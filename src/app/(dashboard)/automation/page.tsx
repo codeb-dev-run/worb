@@ -11,8 +11,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { 
-  Settings, Plus, ChevronLeft, Clock, Play, Pause, 
+import {
+  Settings, Plus, ChevronLeft, Clock, Play, Pause,
   Trash2, Edit, Zap, CheckCircle, Activity, Timer,
   Bot, Sparkles, Calendar, Bell, Mail, MessageSquare,
   Webhook, Database, FileText, Users, HardDrive, Download, File
@@ -105,7 +105,8 @@ export default function AutomationPage() {
   const [selectedTemplate, setSelectedTemplate] = useState<WorkflowTemplate | undefined>()
 
   // 권한 체크
-  if (userProfile?.role === 'customer' || userProfile?.role === 'external') {
+  // 권한 체크
+  if (userProfile?.role !== 'admin' && userProfile?.role !== 'member') {
     return (
       <div className="flex items-center justify-center h-96">
         <Card className="w-full max-w-md">
@@ -121,15 +122,15 @@ export default function AutomationPage() {
     )
   }
 
-  const filteredWorkflows = workflows.filter(workflow => 
+  const filteredWorkflows = workflows.filter(workflow =>
     filterStatus === 'all' || workflow.status === filterStatus
   )
 
   const handleSaveWorkflow = (workflowData: Partial<Workflow>) => {
     if (editingWorkflow) {
       // 수정
-      setWorkflows(workflows.map(w => 
-        w.id === editingWorkflow.id 
+      setWorkflows(workflows.map(w =>
+        w.id === editingWorkflow.id
           ? { ...editingWorkflow, ...workflowData, updatedAt: new Date() }
           : w
       ))
@@ -150,8 +151,8 @@ export default function AutomationPage() {
   }
 
   const toggleWorkflowStatus = (workflowId: string) => {
-    setWorkflows(workflows.map(w => 
-      w.id === workflowId 
+    setWorkflows(workflows.map(w =>
+      w.id === workflowId
         ? { ...w, status: w.status === 'active' ? 'inactive' : 'active' }
         : w
     ))
@@ -206,7 +207,7 @@ export default function AutomationPage() {
             <ServiceStatus />
           </div>
         </div>
-        
+
         <div className="flex gap-3">
           <Button variant="outline" asChild>
             <Link href="/automation/runs">
@@ -365,9 +366,9 @@ export default function AutomationPage() {
                             {workflow.status === 'active' ? '활성' : '비활성'}
                           </Badge>
                         </div>
-                        
+
                         <p className="text-muted-foreground mb-4">{workflow.description}</p>
-                        
+
                         <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
                           <div className="flex items-center gap-1">
                             <Settings className="h-4 w-4" />
@@ -389,7 +390,7 @@ export default function AutomationPage() {
                           )}
                         </div>
                       </div>
-                      
+
                       <div className="flex items-center gap-2 ml-4">
                         <Button
                           size="icon"
@@ -399,7 +400,7 @@ export default function AutomationPage() {
                         >
                           {workflow.status === 'active' ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
                         </Button>
-                        
+
                         <Button
                           size="icon"
                           variant="outline"
@@ -411,7 +412,7 @@ export default function AutomationPage() {
                         >
                           <Edit className="h-4 w-4" />
                         </Button>
-                        
+
                         <Button
                           size="icon"
                           variant="outline"

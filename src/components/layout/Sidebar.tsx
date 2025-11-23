@@ -1,6 +1,6 @@
 'use client'
 
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useAuth } from '@/lib/auth-context'
@@ -9,11 +9,19 @@ import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { ChevronDown, ChevronRight, LogOut, Menu, X } from 'lucide-react'
+import { database } from '@/lib/firebase'
+import { ref, onValue } from 'firebase/database'
+import WorkspaceSwitcher from '@/components/workspace/WorkspaceSwitcher'
+
 
 interface MenuItem {
   href: string
   label: string
   icon: keyof typeof icons
+  badge?: {
+    count?: number
+    hasNew?: boolean
+  }
   roles?: string[]
 }
 
@@ -25,191 +33,137 @@ interface MenuGroup {
   roles?: string[]
 }
 
-// 권한별 메뉴 구조 정의
-const getMenuGroups = (role: string): MenuGroup[] => {
-  // 관리자 메뉴
-  const adminMenus: MenuGroup[] = [
-    {
-      id: 'overview',
-      label: '개요',
-      icon: 'dashboard',
-      items: [
-        { href: '/dashboard', label: '대시보드', icon: 'dashboard' },
-        { href: '/analytics', label: '통계 분석', icon: 'analytics' },
-      ]
-    },
-    {
-      id: 'project-management',
-      label: '프로젝트 관리',
-      icon: 'projects',
-      items: [
-        { href: '/projects', label: '전체 프로젝트', icon: 'projects' },
-        { href: '/gantt', label: '전체 간트차트', icon: 'gantt' },
-        { href: '/kanban', label: '전체 칸반보드', icon: 'tasks' },
-        { href: '/tasks', label: '작업 관리', icon: 'tasks' },
-      ]
-    },
-    {
-      id: 'user-management',
-      label: '사용자 관리',
-      icon: 'users',
-      items: [
-        { href: '/users', label: '전체 사용자', icon: 'users' },
-        { href: '/users/employees', label: '직원 관리', icon: 'operators' },
-        { href: '/users/clients', label: '거래처 관리', icon: 'clients' },
-        { href: '/invitations', label: '초대 관리', icon: 'mail' },
-      ]
-    },
-    {
-      id: 'business',
-      label: '비즈니스',
-      icon: 'finance',
-      items: [
-        { href: '/finance', label: '재무 관리', icon: 'finance' },
-        { href: '/marketing', label: '마케팅', icon: 'marketing' },
-        { href: '/contracts', label: '계약 관리', icon: 'file' },
-      ]
-    },
-    {
-      id: 'system',
-      label: '시스템',
-      icon: 'settings',
-      items: [
-        { href: '/settings', label: '시스템 설정', icon: 'settings' },
-        { href: '/logs', label: '활동 로그', icon: 'logs' },
-        { href: '/automation', label: '자동화 규칙', icon: 'automation' },
-      ]
-    }
-  ]
-
-  // 직원 메뉴
-  const employeeMenus: MenuGroup[] = [
-    {
-      id: 'overview',
-      label: '개요',
-      icon: 'dashboard',
-      items: [
-        { href: '/dashboard', label: '내 대시보드', icon: 'dashboard' },
-        { href: '/projects', label: '내 프로젝트', icon: 'projects' },
-      ]
-    },
-    {
-      id: 'work',
-      label: '업무',
-      icon: 'tasks',
-      items: [
-        { href: '/tasks', label: '내 작업', icon: 'tasks' },
-        { href: '/calendar', label: '일정 관리', icon: 'calendar' },
-        { href: '/files', label: '파일 관리', icon: 'files' },
-      ]
-    },
-    {
-      id: 'collaboration',
-      label: '협업',
-      icon: 'chat',
-      items: [
-        { href: '/chat', label: '팀 채팅', icon: 'chat' },
-        { href: '/meetings', label: '회의', icon: 'video' },
-        { href: '/ai', label: 'AI 어시스턴트', icon: 'ai' },
-      ]
-    }
-  ]
-
-  // 상담 직원 메뉴
-  const supportMenus: MenuGroup[] = [
-    {
-      id: 'overview',
-      label: '개요',
-      icon: 'dashboard',
-      items: [
-        { href: '/dashboard', label: '상담 대시보드', icon: 'dashboard' },
-        { href: '/tickets', label: '상담 티켓', icon: 'support' },
-      ]
-    },
-    {
-      id: 'customer-support',
-      label: '고객 지원',
-      icon: 'support',
-      items: [
-        { href: '/support/chat', label: '실시간 상담', icon: 'chat' },
-        { href: '/support/history', label: '상담 이력', icon: 'history' },
-        { href: '/clients', label: '고객 정보', icon: 'clients' },
-      ]
-    },
-    {
-      id: 'knowledge',
-      label: '지식 베이스',
-      icon: 'book',
-      items: [
-        { href: '/faq', label: 'FAQ 관리', icon: 'help' },
-        { href: '/guides', label: '가이드 문서', icon: 'file' },
-      ]
-    }
-  ]
-
-  // 거래처(클라이언트) 메뉴
-  const clientMenus: MenuGroup[] = [
-    {
-      id: 'overview',
-      label: '개요',
-      icon: 'dashboard',
-      items: [
-        { href: '/dashboard', label: '프로젝트 현황', icon: 'dashboard' },
-        { href: '/projects', label: '내 프로젝트', icon: 'projects' },
-      ]
-    },
-    {
-      id: 'project-detail',
-      label: '프로젝트 상세',
-      icon: 'status',
-      items: [
-        { href: '/progress', label: '진행 상황', icon: 'status' },
-        { href: '/deliverables', label: '산출물', icon: 'files' },
-        { href: '/invoices', label: '청구서', icon: 'finance' },
-      ]
-    },
-    {
-      id: 'communication',
-      label: '커뮤니케이션',
-      icon: 'chat',
-      items: [
-        { href: '/messages', label: '메시지', icon: 'mail' },
-        { href: '/support', label: '문의하기', icon: 'support' },
-        { href: '/review', label: '리뷰 작성', icon: 'review' },
-      ]
-    }
-  ]
-
-  // 역할별 메뉴 반환
-  switch (role) {
-    case 'admin':
-      return adminMenus
-    case 'employee':
-      return employeeMenus
-    case 'support':
-      return supportMenus
-    case 'client':
-      return clientMenus
-    default:
-      return clientMenus // 기본값
-  }
-}
-
 export default function Sidebar() {
   const pathname = usePathname()
   const { userProfile, logout } = useAuth()
   const [isOpen, setIsOpen] = React.useState(false)
-  const [expandedGroups, setExpandedGroups] = React.useState<string[]>(['overview'])
+  const [expandedGroups, setExpandedGroups] = React.useState<string[]>(['projects', 'overview', 'collaboration', 'admin-manage'])
+  const [projects, setProjects] = useState<any[]>([])
 
-  // 사용자 역할에 따른 메뉴 가져오기
+  // 프로젝트 목록 가져오기
+  useEffect(() => {
+    const projectsRef = ref(database, 'projects')
+    const unsubscribe = onValue(projectsRef, (snapshot) => {
+      const data = snapshot.val()
+      if (data) {
+        const projectList = Object.entries(data).map(([id, value]: [string, any]) => ({
+          id,
+          ...value
+        }))
+        setProjects(projectList)
+      } else {
+        setProjects([])
+      }
+    })
+
+    return () => unsubscribe()
+  }, [])
+
+  // 사용자 역할 및 프로젝트에 따른 메뉴 가져오기
   const menuGroups = React.useMemo(() => {
-    return getMenuGroups(userProfile?.role || 'client')
-  }, [userProfile?.role])
+    const role = userProfile?.role || 'member'
+
+    // 프로젝트 메뉴 그룹 생성
+    const projectItems: MenuItem[] = [
+      { href: '/projects', label: '전체 프로젝트', icon: 'list' },
+      ...projects.map(p => ({
+        href: `/projects/${p.id}`,
+        label: p.title,
+        icon: 'file' as keyof typeof icons // file 아이콘 사용
+      }))
+    ]
+
+    const projectGroup: MenuGroup = {
+      id: 'projects',
+      label: '프로젝트',
+      icon: 'projects',
+      items: projectItems
+    }
+
+    // 모든 멤버가 접근 가능한 공통 메뉴
+    const workspaceMenus: MenuGroup[] = [
+      {
+        id: 'overview',
+        label: '워크스페이스',
+        icon: 'dashboard',
+        items: [
+          { href: '/dashboard', label: '홈', icon: 'dashboard' },
+          { href: '/tasks', label: '내 작업', icon: 'tasks' },
+          { href: '/files', label: '파일', icon: 'files' },
+          { href: '/calendar', label: '캘린더', icon: 'calendar' },
+          { href: '/workspace/organization', label: '조직 관리', icon: 'users' },
+        ]
+      },
+      {
+        id: 'hr',
+        label: 'HR',
+        icon: 'users',
+        items: [
+          { href: '/hr/attendance', label: '근태 관리', icon: 'calendar' },
+          { href: '/hr/leave', label: '휴가 관리', icon: 'calendar' },
+        ]
+      },
+      {
+        id: 'finance',
+        label: '재무',
+        icon: 'finance',
+        items: [
+          { href: '/finance/contracts', label: '계약 관리', icon: 'file' },
+          { href: '/finance/pl', label: '손익 관리', icon: 'finance' },
+        ]
+      },
+      {
+        id: 'groupware',
+        label: '그룹웨어',
+        icon: 'chat',
+        items: [
+          {
+            href: '/groupware',
+            label: '그룹웨어',
+            icon: 'chat',
+            badge: { count: 5, hasNew: true } // 예시: 5개 게시물, 새 글 있음
+          },
+        ]
+      }
+    ]
+
+    // 관리자 전용 메뉴
+    const adminMenus: MenuGroup[] = [
+      {
+        id: 'admin-manage',
+        label: '관리자 설정',
+        icon: 'settings',
+        items: [
+          { href: '/users', label: '멤버 관리', icon: 'users' },
+          { href: '/finance', label: '재무 관리', icon: 'finance' },
+          { href: '/marketing', label: '마케팅', icon: 'marketing' },
+          { href: '/settings', label: '시스템 설정', icon: 'settings' },
+          { href: '/logs', label: '활동 로그', icon: 'logs' },
+          { href: '/automation', label: '자동화', icon: 'automation' },
+        ]
+      }
+    ]
+
+    // 프로젝트 그룹을 워크스페이스 다음에 배치
+    const baseMenus = [
+      workspaceMenus[0], // 워크스페이스 (홈, 내 작업, 파일, 캘린더)
+      projectGroup,      // 프로젝트
+      workspaceMenus[1], // HR
+      workspaceMenus[2], // Finance
+      workspaceMenus[3], // Groupware
+    ]
+
+    if (role === 'admin') {
+      return [...baseMenus, ...adminMenus]
+    }
+
+    return baseMenus
+  }, [userProfile?.role, projects])
 
   // 그룹 토글
   const toggleGroup = (groupId: string) => {
-    setExpandedGroups(prev => 
-      prev.includes(groupId) 
+    setExpandedGroups(prev =>
+      prev.includes(groupId)
         ? prev.filter(id => id !== groupId)
         : [...prev, groupId]
     )
@@ -217,13 +171,7 @@ export default function Sidebar() {
 
   // 현재 경로가 그룹에 속하는지 확인
   const isGroupActive = (group: MenuGroup) => {
-    return group.items.some(item => pathname === item.href)
-  }
-
-  // 아이콘 컴포넌트 가져오기
-  const getIcon = (iconName: keyof typeof icons) => {
-    const IconComponent = icons[iconName]
-    return IconComponent ? <IconComponent className="h-5 w-5" /> : null
+    return group.items.some(item => pathname === item.href || pathname?.startsWith(item.href + '/'))
   }
 
   return (
@@ -253,12 +201,10 @@ export default function Sidebar() {
         "w-[280px] lg:w-[var(--sidebar-width)]",
         isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
       )}>
-        <div className="p-6 border-b">
-          <h1 className="text-2xl font-bold bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
-            CodeB Platform
-          </h1>
+        <div className="p-4 border-b">
+          <WorkspaceSwitcher />
         </div>
-      
+
         <ScrollArea className="flex-1 px-4 py-6">
           <div className="space-y-6">
             {menuGroups.map((group) => {
@@ -295,20 +241,37 @@ export default function Sidebar() {
                       {group.items.map((item) => {
                         const isItemActive = pathname === item.href
                         const ItemIcon = icons[item.icon]
-                        
+
                         return (
                           <Link
                             key={item.href}
-                            href={item.href as any}
+                            href={item.href}
                             className={cn(
-                              "flex items-center gap-3 px-3 py-2 rounded-lg",
-                              "text-sm transition-all duration-200",
-                              "hover:bg-accent hover:text-accent-foreground",
-                              isItemActive && "bg-primary text-primary-foreground font-medium"
+                              "flex items-center gap-3 px-3 py-2 rounded-lg transition-colors",
+                              pathname === item.href
+                                ? "bg-primary text-primary-foreground"
+                                : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
                             )}
                           >
-                            {ItemIcon && <ItemIcon className="h-4 w-4" />}
-                            <span>{item.label}</span>
+                            {icons[item.icon as keyof typeof icons] &&
+                              React.createElement(icons[item.icon as keyof typeof icons], { className: "w-4 h-4" })
+                            }
+                            <span className="flex-1">{item.label}</span>
+                            {/* 게시물 개수 및 새 글 표시 */}
+                            {item.badge && (
+                              <div className="flex items-center gap-1">
+                                {item.badge.count > 0 && (
+                                  <span className="px-1.5 py-0.5 text-xs bg-blue-600 text-white rounded">
+                                    {item.badge.count}
+                                  </span>
+                                )}
+                                {item.badge.hasNew && (
+                                  <span className="px-1.5 py-0.5 text-xs bg-red-500 text-white rounded font-bold">
+                                    N
+                                  </span>
+                                )}
+                              </div>
+                            )}
                           </Link>
                         )
                       })}
@@ -330,15 +293,11 @@ export default function Sidebar() {
             <div className="flex-1 min-w-0">
               <p className="font-medium text-sm truncate">{userProfile?.displayName}</p>
               <p className="text-xs text-muted-foreground">
-                {userProfile?.role === 'admin' ? '관리자' : 
-                 userProfile?.role === 'developer' ? '개발자' :
-                 userProfile?.role === 'manager' ? '매니저' :
-                 userProfile?.role === 'external' ? '상담원' :
-                 userProfile?.role === 'customer' ? '고객' : '사용자'}
+                {userProfile?.role === 'admin' ? '관리자' : '팀원'}
               </p>
             </div>
           </div>
-          
+
           <Button
             variant="outline"
             size="sm"

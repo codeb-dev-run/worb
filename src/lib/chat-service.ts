@@ -1,8 +1,8 @@
-import { 
-  ref, 
-  push, 
-  onValue, 
-  off, 
+import {
+  ref,
+  push,
+  onValue,
+  off,
   set,
   serverTimestamp,
   query,
@@ -16,7 +16,7 @@ export interface ChatMessage {
   id: string
   senderId: string
   senderName: string
-  senderRole: 'customer' | 'admin' | 'manager' | 'developer'
+  senderRole: 'admin' | 'member'
   receiverId: string
   message: string
   timestamp: number
@@ -73,17 +73,17 @@ export class ChatService {
 
   // 메시지 전송
   async sendMessage(
-    roomId: string, 
-    senderId: string, 
+    roomId: string,
+    senderId: string,
     senderName: string,
     senderRole: ChatMessage['senderRole'],
     receiverId: string,
-    message: string, 
+    message: string,
     type: 'text' | 'file' | 'image' = 'text',
     fileData?: { url: string; name: string; size: number }
   ): Promise<void> {
     const messagesRef = ref(database, `messages/${roomId}`)
-    
+
     const newMessage: Omit<ChatMessage, 'id'> = {
       senderId,
       senderName,
@@ -102,11 +102,11 @@ export class ChatService {
 
     // 메시지 추가
     const messageRef = await push(messagesRef, newMessage)
-    
+
     // 채팅방 업데이트
     await set(ref(database, `chatRooms/${roomId}/lastMessage`), { ...newMessage, id: messageRef.key })
     await set(ref(database, `chatRooms/${roomId}/updatedAt`), new Date().toISOString())
-    
+
     // 받는 사람의 읽지 않은 메시지 수 증가
     const unreadRef = ref(database, `chatRooms/${roomId}/unreadCount/${receiverId}`)
     const currentUnread = await get(unreadRef)
@@ -117,14 +117,14 @@ export class ChatService {
   async markAsRead(roomId: string, userId: string): Promise<void> {
     const unreadRef = ref(database, `chatRooms/${roomId}/unreadCount/${userId}`)
     await set(unreadRef, 0)
-    
+
     // 해당 사용자가 받은 메시지들을 읽음 처리
     const messagesRef = ref(database, `messages/${roomId}`)
     const snapshot = await get(messagesRef)
-    
+
     if (snapshot.exists()) {
       const messages = snapshot.val()
-      
+
       // 각 메시지를 개별적으로 업데이트
       for (const [messageId, message] of Object.entries(messages)) {
         if ((message as any).receiverId === userId && !(message as any).read) {
@@ -136,7 +136,7 @@ export class ChatService {
 
   // 메시지 실시간 수신
   subscribeToMessages(
-    roomId: string, 
+    roomId: string,
     callback: (messages: ChatMessage[]) => void,
     limit: number = 50
   ): () => void {
@@ -171,7 +171,7 @@ export class ChatService {
     callback: (chatRooms: ChatRoom[]) => void
   ): () => void {
     const roomsRef = ref(database, 'chatRooms')
-    
+
     const listener = onValue(roomsRef, (snapshot) => {
       const rooms: ChatRoom[] = []
       snapshot.forEach((child) => {
@@ -180,7 +180,7 @@ export class ChatService {
           rooms.push({ id: child.key!, ...room })
         }
       })
-      
+
       // 최근 업데이트 순으로 정렬
       rooms.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
       callback(rooms)
@@ -195,7 +195,7 @@ export class ChatService {
     callback: (isOnline: boolean, lastSeen?: string) => void
   ): () => void {
     const statusRef = ref(database, `users/${userId}`)
-    
+
     const listener = onValue(statusRef, (snapshot) => {
       const userData = snapshot.val()
       if (userData) {
@@ -209,13 +209,13 @@ export class ChatService {
   // 타이핑 상태 설정
   async setTypingStatus(roomId: string, userId: string, isTyping: boolean): Promise<void> {
     const typingRef = ref(database, `typing/${roomId}/${userId}`)
-    
+
     if (isTyping) {
       await set(typingRef, {
         isTyping: true,
         timestamp: serverTimestamp()
       })
-      
+
       // 3초 후 자동으로 타이핑 상태 해제
       setTimeout(async () => {
         await set(typingRef, null)
@@ -232,12 +232,12 @@ export class ChatService {
     callback: (typingUsers: string[]) => void
   ): () => void {
     const typingRef = ref(database, `typing/${roomId}`)
-    
+
     const listener = onValue(typingRef, (snapshot) => {
       const typingData = snapshot.val() || {}
       const typingUsers = Object.keys(typingData)
         .filter(userId => userId !== currentUserId && typingData[userId]?.isTyping)
-      
+
       callback(typingUsers)
     })
 

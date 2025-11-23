@@ -7,19 +7,20 @@ import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
-import { 
+import {
   Search, Plus, Edit, Trash2, Mail, Shield, UserCheck,
   Users, UserPlus, UserCog, Building2, Briefcase, HeadphonesIcon
 } from 'lucide-react'
 import { useAuth } from '@/lib/auth-context'
 import { getDatabase, ref, onValue, off } from 'firebase/database'
 import { app } from '@/lib/firebase'
+import { cn } from '@/lib/utils'
 
 interface UserData {
   uid: string
   email: string
   displayName: string
-  role: 'admin' | 'employee' | 'support' | 'client' | 'customer'
+  role: 'admin' | 'member'
   department?: string
   companyName?: string
   isActive: boolean
@@ -27,12 +28,15 @@ interface UserData {
   lastLogin?: string
 }
 
-const roleConfig = {
+type UserRole = {
+  label: string
+  icon: any
+  color: 'default' | 'secondary' | 'destructive' | 'outline'
+}
+
+const ROLE_CONFIG: Record<string, UserRole> = {
   admin: { label: '관리자', icon: Shield, color: 'destructive' },
-  employee: { label: '직원', icon: UserCog, color: 'default' },
-  support: { label: '상담원', icon: HeadphonesIcon, color: 'secondary' },
-  client: { label: '거래처', icon: Building2, color: 'outline' },
-  customer: { label: '고객', icon: Users, color: 'outline' } // customer role 추가
+  member: { label: '팀원', icon: Users, color: 'default' },
 }
 
 export default function UsersPage() {
@@ -42,6 +46,26 @@ export default function UsersPage() {
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedRole, setSelectedRole] = useState<string>('all')
+
+  const getRoleStats = () => {
+    const stats = {
+      admin: 0,
+      member: 0,
+    }
+
+    users.forEach(user => {
+      if (user.role in stats) {
+        stats[user.role as keyof typeof stats]++
+      }
+    })
+
+    return Object.entries(stats).map(([role, count]) => ({
+      label: ROLE_CONFIG[role]?.label || role,
+      count,
+      icon: ROLE_CONFIG[role]?.icon || Users,
+      color: ROLE_CONFIG[role]?.color || 'default'
+    }))
+  }
 
   useEffect(() => {
     const db = getDatabase(app)
@@ -74,7 +98,7 @@ export default function UsersPage() {
 
     // 검색 필터
     if (searchTerm) {
-      filtered = filtered.filter(user => 
+      filtered = filtered.filter(user =>
         user.displayName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         user.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         user.companyName?.toLowerCase().includes(searchTerm.toLowerCase())
@@ -105,7 +129,7 @@ export default function UsersPage() {
           <h1 className="text-3xl font-bold tracking-tight">사용자 관리</h1>
           <p className="text-muted-foreground mt-1">플랫폼의 모든 사용자를 관리합니다</p>
         </div>
-        
+
         <Button>
           <UserPlus className="mr-2 h-4 w-4" />
           사용자 추가
@@ -125,8 +149,8 @@ export default function UsersPage() {
             </div>
           </CardContent>
         </Card>
-        
-        {Object.entries(roleConfig).map(([role, config]) => {
+
+        {Object.entries(ROLE_CONFIG).map(([role, config]) => {
           const count = users.filter(u => u.role === role).length
           return (
             <Card key={role}>
@@ -156,11 +180,11 @@ export default function UsersPage() {
             className="pl-10"
           />
         </div>
-        
+
         <Tabs value={selectedRole} onValueChange={setSelectedRole}>
           <TabsList>
             <TabsTrigger value="all">전체</TabsTrigger>
-            {Object.entries(roleConfig).map(([role, config]) => (
+            {Object.entries(ROLE_CONFIG).map(([role, config]) => (
               <TabsTrigger key={role} value={role}>{config.label}</TabsTrigger>
             ))}
           </TabsList>
@@ -183,28 +207,22 @@ export default function UsersPage() {
           </TableHeader>
           <TableBody>
             {filteredUsers.map((user) => {
-              const roleInfo = roleConfig[user.role] || roleConfig.client // 기본값으로 client 사용
-              const RoleIcon = roleInfo.icon
-              
               return (
                 <TableRow key={user.uid}>
                   <TableCell>
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center">
-                        <span className="font-medium">
-                          {user.displayName?.charAt(0)?.toUpperCase() || 'U'}
-                        </span>
+                      <div className={cn("p-2 rounded-full bg-muted", `text-${ROLE_CONFIG[user.role]?.color || 'default'}-600`)}>
+                        {ROLE_CONFIG[user.role]?.icon ? React.createElement(ROLE_CONFIG[user.role].icon, { className: "h-4 w-4" }) : <Users className="h-4 w-4" />}
                       </div>
                       <div>
-                        <p className="font-medium">{user.displayName || '이름 없음'}</p>
+                        <p className="font-medium">{user.displayName}</p>
                         <p className="text-sm text-muted-foreground">{user.email}</p>
                       </div>
                     </div>
                   </TableCell>
                   <TableCell>
-                    <Badge variant={roleInfo.color as any} className="gap-1">
-                      <RoleIcon className="h-3 w-3" />
-                      {roleInfo.label}
+                    <Badge variant={ROLE_CONFIG[user.role]?.color === 'destructive' ? 'destructive' : 'secondary'}>
+                      {ROLE_CONFIG[user.role]?.label || user.role}
                     </Badge>
                   </TableCell>
                   <TableCell>

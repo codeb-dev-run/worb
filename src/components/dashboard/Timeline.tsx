@@ -37,19 +37,18 @@ export default function Timeline() {
 
         if (projectsSnapshot.exists()) {
           const projects = projectsSnapshot.val()
-          
+
           // 각 프로젝트의 활동 가져오기
           for (const [projectId, project] of Object.entries(projects) as [string, any][]) {
             // 권한 체크
-            if (userProfile.role === 'customer' && project.clientId !== user.uid) continue
-            if (userProfile.role === 'developer' && !project.team?.includes(userProfile.email)) continue
+            if (userProfile.role === 'member' && !project.team?.includes(userProfile.email)) continue
 
             const activitiesRef = query(
               ref(db, `projectActivities/${projectId}`),
               orderByChild('timestamp'),
               limitToLast(5)
             )
-            
+
             const activitiesSnapshot = await new Promise<any>((resolve) => {
               onValue(activitiesRef, resolve, { onlyOnce: true })
             })
@@ -58,14 +57,14 @@ export default function Timeline() {
               Object.entries(activitiesSnapshot.val()).forEach(([id, activity]: [string, any]) => {
                 const timeDiff = Date.now() - new Date(activity.timestamp).getTime()
                 const timeString = getRelativeTime(timeDiff)
-                
+
                 timelineItems.push({
                   id: `${projectId}-${id}`,
                   title: activity.message,
                   description: `${project.name} 프로젝트`,
                   time: timeString,
-                  status: activity.type === 'task' && activity.message.includes('완료') ? 'complete' : 
-                         activity.type === 'file' ? 'active' : 'active',
+                  status: activity.type === 'task' && activity.message.includes('완료') ? 'complete' :
+                    activity.type === 'file' ? 'active' : 'active',
                   type: activity.type,
                   projectId,
                   projectName: project.name
@@ -107,13 +106,13 @@ export default function Timeline() {
 
   const parseRelativeTime = (timeString: string): number => {
     if (timeString === '방금 전') return 0
-    
+
     const match = timeString.match(/(\d+)(분|시간|일) 전/)
     if (!match) return 0
-    
+
     const value = parseInt(match[1])
     const unit = match[2]
-    
+
     switch (unit) {
       case '분': return value
       case '시간': return value * 60
@@ -139,7 +138,7 @@ export default function Timeline() {
         <span>📋</span>
         <span>최근 활동</span>
       </h3>
-      
+
       <div className="space-y-6">
         {items.map((item, index) => (
           <div key={item.id} className="relative">
@@ -147,14 +146,14 @@ export default function Timeline() {
             {index < items.length - 1 && (
               <div className="absolute left-2 top-8 bottom-0 w-0.5 bg-gray-200" />
             )}
-            
+
             <div className="flex gap-4">
               {/* Timeline dot */}
               <div className={`
                 relative z-10 w-4 h-4 rounded-full border-4 bg-white
                 ${getStatusColor(item.status)}
               `} />
-              
+
               {/* Content */}
               <div className="flex-1 -mt-1">
                 <div className="bg-gray-50 rounded-lg p-4">

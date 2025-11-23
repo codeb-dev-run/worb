@@ -10,7 +10,7 @@ export default function WorkflowRunsPage() {
   const { userProfile } = useAuth()
 
   // 권한 체크
-  if (userProfile?.role !== 'admin' && userProfile?.role !== 'manager' && userProfile?.role !== 'developer') {
+  if (userProfile?.role !== 'admin' && userProfile?.role !== 'member') {
     return (
       <div className="flex items-center justify-center h-96">
         <div className="text-center">

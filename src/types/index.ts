@@ -2,7 +2,7 @@ export interface User {
   id: string
   email: string
   name: string
-  role: 'admin' | 'employee' | 'support' | 'client'
+  role: 'admin' | 'member'
   department?: string // 직원의 부서 (개발, 디자인, 기획 등)
   permissions?: {
     projects: string[] // 접근 가능한 프로젝트 ID 목록
@@ -53,17 +53,17 @@ export interface ProjectMember {
 }
 
 // Task 타입은 task.ts에서 import
-export type { 
-  Task, 
-  BaseTask, 
-  KanbanTask, 
-  GanttTask, 
-  TaskStatus, 
+export type {
+  Task,
+  BaseTask,
+  KanbanTask,
+  GanttTask,
+  TaskStatus,
   TaskPriority,
   ChecklistItem,
   TaskAttachment,
   TaskComment,
-  TaskSummary 
+  TaskSummary
 } from './task'
 
 export interface Message {

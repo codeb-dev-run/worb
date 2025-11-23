@@ -36,7 +36,7 @@ export default function FilesPage() {
     try {
       setLoading(true)
       const filesList = await fileService.getFiles()
-      
+
       // FileMetadata를 FileItem으로 변환
       const fileItems: FileItem[] = filesList.map(file => ({
         id: file.id,
@@ -48,7 +48,7 @@ export default function FilesPage() {
         uploadedBy: file.uploadedByName,
         createdAt: new Date(file.createdAt)
       }))
-      
+
       setFiles(fileItems)
     } catch (error) {
       console.error('Failed to load files:', error)
@@ -60,7 +60,7 @@ export default function FilesPage() {
 
   const handleUpload = async (newFiles: File[]) => {
     if (!user || !userProfile) return
-    
+
     try {
       // Firebase Storage에 업로드
       const uploadedFiles = await fileService.uploadFiles(
@@ -68,7 +68,7 @@ export default function FilesPage() {
         user.uid,
         userProfile.displayName || userProfile.email
       )
-      
+
       // 업로드된 파일을 목록에 추가
       const fileItems: FileItem[] = uploadedFiles.map(file => ({
         id: file.id,
@@ -98,7 +98,7 @@ export default function FilesPage() {
 
   const handleDownload = async (file: FileItem) => {
     if (!user || !userProfile) return
-    
+
     try {
       // 다운로드 이력 기록
       await fileService.recordDownload(
@@ -106,7 +106,7 @@ export default function FilesPage() {
         user.uid,
         userProfile.displayName || userProfile.email
       )
-      
+
       // 다운로드 이력 추가 (UI 업데이트용)
       const newDownload: DownloadHistory = {
         id: `dl-${Date.now()}`,
@@ -116,11 +116,11 @@ export default function FilesPage() {
         downloadedAt: new Date(),
         userAgent: navigator.userAgent.split(' ').pop() || 'Unknown'
       }
-      
+
       setDownloadHistory(prev => [newDownload, ...prev])
-      
+
       toast.success(`${file.name} 다운로드를 시작합니다.`)
-      
+
       // 파일 다운로드
       const link = document.createElement('a')
       link.href = file.url
@@ -138,7 +138,7 @@ export default function FilesPage() {
       try {
         // Firebase Storage에서 파일 삭제
         await fileService.deleteFile(file.id)
-        
+
         setFiles(prev => prev.filter(f => f.id !== file.id))
         toast.success('파일이 삭제되었습니다.')
       } catch (error) {
@@ -148,8 +148,8 @@ export default function FilesPage() {
     }
   }
 
-  const canDelete = userProfile?.role === 'admin' || userProfile?.role === 'developer' || userProfile?.role === 'manager'
-  const canViewHistory = userProfile?.role === 'admin' || userProfile?.role === 'developer' || userProfile?.role === 'manager'
+  const canDelete = userProfile?.role === 'admin'
+  const canViewHistory = userProfile?.role === 'admin'
 
   const formatDate = (date: Date) => {
     return new Intl.DateTimeFormat('ko-KR', {
@@ -208,7 +208,7 @@ export default function FilesPage() {
             </div>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
@@ -220,7 +220,7 @@ export default function FilesPage() {
             </div>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
@@ -232,7 +232,7 @@ export default function FilesPage() {
             </div>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
@@ -258,13 +258,13 @@ export default function FilesPage() {
         {/* 파일 관리 탭 */}
         <TabsContent value="files" className="space-y-6">
           {/* 업로드 영역 */}
-          {(userProfile?.role === 'admin' || userProfile?.role === 'developer' || userProfile?.role === 'manager') && (
+          {(userProfile?.role === 'admin' || userProfile?.role === 'member') && (
             <Card>
               <CardHeader>
                 <CardTitle>파일 업로드</CardTitle>
               </CardHeader>
               <CardContent>
-                <FileUpload 
+                <FileUpload
                   onUpload={handleUpload}
                   maxSize={100}
                   acceptedTypes={['*']}
@@ -279,7 +279,7 @@ export default function FilesPage() {
               <CardTitle>파일 목록</CardTitle>
             </CardHeader>
             <CardContent>
-              <FileList 
+              <FileList
                 files={files}
                 onDownload={handleDownload}
                 onDelete={handleDelete}

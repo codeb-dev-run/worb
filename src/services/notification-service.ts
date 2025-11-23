@@ -23,7 +23,7 @@ class NotificationService {
     try {
       const notificationRef = ref(this.db, `notifications/${notification.userId}`)
       const newNotificationRef = push(notificationRef)
-      
+
       await set(newNotificationRef, {
         ...notification,
         time: new Date().toISOString(),
@@ -104,7 +104,7 @@ class NotificationService {
 
     const unsubscribe = onValue(notificationsRef, (snapshot) => {
       const notifications: Notification[] = []
-      
+
       if (snapshot.exists()) {
         snapshot.forEach((child) => {
           notifications.push({
@@ -115,7 +115,7 @@ class NotificationService {
       }
 
       // 최신순으로 정렬
-      notifications.sort((a, b) => 
+      notifications.sort((a, b) =>
         new Date(b.time).getTime() - new Date(a.time).getTime()
       )
 
@@ -129,18 +129,20 @@ class NotificationService {
   async createSystemNotifications(type: string, data: NotificationData) {
     switch (type) {
       case 'task_assigned':
-        await this.createNotification({
-          userId: data.assigneeId,
-          type: 'info',
-          title: '새 작업 할당',
-          message: `"${data.taskTitle}" 작업이 할당되었습니다.`,
-          projectId: data.projectId,
-          link: `/projects/${data.projectId}?tab=kanban`
-        })
+        if (data.assigneeId) {
+          await this.createNotification({
+            userId: data.assigneeId,
+            type: 'info',
+            title: '새 작업 할당',
+            message: `"${data.taskTitle}" 작업이 할당되었습니다.`,
+            projectId: data.projectId,
+            link: `/projects/${data.projectId}?tab=kanban`
+          })
+        }
         break
 
       case 'task_completed':
-        if (data.teamMembers) {
+        if (data.teamMembers && data.projectId) {
           await this.createProjectNotification(
             data.projectId,
             data.teamMembers,
@@ -155,39 +157,45 @@ class NotificationService {
         break
 
       case 'project_deadline':
-        await this.createProjectNotification(
-          data.projectId,
-          data.teamMembers,
-          {
-            type: 'warning',
-            title: '프로젝트 마감 임박',
-            message: `${data.projectName} 프로젝트가 ${data.daysLeft}일 후 마감됩니다.`,
-            link: `/projects/${data.projectId}`
-          }
-        )
+        if (data.projectId && data.teamMembers) {
+          await this.createProjectNotification(
+            data.projectId,
+            data.teamMembers,
+            {
+              type: 'warning',
+              title: '프로젝트 마감 임박',
+              message: `${data.projectName} 프로젝트가 ${data.daysLeft}일 후 마감됩니다.`,
+              link: `/projects/${data.projectId}`
+            }
+          )
+        }
         break
 
       case 'file_uploaded':
-        await this.createProjectNotification(
-          data.projectId,
-          data.teamMembers,
-          {
-            type: 'info',
-            title: '새 파일 업로드',
-            message: `${data.userName}님이 "${data.fileName}" 파일을 업로드했습니다.`,
-            link: `/files?project=${data.projectId}`
-          }
-        )
+        if (data.projectId && data.teamMembers) {
+          await this.createProjectNotification(
+            data.projectId,
+            data.teamMembers,
+            {
+              type: 'info',
+              title: '새 파일 업로드',
+              message: `${data.userName}님이 "${data.fileName}" 파일을 업로드했습니다.`,
+              link: `/files?project=${data.projectId}`
+            }
+          )
+        }
         break
 
       case 'marketing_lead':
-        await this.createNotification({
-          userId: data.userId,
-          type: 'success',
-          title: '새 리드 등록',
-          message: `${data.leadName} 고객이 ${data.stage} 단계로 등록되었습니다.`,
-          link: '/marketing'
-        })
+        if (data.userId) {
+          await this.createNotification({
+            userId: data.userId,
+            type: 'success',
+            title: '새 리드 등록',
+            message: `${data.leadName} 고객이 ${data.stage} 단계로 등록되었습니다.`,
+            link: '/marketing'
+          })
+        }
         break
     }
   }

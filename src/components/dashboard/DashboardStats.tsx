@@ -34,9 +34,8 @@ function StatCard({ icon, iconBg, value, label, change, loading }: StatCardProps
           <div className="text-3xl font-bold text-gray-900 mb-1">{value}</div>
           <div className="text-sm text-gray-600">{label}</div>
           {change && (
-            <div className={`inline-flex items-center gap-1 mt-3 px-2 py-1 rounded text-xs ${
-              change.isPositive ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-            }`}>
+            <div className={`inline-flex items-center gap-1 mt-3 px-2 py-1 rounded text-xs ${change.isPositive ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+              }`}>
               <span>{change.isPositive ? '↑' : '↓'}</span>
               <span>{change.value}</span>
             </div>
@@ -117,22 +116,22 @@ export default function DashboardStats() {
         onValue(projectsRef, (snapshot) => {
           const projects = snapshot.val() || {}
           const projectArray = Object.values(projects) as any[]
-          
+
           const totalProjects = projectArray.length
           const activeProjects = projectArray.filter(p => p.status === 'in_progress').length
-          
+
           // 실제 tasks 데이터에서 직접 카운트
           const tasksRef = ref(db, 'tasks')
           onValue(tasksRef, (tasksSnapshot) => {
             const tasks = tasksSnapshot.val() || {}
             const taskArray = Object.values(tasks) as any[]
-            
+
             const completedTasks = taskArray.filter(t => t.status === 'completed').length
             const activeTasks = taskArray.filter(t => t.status === 'in_progress' || t.status === 'pending').length
 
             setData(prev => {
               // 이전 값 저장 및 변화량 계산
-              const taskCompletionChange = prev.completedTasks > 0 
+              const taskCompletionChange = prev.completedTasks > 0
                 ? Math.round(((completedTasks - prev.completedTasks) / prev.completedTasks) * 100)
                 : 0
               const newActiveTasks = activeTasks - prev.activeTasks
@@ -156,7 +155,7 @@ export default function DashboardStats() {
         })
 
         // Fetch messages data for admin/manager
-        if (userProfile.role === 'admin' || userProfile.role === 'manager') {
+        if (userProfile.role === 'admin' || userProfile.role === 'member') {
           const messagesRef = ref(db, 'messages')
           onValue(messagesRef, (snapshot) => {
             const messages = snapshot.val() || {}
@@ -232,7 +231,7 @@ export default function DashboardStats() {
             }
           }
         }
-        
+
         saveStats()
       } catch (error) {
         console.error('Error fetching dashboard data:', error)
@@ -264,36 +263,36 @@ export default function DashboardStats() {
       label: string
       change?: { value: string; isPositive: boolean }
     }> = [
-      {
-        icon: '📊',
-        iconBg: 'bg-blue-100 text-blue-600',
-        value: data.completedTasks,
-        label: '완료된 작업',
-        change: data.taskCompletionChange !== 0 ? {
-          value: `${Math.abs(data.taskCompletionChange)}% ${data.taskCompletionChange > 0 ? '증가' : '감소'}`,
-          isPositive: data.taskCompletionChange > 0
-        } : undefined
-      },
-      {
-        icon: '⏱️',
-        iconBg: 'bg-green-100 text-green-600',
-        value: data.activeTasks,
-        label: '진행 중인 작업',
-        change: data.newActiveTasks !== 0 ? {
-          value: `${Math.abs(data.newActiveTasks)}개 ${data.newActiveTasks > 0 ? '추가' : '감소'}`,
-          isPositive: data.newActiveTasks >= 0
-        } : undefined
-      },
-      {
-        icon: '📁',
-        iconBg: 'bg-purple-100 text-purple-600',
-        value: data.activeProjects,
-        label: '진행중 프로젝트',
-        change: { value: `총 ${data.totalProjects}개`, isPositive: true }
-      }
-    ]
+        {
+          icon: '📊',
+          iconBg: 'bg-blue-100 text-blue-600',
+          value: data.completedTasks,
+          label: '완료된 작업',
+          change: data.taskCompletionChange !== 0 ? {
+            value: `${Math.abs(data.taskCompletionChange)}% ${data.taskCompletionChange > 0 ? '증가' : '감소'}`,
+            isPositive: data.taskCompletionChange > 0
+          } : undefined
+        },
+        {
+          icon: '⏱️',
+          iconBg: 'bg-green-100 text-green-600',
+          value: data.activeTasks,
+          label: '진행 중인 작업',
+          change: data.newActiveTasks !== 0 ? {
+            value: `${Math.abs(data.newActiveTasks)}개 ${data.newActiveTasks > 0 ? '추가' : '감소'}`,
+            isPositive: data.newActiveTasks >= 0
+          } : undefined
+        },
+        {
+          icon: '📁',
+          iconBg: 'bg-purple-100 text-purple-600',
+          value: data.activeProjects,
+          label: '진행중 프로젝트',
+          change: { value: `총 ${data.totalProjects}개`, isPositive: true }
+        }
+      ]
 
-    if (userProfile.role === 'admin' || userProfile.role === 'manager') {
+    if (userProfile.role === 'admin' || userProfile.role === 'member') {
       baseStats.push({
         icon: '💬',
         iconBg: 'bg-indigo-100 text-indigo-600',
@@ -307,7 +306,7 @@ export default function DashboardStats() {
       const revenueChange = data.prevMonthlyRevenue > 0
         ? Math.round(((data.monthlyRevenue - data.prevMonthlyRevenue) / data.prevMonthlyRevenue) * 100)
         : 0
-      
+
       baseStats.push(
         {
           icon: '💰',

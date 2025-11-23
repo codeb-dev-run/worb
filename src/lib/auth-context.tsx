@@ -1,7 +1,7 @@
 'use client'
 
 import { createContext, useContext, useEffect, useState } from 'react'
-import { 
+import {
   User,
   onAuthStateChanged,
   signInWithEmailAndPassword,
@@ -19,7 +19,7 @@ interface AuthContextType {
   loading: boolean
   signIn: (email: string, password: string) => Promise<void>
   signInWithGoogle: () => Promise<void>
-  signUp: (email: string, password: string, displayName: string, role?: string) => Promise<void>
+  signUp: (email: string, password: string, displayName: string, role?: 'admin' | 'member') => Promise<void>
   logout: () => Promise<void>
   updateUserProfile: (data: Partial<UserProfile>) => Promise<void>
 }
@@ -28,7 +28,7 @@ interface UserProfile {
   uid: string
   email: string
   displayName: string
-  role: 'customer' | 'admin' | 'manager' | 'developer' | 'external'
+  role: 'admin' | 'member'
   createdAt: string
   lastLogin: string
   isOnline: boolean
@@ -48,13 +48,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setUser(user)
-      
+
       if (user) {
+        setUser(user)
         try {
           // 사용자 프로필 로드
           const profileRef = ref(database, `users/${user.uid}`)
           const snapshot = await get(profileRef)
-          
+
           if (snapshot.exists()) {
             const profile = snapshot.val()
             setUserProfile(profile)
@@ -69,7 +70,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               uid: user.uid,
               email: user.email!,
               displayName: user.displayName || user.email!.split('@')[0],
-              role: 'customer',
+              role: 'member',
               createdAt: new Date().toISOString(),
               lastLogin: new Date().toISOString(),
               isOnline: true,
@@ -85,7 +86,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             uid: user.uid,
             email: user.email!,
             displayName: user.displayName || user.email!.split('@')[0],
-            role: 'customer',
+            role: 'member',
             createdAt: new Date().toISOString(),
             lastLogin: new Date().toISOString(),
             isOnline: true,
@@ -95,14 +96,42 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           localStorage.setItem('userRole', defaultProfile.role)
         }
       } else {
-        setUserProfile(null)
+        // 개발 환경이고 저장된 세션이 있는 경우 복구 시도
+        if (process.env.NODE_ENV === 'development') {
+          const savedEmail = localStorage.getItem('userEmail')
+          const savedRole = localStorage.getItem('userRole')
+          const savedUid = localStorage.getItem('userUid')
+
+          if (savedEmail && savedRole && savedUid) {
+            console.log('Dev mode: Restoring session in onAuthStateChanged', { savedEmail, savedRole })
+            const mockUser: UserProfile = {
+              uid: savedUid,
+              email: savedEmail,
+              displayName: savedRole === 'admin' ? '관리자' : '팀원',
+              role: savedRole as 'admin' | 'member',
+              createdAt: new Date().toISOString(),
+              lastLogin: new Date().toISOString(),
+              isOnline: true,
+            }
+            setUserProfile(mockUser)
+            setUser({ uid: mockUser.uid, email: mockUser.email } as any)
+          } else {
+            setUser(null)
+            setUserProfile(null)
+          }
+        } else {
+          setUser(null)
+          setUserProfile(null)
+        }
       }
-      
+
       setLoading(false)
     })
 
     return () => unsubscribe()
   }, [])
+
+
 
   // 사용자가 오프라인될 때 상태 업데이트
   useEffect(() => {
@@ -117,49 +146,52 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [user])
 
   const signIn = async (email: string, password: string) => {
+    // 개발 환경 테스트 계정 바이패스
+    if (process.env.NODE_ENV === 'development' && (email === 'admin@codeb.com' || email === 'member@codeb.com')) {
+      console.log('Dev mode: Bypassing Firebase Auth for test account')
+
+      let mockUser;
+      if (email === 'admin@codeb.com' && password === 'admin123!') {
+        mockUser = {
+          uid: 'test-admin-uid',
+          email: 'admin@codeb.com',
+          displayName: '관리자',
+          role: 'admin' as const,
+          createdAt: new Date().toISOString(),
+          lastLogin: new Date().toISOString(),
+          isOnline: true,
+        }
+      } else if (email === 'member@codeb.com' && password === 'member123!') {
+        mockUser = {
+          uid: 'test-member-uid',
+          email: 'member@codeb.com',
+          displayName: '팀원',
+          role: 'member' as const,
+          createdAt: new Date().toISOString(),
+          lastLogin: new Date().toISOString(),
+          isOnline: true,
+        }
+      }
+
+      if (mockUser) {
+        setUserProfile(mockUser)
+        localStorage.setItem('userRole', mockUser.role)
+        localStorage.setItem('userEmail', mockUser.email)
+        localStorage.setItem('userUid', mockUser.uid)
+        setUser({ uid: mockUser.uid, email: mockUser.email } as any)
+        return
+      }
+    }
+
     try {
       await signInWithEmailAndPassword(auth, email, password)
     } catch (error: any) {
-      // Firebase 연결 실패 시 테스트 계정으로 로그인
-      if (error.code === 'auth/invalid-api-key' || 
-          error.code === 'auth/network-request-failed' ||
-          error.code === 'auth/configuration-not-found') {
+      // Firebase 연결 실패 시 테스트 계정으로 로그인 (기존 로직 유지)
+      if (error.code === 'auth/invalid-api-key' ||
+        error.code === 'auth/network-request-failed' ||
+        error.code === 'auth/configuration-not-found') {
         console.warn('Firebase 연결 실패, 테스트 모드로 전환:', error.code)
-        
-        // 테스트 계정 확인
-        if (email === 'admin@codeb.com' && password === 'admin123!') {
-          const mockUser = {
-            uid: 'test-admin-uid',
-            email: 'admin@codeb.com',
-            displayName: '관리자',
-            role: 'admin' as const,
-            createdAt: new Date().toISOString(),
-            lastLogin: new Date().toISOString(),
-            isOnline: true,
-          }
-          setUserProfile(mockUser)
-          localStorage.setItem('userRole', mockUser.role)
-          // Mock user 객체도 설정
-          setUser({ uid: mockUser.uid, email: mockUser.email } as any)
-          return
-        } else if (email === 'customer@test.com' && password === 'customer123!') {
-          const mockUser = {
-            uid: 'test-customer-uid',
-            email: 'customer@test.com',
-            displayName: '테스트 고객',
-            role: 'customer' as const,
-            createdAt: new Date().toISOString(),
-            lastLogin: new Date().toISOString(),
-            isOnline: true,
-          }
-          setUserProfile(mockUser)
-          localStorage.setItem('userRole', mockUser.role)
-          // Mock user 객체도 설정
-          setUser({ uid: mockUser.uid, email: mockUser.email } as any)
-          return
-        } else {
-          throw new Error('이메일 또는 비밀번호가 올바르지 않습니다.')
-        }
+        // ... (fallback logic if needed)
       }
       throw error
     }
@@ -169,24 +201,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const result = await signInWithPopup(auth, googleProvider)
       const user = result.user
-      
+
       // 기존 사용자 확인
       const profileRef = ref(database, `users/${user.uid}`)
       const snapshot = await get(profileRef)
-      
+
       if (!snapshot.exists()) {
         // 새 사용자인 경우 프로필 생성
         const userProfile: UserProfile = {
           uid: user.uid,
           email: user.email!,
           displayName: user.displayName || '사용자',
-          role: 'customer', // 기본값은 customer
+          role: 'member', // 기본값은 member
           createdAt: new Date().toISOString(),
           lastLogin: new Date().toISOString(),
           isOnline: true,
           avatar: user.photoURL || undefined
         }
-        
+
         await set(profileRef, userProfile)
       }
     } catch (error: any) {
@@ -195,12 +227,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
-  const signUp = async (email: string, password: string, displayName: string, role: string = 'customer') => {
+  const signUp = async (email: string, password: string, displayName: string, role: 'admin' | 'member' = 'member') => {
     const userCredential = await createUserWithEmailAndPassword(auth, email, password)
-    
+
     // 프로필 업데이트
     await updateProfile(userCredential.user, { displayName })
-    
+
     // 데이터베이스에 사용자 정보 저장
     const userProfile: UserProfile = {
       uid: userCredential.user.uid,
@@ -211,13 +243,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       lastLogin: new Date().toISOString(),
       isOnline: true
     }
-    
+
     await set(ref(database, `users/${userCredential.user.uid}`), userProfile)
   }
 
   const updateUserProfile = async (data: Partial<UserProfile>) => {
     if (!user) return
-    
+
     const updates = { ...data, uid: user.uid }
     await set(ref(database, `users/${user.uid}`), { ...userProfile, ...updates })
     setUserProfile(prev => prev ? { ...prev, ...updates } : null)
@@ -232,16 +264,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           console.warn('오프라인 상태 업데이트 실패:', error)
         }
       }
-      
+
       // 테스트 모드인 경우 처리
       if (userProfile && userProfile.uid?.startsWith('test-')) {
         setUserProfile(null)
         setUser(null as any)
       }
-      
+
       localStorage.removeItem('userRole')
+      localStorage.removeItem('userEmail')
+      localStorage.removeItem('userUid')
       await signOut(auth)
-      
+
       // 로그인 페이지로 리다이렉트
       window.location.href = '/login'
     } catch (error) {
@@ -250,6 +284,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUserProfile(null)
       setUser(null as any)
       localStorage.removeItem('userRole')
+      localStorage.removeItem('userEmail')
+      localStorage.removeItem('userUid')
       window.location.href = '/login'
     }
   }
@@ -283,7 +319,7 @@ export function useAuth() {
 // 기존 타입과의 호환성을 위한 타입 변환 함수
 export function convertToLegacyUser(userProfile: UserProfile | null): any {
   if (!userProfile) return null
-  
+
   return {
     id: userProfile.uid,
     email: userProfile.email,

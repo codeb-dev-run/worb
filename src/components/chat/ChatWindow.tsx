@@ -19,7 +19,7 @@ export default function ChatWindow({ receiverId, receiverName, onClose }: ChatWi
   const [roomId, setRoomId] = useState<string>('')
   const [isOnline, setIsOnline] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
-  
+
   // receiverName이 undefined인 경우 기본값 설정
   const displayName = receiverName || '사용자'
 
@@ -83,13 +83,13 @@ export default function ChatWindow({ receiverId, receiverName, onClose }: ChatWi
     // 메시지를 먼저 클리어
     setNewMessage('')
     setIsTyping(false)
-    
+
     try {
       await chatService.sendMessage(
         roomId,
         user.uid,
         userProfile.displayName,
-        userProfile.role === 'external' ? 'customer' : userProfile.role,
+        userProfile.role,
         receiverId,
         messageToSend
       )
@@ -110,7 +110,7 @@ export default function ChatWindow({ receiverId, receiverName, onClose }: ChatWi
 
   const handleInputChange = async (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setNewMessage(e.target.value)
-    
+
     if (!roomId || !user) return
 
     // 타이핑 상태 업데이트
@@ -140,7 +140,7 @@ export default function ChatWindow({ receiverId, receiverName, onClose }: ChatWi
 
   const groupMessagesByDate = (messages: ChatMessage[]) => {
     const grouped: { [date: string]: ChatMessage[] } = {}
-    
+
     messages.forEach(message => {
       const date = new Date(message.timestamp).toDateString()
       if (!grouped[date]) {
@@ -148,7 +148,7 @@ export default function ChatWindow({ receiverId, receiverName, onClose }: ChatWi
       }
       grouped[date].push(message)
     })
-    
+
     return grouped
   }
 
@@ -196,30 +196,27 @@ export default function ChatWindow({ receiverId, receiverName, onClose }: ChatWi
                 {formatDate(dateMessages[0].timestamp)}
               </div>
             </div>
-            
+
             {/* 해당 날짜의 메시지들 */}
             {dateMessages.map((message) => (
               <div
                 key={message.id}
-                className={`flex ${
-                  message.senderId === user?.uid ? 'justify-end' : 'justify-start'
-                }`}
+                className={`flex ${message.senderId === user?.uid ? 'justify-end' : 'justify-start'
+                  }`}
               >
                 <div
-                  className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
-                    message.senderId === user?.uid
+                  className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${message.senderId === user?.uid
                       ? 'bg-blue-500 text-white'
                       : 'bg-gray-200 text-gray-900'
-                  }`}
+                    }`}
                 >
                   {message.senderId !== user?.uid && (
                     <p className="text-xs font-medium mb-1">{message.senderName}</p>
                   )}
                   <p className="text-sm whitespace-pre-wrap">{message.message}</p>
                   <div className="flex items-center justify-end mt-1 space-x-1">
-                    <p className={`text-xs ${
-                      message.senderId === user?.uid ? 'text-blue-100' : 'text-gray-500'
-                    }`}>
+                    <p className={`text-xs ${message.senderId === user?.uid ? 'text-blue-100' : 'text-gray-500'
+                      }`}>
                       {formatTime(message.timestamp)}
                     </p>
                     {message.senderId === user?.uid && (
@@ -233,7 +230,7 @@ export default function ChatWindow({ receiverId, receiverName, onClose }: ChatWi
             ))}
           </div>
         ))}
-        
+
         {/* 타이핑 인디케이터 */}
         {typingUsers.length > 0 && (
           <div className="flex justify-start">
@@ -249,7 +246,7 @@ export default function ChatWindow({ receiverId, receiverName, onClose }: ChatWi
             </div>
           </div>
         )}
-        
+
         <div ref={messagesEndRef} />
       </div>
 

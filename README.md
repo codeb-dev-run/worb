@@ -1,351 +1,314 @@
-# CodeB Platform - 프로젝트 관리 & CMS 플랫폼
+# CodeB Platform - 통합 비즈니스 관리 플랫폼
 
-CodeB Platform은 Next.js 14, React 18, TypeScript, Firebase를 기반으로 구축된 현대적인 프로젝트 관리 및 콘텐츠 관리 시스템(CMS)을 결합한 종합 비즈니스 플랫폼입니다. 
+**Next.js 14 + Prisma + PostgreSQL 기반의 현대적인 프로젝트 관리 및 협업 플랫폼**
 
-**✅ 프로덕션 배포 준비 완료** - 최신 개선으로 안전하고 최적화된 상태입니다.
+[![Next.js](https://img.shields.io/badge/Next.js-14.1.0-black)](https://nextjs.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.0-blue)](https://www.typescriptlang.org/)
+[![Prisma](https://img.shields.io/badge/Prisma-5.10-2D3748)](https://www.prisma.io/)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-14+-336791)](https://www.postgresql.org/)
 
-## 🚀 주요 기능
+---
 
-### 1. **인증 및 권한 관리**
-- Firebase Authentication 기반 로그인/회원가입
-- 역할 기반 접근 제어 (RBAC)
-  - Admin (관리자)
-  - Manager (매니저)
-  - Developer (개발자)
-  - Customer (고객)
-- Google 소셜 로그인 지원
-- 실시간 온라인/오프라인 상태 관리
+## 🚀 핵심 기능
 
-### 2. **대시보드**
-- 역할별 맞춤형 통계 표시
-- 실시간 데이터 업데이트
-- 빠른 액션 버튼
-- 최근 활동 피드
-- 알림 센터
-- 프로젝트 진행 상황 개요
+### 📊 프로젝트 관리
+- **프로젝트 생성 마법사**: 단계별 가이드로 쉬운 프로젝트 생성
+- **다중 뷰 지원**: 리스트, 칸반, 간트 차트, 마인드맵
+- **실시간 진행률 추적**: 자동 계산되는 프로젝트 진척도
+- **팀 협업**: 역할 기반 팀원 관리 및 권한 제어
 
-### 3. **프로젝트 관리**
-- 프로젝트 생성/수정/삭제
-- 실시간 진행률 추적
-- 팀 구성원 관리
-- 예산 및 일정 관리
-- 프로젝트 상태 관리 (기획/디자인/개발/테스트/완료)
-- 검색 및 필터링 기능
-- 그리드/테이블 뷰 전환
+### ✅ 작업 관리
+- **칸반 보드**: 드래그 앤 드롭으로 작업 상태 관리
+- **간트 차트**: 일정 시각화 및 의존성 관리
+- **마인드맵 → 태스크 변환**: 아이디어를 실행 가능한 작업으로 자동 변환
+- **체크리스트 & 첨부파일**: 세부 작업 관리
 
-### 4. **프로젝트 상세 페이지**
-- 종합적인 프로젝트 개요
-- 작업 관리 시스템
-  - 작업 생성/할당
-  - 우선순위 설정
-  - 진행 상태 추적
-- 마일스톤 관리
-- 파일 공유
-- 활동 타임라인
-- 팀 구성원 정보
+### 💼 워크스페이스
+- **멀티 워크스페이스**: 여러 조직/팀 관리
+- **보드 & 캘린더**: 작업 시각화
+- **실시간 협업**: Socket.io 기반 실시간 업데이트
 
-### 5. **실시간 채팅**
-- Firebase Realtime Database 기반 실시간 메시징
-- 채팅방 생성 및 관리
-- 온라인/오프라인 상태 표시
-- 타이핑 인디케이터
-- 파일 공유 지원
-- 읽음 확인 기능
-- 채팅방 검색
+### 👥 그룹웨어
+- **근태 관리**: 출퇴근 체크 및 근무 시간 추적
+- **휴가 신청**: 결재 워크플로우 통합
+- **조직도**: 부서 및 팀 구조 관리
+- **공지사항**: 전사 소통 플랫폼
 
-### 6. **파일 관리**
-- 드래그 앤 드롭 파일 업로드
-- 파일 미리보기
-- 폴더 구조 관리
-- 파일 공유 및 권한 설정
-- 버전 관리
+### 💰 재무 관리
+- **계약 관리**: 계약서 관리 및 상태 추적
+- **수입/지출 관리**: 거래 내역 기록
+- **손익계산서**: 프로젝트별 재무 현황
 
-### 7. **AI 어시스턴트**
-- 프로젝트 인사이트 제공
-- 작업 추천
-- 리스크 분석
-- 일정 최적화 제안
+### 🤖 AI 어시스턴트
+- **프로젝트 인사이트**: Google Gemini 기반 AI 분석
+- **작업 추천**: 스마트 작업 우선순위 제안
+- **리스크 분석**: 프로젝트 위험 요소 탐지
 
-### 8. **자동화 워크플로우**
-- 워크플로우 빌더
-- 트리거 및 액션 설정
-- 실행 모니터링
-- 워크플로우 템플릿
-
-### 9. **분석 및 예측**
-- 프로젝트 분석 대시보드
-- 예측 분석
-- 성과 지표 추적
-- 맞춤형 보고서 생성
-
-### 10. **재무 관리** (관리자 전용)
-- 수익/지출 추적
-- 인보이스 관리
-- 재무 보고서
-- 예산 모니터링
+---
 
 ## 🛠 기술 스택
 
 ### Frontend
 - **Framework**: Next.js 14.1.0 (App Router)
-- **Language**: TypeScript
-- **Styling**: Tailwind CSS
-- **UI Components**: 
-  - Framer Motion (애니메이션)
-  - React Beautiful DnD (드래그 앤 드롭)
-  - Chart.js (차트)
-- **State Management**: React Context API
-- **Form Handling**: React Hook Form
+- **Language**: TypeScript 5.x
+- **Styling**: Tailwind CSS 3.4
+- **UI Components**: Radix UI, Shadcn/ui
+- **Animation**: Framer Motion
+- **State**: Zustand, React Context API
+- **Forms**: React Hook Form
 
-### Backend & Services
-- **Authentication**: Firebase Auth
-- **Database**: Firebase Realtime Database
-- **Storage**: Firebase Storage
-- **Real-time**: Socket.io
-- **API**: Next.js API Routes
+### Backend
+- **ORM**: Prisma 5.10
+- **Database**: PostgreSQL 14+
+- **Cache**: Redis (ioredis)
+- **Real-time**: Socket.io 4.8
+- **API**: Next.js API Routes + Server Actions
 
-### Development Tools
-- **Package Manager**: npm
+### AI & Analytics
+- **AI**: Google Gemini API
+- **Charts**: Recharts 2.10
+- **Visualization**: D3-based charts
+
+### Development
+- **Testing**: Jest + React Testing Library
 - **Linting**: ESLint
-- **Testing**: Jest
-- **Build Tool**: Next.js built-in
+- **Type Checking**: TypeScript
+- **Package Manager**: npm
+
+---
+
+## 📦 빠른 시작
+
+### 1. 사전 요구사항
+
+\`\`\`bash
+Node.js >= 18.17.0
+PostgreSQL >= 14.x
+npm >= 9.0.0
+\`\`\`
+
+### 2. 설치
+
+\`\`\`bash
+# 저장소 클론
+git clone https://github.com/your-org/codeb-platform.git
+cd codeb-platform
+
+# 의존성 설치
+npm install
+
+# 환경 변수 설정
+cp .env.example .env.local
+# .env.local 파일 수정
+
+# 데이터베이스 설정
+npx prisma migrate dev --name init
+npx prisma generate
+
+# 개발 서버 실행
+npm run dev
+\`\`\`
+
+### 3. 접속
+
+- **Frontend**: http://localhost:3000
+- **Prisma Studio**: \`npx prisma studio\` → http://localhost:5555
+
+---
 
 ## 📁 프로젝트 구조
 
-```
-project_cms/
+\`\`\`
+codeb-platform/
 ├── src/
-│   ├── app/                    # Next.js App Router 페이지
-│   │   ├── (admin)/           # 관리자 전용 페이지
-│   │   ├── (auth)/            # 인증 관련 페이지
-│   │   ├── (customer)/        # 고객 전용 페이지
-│   │   └── (dashboard)/       # 대시보드 관련 페이지
-│   ├── components/            # 재사용 가능한 컴포넌트
-│   │   ├── ai/               # AI 관련 컴포넌트
-│   │   ├── analytics/        # 분석 관련 컴포넌트
-│   │   ├── automation/       # 자동화 관련 컴포넌트
-│   │   ├── chat/             # 채팅 관련 컴포넌트
-│   │   ├── dashboard/        # 대시보드 컴포넌트
-│   │   ├── files/            # 파일 관리 컴포넌트
-│   │   ├── finance/          # 재무 관련 컴포넌트
-│   │   ├── layout/           # 레이아웃 컴포넌트
-│   │   ├── notification/     # 알림 컴포넌트
-│   │   └── projects/         # 프로젝트 관련 컴포넌트
-│   ├── lib/                   # 유틸리티 및 설정
-│   │   ├── firebase.ts       # Firebase 설정
-│   │   ├── auth-context.tsx  # 인증 컨텍스트
-│   │   └── socket.ts         # Socket.io 설정
-│   ├── services/             # 비즈니스 로직 서비스
-│   └── types/                # TypeScript 타입 정의
-├── public/                   # 정적 파일
-├── scripts/                  # 유틸리티 스크립트
-│   ├── create-test-accounts.js  # 테스트 계정 생성
-│   └── seed-data.js            # 샘플 데이터 생성
-└── server/
-    └── socket-server.js      # Socket.io 서버
+│   ├── app/                    # Next.js App Router
+│   │   ├── (auth)/            # 인증 페이지
+│   │   ├── (dashboard)/       # 메인 대시보드
+│   │   └── api/               # API 라우트
+│   ├── components/            # React 컴포넌트
+│   │   ├── ui/               # 기본 UI
+│   │   ├── layout/           # 레이아웃
+│   │   ├── projects/         # 프로젝트 관련
+│   │   ├── kanban/           # 칸반 보드
+│   │   ├── gantt/            # 간트 차트
+│   │   └── ...
+│   ├── lib/                   # 유틸리티 & 설정
+│   ├── services/              # 비즈니스 로직
+│   ├── actions/               # Server Actions
+│   ├── hooks/                 # Custom Hooks
+│   └── types/                 # TypeScript 타입
+├── prisma/
+│   ├── schema.prisma          # 데이터베이스 스키마
+│   ├── migrations/            # 마이그레이션
+│   └── seed.ts               # 시드 데이터
+├── docs/                      # 문서
+│   ├── ARCHITECTURE.md
+│   ├── API_DATA_MODEL.md
+│   └── DEVELOPMENT_GUIDE.md
+└── package.json
+\`\`\`
 
-```
+---
 
-## 🚀 시작하기
+## 📚 주요 페이지
 
-### 1. 환경 설정
-
-```bash
-# 의존성 설치
-npm install
-```
-
-### 2. 환경 변수 설정
-
-`.env.local` 파일을 생성하고 Firebase 설정을 추가합니다:
-
-```env
-# Firebase Configuration
-NEXT_PUBLIC_FIREBASE_API_KEY=your_api_key
-NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=your_auth_domain
-NEXT_PUBLIC_FIREBASE_DATABASE_URL=your_database_url
-NEXT_PUBLIC_FIREBASE_PROJECT_ID=your_project_id
-NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=your_storage_bucket
-NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=your_sender_id
-NEXT_PUBLIC_FIREBASE_APP_ID=your_app_id
-NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=your_measurement_id
-
-# Socket.io Server URL
-NEXT_PUBLIC_SOCKET_URL=http://localhost:3001
-```
-
-### 3. Firebase 설정
-
-1. Firebase Console에서 프로젝트 생성
-2. Authentication 활성화 (이메일/비밀번호 및 Google 로그인)
-3. Realtime Database 생성
-4. Storage 활성화
-5. Firebase 보안 규칙 설정 (`firebase-database-rules.json` 참조)
-
-### 4. 개발 서버 실행
-
-```bash
-# Next.js 개발 서버
-npm run dev
-
-# Socket.io 서버 (별도 터미널)
-npm run socket-server
-```
-
-### 5. 테스트 계정 생성
-
-```bash
-# 테스트 계정 생성
-npm run create-accounts
-
-# 샘플 데이터 생성
-npm run seed
-```
-
-생성되는 테스트 계정:
-- **관리자**: admin@codeb.com / admin123!
-- **고객**: customer@test.com / customer123!
-- **개발자**: developer@codeb.com / dev123!
-
-## 📝 주요 페이지 및 경로
-
-### 인증 페이지
-- `/login` - 로그인
-- `/forgot-password` - 비밀번호 찾기
+### 인증
+- \`/login\` - 로그인
 
 ### 대시보드
-- `/dashboard` - 메인 대시보드
-- `/projects` - 프로젝트 목록
-- `/projects/[id]` - 프로젝트 상세
-- `/projects/[id]/gantt` - 간트 차트
-- `/projects/[id]/kanban` - 칸반 보드
+- \`/dashboard\` - 메인 대시보드
+- \`/projects\` - 프로젝트 목록
+- \`/projects/[id]\` - 프로젝트 상세
+- \`/tasks\` - 작업 관리
+- \`/gantt\` - 전역 간트 차트
+- \`/users\` - 사용자 관리
 
-### 커뮤니케이션
-- `/chat` - 채팅
-- `/chat/multi` - 멀티 채팅 (운영자용)
+### 워크스페이스
+- \`/workspace/board\` - 보드 뷰
+- \`/workspace/calendar\` - 캘린더
+- \`/workspace/mindmap\` - 마인드맵
 
-### 관리 도구
-- `/files` - 파일 관리
-- `/ai` - AI 어시스턴트
-- `/automation` - 자동화 워크플로우
-- `/automation/runs` - 워크플로우 실행 내역
-- `/analytics` - 분석 및 예측
+### 그룹웨어
+- \`/groupware/attendance\` - 근태 관리
+- \`/groupware/leave\` - 휴가 관리
+- \`/groupware/organization\` - 조직도
+- \`/groupware/announcement\` - 공지사항
 
-### 관리자 전용
-- `/finance` - 재무 관리
-- `/finance/invoices` - 인보이스 관리
-- `/operators` - 운영자 관리
+### 재무
+- \`/finance/contracts\` - 계약 관리
+- \`/finance/pl\` - 손익계산서
 
-### 고객 전용
-- `/status` - 프로젝트 상태 확인
-- `/support` - 고객 지원
-- `/review` - 프로젝트 리뷰
+### 기타
+- \`/messages\` - 메시지
+- \`/files\` - 파일 관리
+- \`/automation\` - 자동화
 
-## 🔐 보안 및 권한
+---
 
-### 역할별 접근 권한
+## 🔐 데이터베이스 스키마
 
-| 기능 | Admin | Manager | Developer | Customer |
-|------|-------|---------|-----------|----------|
-| 대시보드 | ✅ | ✅ | ✅ | ✅ |
-| 프로젝트 관리 | ✅ | ✅ | ✅ | 읽기만 |
-| 채팅 | ✅ | ✅ | ✅ | ✅ |
-| 파일 관리 | ✅ | ✅ | ✅ | 제한적 |
-| AI 어시스턴트 | ✅ | ✅ | ✅ | ❌ |
-| 자동화 | ✅ | ✅ | ✅ | ❌ |
-| 분석 | ✅ | ✅ | ❌ | ❌ |
-| 재무 관리 | ✅ | ❌ | ❌ | ❌ |
-| 운영자 관리 | ✅ | ❌ | ❌ | ❌ |
+주요 모델:
 
-### Firebase 보안 규칙
-
-```json
-{
-  "rules": {
-    ".read": "auth != null",
-    ".write": "auth != null",
-    "users": {
-      "$uid": {
-        ".read": true,
-        ".write": "$uid === auth.uid || (auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin')"
-      }
-    }
-  }
+\`\`\`prisma
+model Workspace {
+  id          String
+  name        String
+  plan        String
+  members     WorkspaceMember[]
+  projects    Project[]
+  // ...
 }
-```
+
+model Project {
+  id          String
+  name        String
+  status      ProjectStatus
+  priority    ProjectPriority
+  team        ProjectMember[]
+  tasks       Task[]
+  // ...
+}
+
+model Task {
+  id          String
+  title       String
+  status      TaskStatus
+  priority    TaskPriority
+  assignee    User
+  checklist   ChecklistItem[]
+  // ...
+}
+\`\`\`
+
+전체 스키마는 \`prisma/schema.prisma\` 참조
+
+---
 
 ## 🧪 테스트
 
-```bash
-# 단위 테스트 실행
+\`\`\`bash
+# 단위 테스트
 npm test
 
-# 테스트 감시 모드
+# 테스트 워치 모드
 npm run test:watch
 
-# 테스트 커버리지
+# 커버리지
 npm run test:coverage
-```
+\`\`\`
 
-## 📦 빌드 및 배포
+---
 
-### 프로덕션 빌드
+## 🚢 배포
 
-```bash
-# 프로덕션 빌드
-npm run build
+### Vercel (권장)
 
-# 프로덕션 서버 실행
-npm start
-```
+\`\`\`bash
+# Vercel CLI 설치
+npm i -g vercel
 
-### Vercel 배포
+# 배포
+vercel
 
-1. Vercel에 프로젝트 연결
-2. 환경 변수 설정
-3. 자동 배포 설정
+# 프로덕션
+vercel --prod
+\`\`\`
 
-## 🐛 문제 해결
+### Docker
 
-### 일반적인 문제
+\`\`\`bash
+# 모든 서비스 실행
+docker-compose up -d
 
-1. **Firebase 연결 오류**
-   - 환경 변수 확인
-   - Firebase 프로젝트 설정 확인
-   - 네트워크 연결 확인
+# 로그 확인
+docker-compose logs -f
+\`\`\`
 
-2. **타입 오류**
-   - `npm run type-check` 실행
-   - TypeScript 설정 확인
+---
 
-3. **포트 충돌**
-   - `pkill -f "next dev"` 실행
-   - 다른 포트 사용: `npm run dev -- -p 3002`
+## 📖 문서
+
+- [아키텍처 가이드](./docs/ARCHITECTURE.md)
+- [개발 가이드](./docs/DEVELOPMENT_GUIDE.md)
+- [API 문서](./docs/API_DATA_MODEL.md)
+- [설치 가이드](./SETUP.md)
+- [컴포넌트 가이드](./docs/COMPONENTS.md)
+- [배포 가이드](./docs/DEPLOYMENT_GUIDE.md)
+
+---
 
 ## 🤝 기여하기
 
 1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
-
-## 📄 라이선스
-
-This project is licensed under the MIT License - see the LICENSE file for details.
-
-## 👥 개발팀
-
-- **프로젝트 매니저**: CodeB Team
-- **개발**: Full Stack Development Team
-- **디자인**: UI/UX Team
-
-## 📞 연락처
-
-- **이메일**: support@codeb.com
-- **웹사이트**: https://codeb.com
-- **문서**: https://docs.codeb.com
+2. Create feature branch (\`git checkout -b feature/AmazingFeature\`)
+3. Commit changes (\`git commit -m 'feat: Add AmazingFeature'\`)
+4. Push to branch (\`git push origin feature/AmazingFeature\`)
+5. Open Pull Request
 
 ---
 
-Made with ❤️ by CodeB Team
+## 📄 라이선스
+
+MIT License - 자세한 내용은 [LICENSE](./LICENSE) 참조
+
+---
+
+## 👥 개발팀
+
+**CodeB Development Team**
+
+- 프로젝트 관리
+- 풀스택 개발
+- UI/UX 디자인
+
+---
+
+## 📞 연락처
+
+- **Email**: support@codeb.com
+- **Website**: https://codeb.com
+- **Documentation**: https://docs.codeb.com
+
+---
+
+**Made with ❤️ by CodeB Team**

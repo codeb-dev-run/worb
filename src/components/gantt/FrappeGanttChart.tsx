@@ -1,300 +1,312 @@
 'use client'
 
-import React, { useEffect, useRef } from 'react'
-import { GanttTask } from '@/types/task'
+import React, { useEffect, useRef, useState } from 'react'
+import Gantt from 'frappe-gantt'
+import './frappe-gantt.css'
+import { Task } from '@/types/task'
+import { Button } from '@/components/ui/button'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 
 interface FrappeGanttChartProps {
-  tasks?: GanttTask[]
-  onTaskUpdate?: (task: GanttTask) => void
-  onTaskAdd?: () => void
-  onTaskDelete?: (taskId: string) => void
-  canEdit?: boolean
+  tasks: Task[]
 }
 
-export default function FrappeGanttChart({ 
-  tasks, 
-  onTaskUpdate, 
-  onTaskAdd, 
-  onTaskDelete, 
-  canEdit = false 
-}: FrappeGanttChartProps) {
-  const containerRef = useRef<HTMLDivElement>(null)
-  const ganttRef = useRef<any>(null)
+export default function FrappeGanttChart({ tasks }: FrappeGanttChartProps) {
+  const ganttRef = useRef<HTMLDivElement>(null)
+  const listRef = useRef<HTMLDivElement>(null)
+  const scrollSyncRef = useRef<boolean>(false)
+  const [ganttInstance, setGanttInstance] = useState<any>(null)
+  const [viewMode, setViewMode] = useState<string>('Day')
+
+  const HEADER_HEIGHT = 50 + 10
+  const ROW_HEIGHT = 38
 
   useEffect(() => {
-    if (!containerRef.current || !tasks || tasks.length === 0) {
-      // 기존 간트 인스턴스 정리
-      if (ganttRef.current) {
-        ganttRef.current = null
+    if (!ganttRef.current || tasks.length === 0) return
+
+    const ganttData = tasks.map(task => {
+      let startDate = task.startDate ? new Date(task.startDate) : new Date(task.createdAt)
+      if (isNaN(startDate.getTime())) startDate = new Date()
+
+      let endDate = task.dueDate ? new Date(task.dueDate) : new Date(startDate.getTime() + 24 * 60 * 60 * 1000)
+      if (isNaN(endDate.getTime())) endDate = new Date(startDate.getTime() + 24 * 60 * 60 * 1000)
+
+      if (endDate <= startDate) {
+        endDate = new Date(startDate.getTime() + 24 * 60 * 60 * 1000)
       }
-      if (containerRef.current) {
-        containerRef.current.innerHTML = ''
+
+      return {
+        id: task.id,
+        name: task.title,
+        start: startDate.toISOString().split('T')[0],
+        end: endDate.toISOString().split('T')[0],
+        progress: (task as any).progress || 0,
+        dependencies: '',
+        custom_class: `gantt-task-priority-${task.priority?.toLowerCase() || 'medium'}`
       }
-      return
-    }
+    })
 
-    // 동적으로 Frappe Gantt 라이브러리 로드
-    const initGantt = async () => {
-      try {
-        const FrappeGantt = (await import('frappe-gantt')).default
+    ganttRef.current.innerHTML = ''
 
-        // 기존 간트 인스턴스 정리
-        if (ganttRef.current) {
-          ganttRef.current = null
+    try {
+      // Simplified custom view modes with proper formatting
+      const customViewModes = [
+        {
+          name: 'Day',
+          step: 24,
+          column_width: 50,
+          upper_text: (d: Date, ld: Date, lang: string) => {
+            if (!ld || d.getMonth() !== ld.getMonth()) {
+              return `${d.getFullYear()}년 ${d.getMonth() + 1}월`
+            }
+            return ''
+          },
+          lower_text: (d: Date, ld: Date, lang: string) => {
+            return `${d.getMonth() + 1}/${d.getDate()}`
+          }
+        },
+        {
+          name: 'Week',
+          step: 24 * 7,
+          column_width: 140,
+          upper_text: (d: Date, ld: Date, lang: string) => {
+            if (!ld || d.getMonth() !== ld.getMonth()) {
+              return `${d.getFullYear()}년 ${d.getMonth() + 1}월`
+            }
+            return ''
+          },
+          lower_text: (d: Date, ld: Date, lang: string) => {
+            const end = new Date(d)
+            end.setDate(end.getDate() + 6)
+            return `${d.getMonth() + 1}/${d.getDate()} - ${end.getMonth() + 1}/${end.getDate()}`
+          }
+        },
+        {
+          name: 'Month',
+          step: 24 * 30,
+          column_width: 120,
+          upper_text: (d: Date, ld: Date, lang: string) => {
+            if (!ld || d.getFullYear() !== ld.getFullYear()) {
+              return `${d.getFullYear()}년`
+            }
+            return ''
+          },
+          lower_text: (d: Date, ld: Date, lang: string) => {
+            return `${d.getMonth() + 1}월`
+          }
         }
-        if (containerRef.current) {
-          containerRef.current.innerHTML = ''
-        }
+      ]
 
-        // Frappe Gantt 데이터 형식으로 변환
-        const ganttTasks = (tasks || [])
-          .filter(task => {
-            return task && 
-                   typeof task === 'object' && 
-                   task.id && 
-                   task.title && 
-                   typeof task.id === 'string' && 
-                   typeof task.title === 'string'
-          })
-          .map(task => ({
-            id: String(task.id),
-            name: String(task.title || '제목 없음'),
-            start: task.startDate?.toISOString().split('T')[0] || new Date().toISOString().split('T')[0],
-            end: task.dueDate?.toISOString().split('T')[0] || new Date().toISOString().split('T')[0],
-            progress: Number(task.progress || 0),
-            custom_class: String(task.priority || 'medium'),
-            dependencies: task.dependencies?.join(',') || ''
-          }))
-          .filter(task => task && task.id && task.name) // 결과 검증
-
-        // 간트 태스크가 비어있으면 초기화하지 않음
-        if (ganttTasks.length === 0) {
-          console.log('No valid gantt tasks to display')
-          return
-        }
-
-        // 최종 검증
-        console.log('Final gantt tasks before initialization:', ganttTasks)
-        const hasInvalidTasks = ganttTasks.some(task => !task || !task.id || !task.name)
-        if (hasInvalidTasks) {
-          console.error('Found invalid tasks:', ganttTasks.filter(task => !task || !task.id || !task.name))
-          return
-        }
-
-        // Frappe Gantt 초기화
-        if (!containerRef.current) return
-        
-        console.log('Creating Frappe Gantt with tasks:', ganttTasks)
-        
-        // DOM이 준비될 때까지 대기
-        await new Promise(resolve => setTimeout(resolve, 100))
-        
-        // 컨테이너가 여전히 존재하는지 확인
-        if (!containerRef.current) return
-        
-        try {
-          // 최소한의 설정으로 초기화
-          ganttRef.current = new FrappeGantt(containerRef.current, ganttTasks, {
-            view_mode: 'Day',
-            date_format: 'YYYY-MM-DD',
-            header_height: 50,
-            column_width: 30,
-            step: 24,
-            bar_height: 20,
-            bar_corner_radius: 3,
-            arrow_curve: 5,
-            padding: 18,
-            on_click: canEdit ? (task: any) => {
-              console.log('Task clicked:', task)
-              if (onTaskUpdate) {
-                const originalTask = tasks.find(t => String(t.id) === String(task.id))
-                if (originalTask) {
-                  onTaskUpdate(originalTask)
-                }
-              }
-            } : undefined,
-            on_progress_change: canEdit ? (task: any, progress: number) => {
-              console.log('Progress changed:', task, progress)
-              if (onTaskUpdate) {
-                const originalTask = tasks.find(t => String(t.id) === String(task.id))
-                if (originalTask) {
-                  onTaskUpdate({ ...originalTask, progress })
-                }
-              }
-            } : undefined,
-            on_date_change: canEdit ? (task: any, start: Date, end: Date) => {
-              console.log('Date changed:', task, start, end)
-              if (onTaskUpdate) {
-                const originalTask = tasks.find(t => String(t.id) === String(task.id))
-                if (originalTask) {
-                  onTaskUpdate({ ...originalTask, startDate: start, dueDate: end })
-                }
-              }
-            } : undefined
-          })
-          
-          console.log('Frappe Gantt initialized successfully')
-        } catch (error) {
-          console.error('Failed to initialize Frappe Gantt:', error)
-          // 실패 시 에러 메시지 표시
-          if (containerRef.current) {
-            containerRef.current.innerHTML = `
-              <div class="flex flex-col items-center justify-center h-64 text-center p-4">
-                <div class="text-red-500 mb-2">
-                  <svg class="w-12 h-12 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                  </svg>
-                </div>
-                <h3 class="text-lg font-medium text-gray-900 mb-1">간트차트를 로드할 수 없습니다</h3>
-                <p class="text-sm text-gray-600">페이지를 새로고침하거나 잠시 후 다시 시도해주세요.</p>
+      const gantt = new Gantt(ganttRef.current, ganttData, {
+        header_height: 50,
+        column_width: 50,
+        step: 24,
+        view_modes: customViewModes,
+        bar_height: 20,
+        bar_corner_radius: 3,
+        arrow_curve: 5,
+        padding: 18,
+        view_mode: viewMode,
+        date_format: 'YYYY-MM-DD',
+        language: 'ko',
+        custom_popup_html: function (task: any) {
+          return `
+            <div class="p-3 w-64 text-sm">
+              <div class="font-bold mb-1">${task.name}</div>
+              <div class="text-gray-600 text-xs mb-2">
+                ${task.start} ~ ${task.end}
               </div>
-            `
-          }
+              <div class="flex items-center justify-between">
+                <span class="text-xs text-gray-500">진행률</span>
+                <span class="font-medium">${task.progress}%</span>
+              </div>
+            </div>
+          `
+        },
+        on_click: (task: any) => {
+          console.log('Task clicked:', task)
+        },
+        on_date_change: (task: any, start: Date, end: Date) => {
+          console.log('Task date changed:', task, start, end)
+        },
+        on_progress_change: (task: any, progress: number) => {
+          console.log('Task progress changed:', task, progress)
+        },
+        on_view_change: (mode: string) => {
+          console.log('View mode changed:', mode)
         }
-        
-        // CSS 스타일 동적 추가
-        const style = document.createElement('style')
-        style.textContent = `
-          .gantt-container {
-            font-family: 'Inter', sans-serif;
-          }
-          .bar-urgent {
-            fill: #ef4444;
-          }
-          .bar-high {
-            fill: #f97316;
-          }
-          .bar-medium {
-            fill: #3b82f6;
-          }
-          .bar-low {
-            fill: #10b981;
-          }
-          .details-container {
-            padding: 10px;
-          }
-          .details-container h5 {
-            margin: 0 0 8px 0;
-            font-weight: 600;
-          }
-          .details-container p {
-            margin: 4px 0;
-            font-size: 12px;
-          }
-        `
-        document.head.appendChild(style)
+      })
 
-      } catch (error) {
-        console.error('Error loading Frappe Gantt:', error)
-      }
+      setGanttInstance(gantt)
+
+      // Wait for DOM to be ready, then configure container
+      setTimeout(() => {
+        const ganttContainer = ganttRef.current?.querySelector('.gantt-container') as HTMLElement
+        if (ganttContainer) {
+          ganttContainer.style.height = '100%'
+          ganttContainer.style.overflow = 'auto'
+
+          // Sync scroll handler
+          const handleScroll = () => {
+            if (listRef.current && !scrollSyncRef.current) {
+              scrollSyncRef.current = true
+              listRef.current.scrollTop = ganttContainer.scrollTop
+              setTimeout(() => { scrollSyncRef.current = false }, 10)
+            }
+          }
+
+          ganttContainer.addEventListener('scroll', handleScroll)
+
+          // Scroll to today after a short delay
+          setTimeout(() => {
+            const todayHighlight = ganttContainer.querySelector('.current-date-highlight') || ganttContainer.querySelector('.today-highlight')
+            if (todayHighlight) {
+              const scrollLeft = (todayHighlight as HTMLElement).offsetLeft - ganttContainer.clientWidth / 2
+              ganttContainer.scrollLeft = scrollLeft > 0 ? scrollLeft : 0
+            }
+          }, 100)
+        }
+      }, 50)
+
+    } catch (error) {
+      console.error('Failed to initialize Frappe Gantt:', error)
     }
 
-    initGantt()
-    
-    // 컴포넌트 언마운트 시 정리
-    return () => {
-      if (ganttRef.current) {
-        try {
-          // Frappe Gantt 인스턴스 정리
-          ganttRef.current = null
-        } catch (error) {
-          console.error('Error cleaning up Gantt:', error)
-        }
-      }
-      if (containerRef.current) {
-        containerRef.current.innerHTML = ''
-      }
+  }, [tasks, viewMode])
+
+  const handleViewModeChange = (mode: string) => {
+    setViewMode(mode)
+    if (ganttInstance) {
+      ganttInstance.change_view_mode(mode)
     }
-  }, [tasks, canEdit, onTaskUpdate, onTaskAdd])
+  }
 
+  const handleListScroll = () => {
+    const ganttContainer = ganttRef.current?.querySelector('.gantt-container') as HTMLElement
+    if (ganttContainer && listRef.current && !scrollSyncRef.current) {
+      scrollSyncRef.current = true
+      ganttContainer.scrollTop = listRef.current.scrollTop
+      setTimeout(() => { scrollSyncRef.current = false }, 10)
+    }
+  }
 
-  if (!tasks || tasks.length === 0) {
+  if (tasks.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center h-full py-12">
-        <div className="text-6xl mb-4 opacity-50">📊</div>
-        <h3 className="text-lg font-medium text-gray-900 mb-2">간트차트가 비어있습니다</h3>
-        <p className="text-gray-600 mb-6 text-center">
-          시작일과 마감일이 설정된 태스크를 생성하면<br />
-          간트차트에서 확인할 수 있습니다.
-        </p>
-        {canEdit && onTaskAdd && (
-          <button
-            onClick={onTaskAdd}
-            className="px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
-          >
-            첫 번째 태스크 만들기
-          </button>
-        )}
+      <div className="h-full flex items-center justify-center bg-gray-50">
+        <p className="text-gray-500">표시할 작업이 없습니다.</p>
       </div>
     )
   }
 
   return (
-    <div className="h-full w-full">
-      {/* 간트차트 컨트롤 */}
-      <div className="flex items-center justify-between mb-4 p-4 bg-gray-50 rounded-lg">
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-medium text-gray-700">보기 모드:</span>
-          <div className="flex gap-1">
-            {['Day', 'Week', 'Month'].map(mode => (
-              <button
-                key={mode}
-                onClick={() => {
-                  try {
-                    if (ganttRef.current && ganttRef.current.change_view_mode) {
-                      ganttRef.current.change_view_mode(mode)
-                    }
-                  } catch (error) {
-                    console.error('Failed to change view mode:', error)
-                  }
-                }}
-                className="px-3 py-1 text-xs bg-white border border-gray-300 rounded hover:bg-gray-100"
-              >
-                {mode === 'Day' ? '일' : mode === 'Week' ? '주' : '월'}
-              </button>
-            ))}
-          </div>
-        </div>
-        
-        {canEdit && onTaskAdd && (
-          <button
-            onClick={onTaskAdd}
-            className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-sm"
+    <div className="flex flex-col h-full">
+      {/* View Mode Selector */}
+      <div className="flex justify-end p-4 border-b bg-white">
+        <Select value={viewMode} onValueChange={setViewMode}>
+          <SelectTrigger className="w-[180px]">
+            <SelectValue placeholder="보기 모드" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="Day">일별</SelectItem>
+            <SelectItem value="Week">주별</SelectItem>
+            <SelectItem value="Month">월별</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* Gantt Chart Container */}
+      <div className="flex-1 flex overflow-hidden">
+        {/* Task List */}
+        <div
+          ref={listRef}
+          className="w-64 border-r bg-white overflow-y-auto flex-shrink-0"
+          onScroll={handleListScroll}
+        >
+          {/* Header */}
+          <div
+            className="sticky top-0 z-10 bg-gray-50 border-b font-semibold text-sm px-3 flex items-center"
+            style={{ height: `${HEADER_HEIGHT}px` }}
           >
-            + 태스크 추가
-          </button>
-        )}
-      </div>
+            <span className="flex-1">작업</span>
+            <span className="w-10 text-center">담당</span>
+          </div>
 
-      {/* 범례 */}
-      <div className="flex items-center gap-4 mb-4 p-3 bg-gray-50 rounded-lg">
-        <span className="text-sm font-medium text-gray-700">우선순위:</span>
-        <div className="flex gap-3">
-          <div className="flex items-center gap-1">
-            <div className="w-3 h-3 bg-red-500 rounded"></div>
-            <span className="text-xs">긴급</span>
-          </div>
-          <div className="flex items-center gap-1">
-            <div className="w-3 h-3 bg-orange-500 rounded"></div>
-            <span className="text-xs">높음</span>
-          </div>
-          <div className="flex items-center gap-1">
-            <div className="w-3 h-3 bg-blue-500 rounded"></div>
-            <span className="text-xs">보통</span>
-          </div>
-          <div className="flex items-center gap-1">
-            <div className="w-3 h-3 bg-green-500 rounded"></div>
-            <span className="text-xs">낮음</span>
-          </div>
+          {/* Task Rows */}
+          {tasks.map((task, index) => {
+            const department = getDepartmentByMember(task.assigneeId)
+            const departmentColor = department?.color || '#3B82F6'
+
+            // Handle assignee - it could be a string (ID) or an object
+            const assigneeName = typeof task.assignee === 'object' && task.assignee?.name
+              ? task.assignee.name
+              : task.assigneeId
+            const memberInitial = assigneeName?.[0]?.toUpperCase() || 'U'
+
+            return (
+              <div
+                key={task.id}
+                className="flex items-center px-3 border-b hover:bg-gray-50 transition-colors"
+                style={{
+                  height: `${ROW_HEIGHT}px`,
+                  borderLeft: `3px solid ${departmentColor}`
+                }}
+              >
+                <div className="flex-1 min-w-0 pr-2">
+                  <div className="text-sm font-medium truncate">{task.title}</div>
+                  <div className="text-xs text-gray-500 truncate">
+                    {task.startDate && task.dueDate && (
+                      <>
+                        {new Date(task.startDate).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' })} -
+                        {new Date(task.dueDate).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' })}
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                {/* Member Avatar */}
+                <div className="w-10 flex justify-center flex-shrink-0">
+                  {task.assigneeId ? (
+                    <div
+                      className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-semibold"
+                      style={{ backgroundColor: departmentColor }}
+                      title={assigneeName || task.assigneeId}
+                    >
+                      {memberInitial}
+                    </div>
+                  ) : (
+                    <div className="w-7 h-7 rounded-full bg-gray-200 flex items-center justify-center text-gray-400 text-xs">
+                      ?
+                    </div>
+                  )}
+                </div>
+              </div>
+            )
+          })}
         </div>
-      </div>
 
-      {/* 간트차트 */}
-      <div 
-        ref={containerRef} 
-        className="gantt-container bg-white border border-gray-200 rounded-lg"
-        style={{ minHeight: '400px' }}
-      />
+        {/* Gantt Chart */}
+        <div
+          ref={ganttRef}
+          className="flex-1 overflow-x-auto overflow-y-auto bg-white"
+        />
+      </div>
     </div>
   )
+}
+
+// Helper function to get department by member
+function getDepartmentByMember(memberId?: string) {
+  // This would ideally come from a context or prop
+  // For now, return a default department
+  const DEPARTMENTS = [
+    { id: 'planning', name: '기획', color: '#8B5CF6' },
+    { id: 'development', name: '개발', color: '#3B82F6' },
+    { id: 'design', name: '디자인', color: '#EC4899' },
+    { id: 'operations', name: '운영', color: '#10B981' },
+    { id: 'marketing', name: '마케팅', color: '#F59E0B' },
+  ]
+
+  // TODO: Get actual member department from API/context
+  // For now, return a random department for demonstration
+  return DEPARTMENTS[Math.floor(Math.random() * DEPARTMENTS.length)]
 }

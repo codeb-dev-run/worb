@@ -16,11 +16,11 @@ import { Textarea } from '@/components/ui/textarea'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { 
+import {
   MessageSquare, Send, Search, Filter, Star, Archive,
   Trash2, Reply, Forward, Paperclip, Calendar, User,
   Mail, Phone, Building2, Clock, CheckCheck, Loader2,
-  Inbox, FileText
+  Inbox, FileText, Hash, Briefcase, Bell
 } from 'lucide-react'
 
 interface Message {
@@ -35,7 +35,7 @@ interface Message {
   toEmail: string
   projectId?: string
   projectName?: string
-  type: 'general' | 'project' | 'support' | 'announcement'
+  type: 'general' | 'project' | 'announcement'
   priority: 'low' | 'normal' | 'high'
   status: 'unread' | 'read' | 'replied' | 'forwarded'
   isStarred: boolean
@@ -46,11 +46,10 @@ interface Message {
   repliedAt?: string
 }
 
-const typeConfig = {
-  general: { label: '일반', icon: Mail },
-  project: { label: '프로젝트', icon: Building2 },
-  support: { label: '지원', icon: MessageSquare },
-  announcement: { label: '공지', icon: FileText }
+const CHANNEL_TYPES = {
+  general: { label: '일반', icon: Hash },
+  project: { label: '프로젝트', icon: Briefcase },
+  announcement: { label: '공지사항', icon: Bell },
 }
 
 const priorityConfig = {
@@ -69,7 +68,11 @@ export default function MessagesPage() {
   const [showCompose, setShowCompose] = useState(false)
   const [selectedMessage, setSelectedMessage] = useState<Message | null>(null)
   const [replyTo, setReplyTo] = useState<Message | null>(null)
-  
+  const [activeChannel, setActiveChannel] = useState<string | null>(null)
+  const [messageInput, setMessageInput] = useState('')
+  const [showSidebar, setShowSidebar] = useState(true)
+  const [activeTab, setActiveTab] = useState('all')
+
   const [formData, setFormData] = useState({
     subject: '',
     content: '',
@@ -78,12 +81,10 @@ export default function MessagesPage() {
     toEmail: ''
   })
 
+
+
   // 고객이 아닌 경우 리다이렉트
-  useEffect(() => {
-    if (!loading && userProfile && userProfile.role !== 'customer' && userProfile.role !== 'external') {
-      router.push('/dashboard')
-    }
-  }, [userProfile, loading, router])
+
 
   // 메시지 데이터 로드
   useEffect(() => {
@@ -91,7 +92,7 @@ export default function MessagesPage() {
 
     const db = getDatabase(app)
     const messagesRef = ref(db, 'messages')
-    
+
     const unsubscribe = onValue(messagesRef, (snapshot) => {
       const data = snapshot.val()
       if (data) {
@@ -99,13 +100,13 @@ export default function MessagesPage() {
           id,
           ...message
         }))
-        
+
         // 고객은 자신이 받거나 보낸 메시지만 볼 수 있음
-        const filteredMessages = messagesList.filter(msg => 
+        const filteredMessages = messagesList.filter(msg =>
           msg.toId === user.uid || msg.fromId === user.uid
         )
-        
-        setMessages(filteredMessages.sort((a, b) => 
+
+        setMessages(filteredMessages.sort((a, b) =>
           new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
         ))
       } else {
@@ -114,28 +115,37 @@ export default function MessagesPage() {
       setLoading(false)
     })
 
-    return () => off(messagesRef)
+    return () => unsubscribe()
   }, [user, userProfile])
 
+  // 권한 체크
+  if (userProfile?.role !== 'admin' && userProfile?.role !== 'member') {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <p className="text-muted-foreground">접근 권한이 없습니다.</p>
+      </div>
+    )
+  }
+
   const filteredMessages = messages.filter(message => {
-    const matchesSearch = 
+    const matchesSearch =
       message.subject.toLowerCase().includes(searchTerm.toLowerCase()) ||
       message.content.toLowerCase().includes(searchTerm.toLowerCase()) ||
       message.fromName.toLowerCase().includes(searchTerm.toLowerCase())
-    
+
     const matchesType = filterType === 'all' || message.type === filterType
-    const matchesFilter = 
+    const matchesFilter =
       filterType === 'starred' ? message.isStarred :
-      filterType === 'archived' ? message.isArchived :
-      filterType === 'unread' ? message.status === 'unread' :
-      true
-    
+        filterType === 'archived' ? message.isArchived :
+          filterType === 'unread' ? message.status === 'unread' :
+            true
+
     return matchesSearch && matchesType && matchesFilter && !message.isArchived
   })
 
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault()
-    
+
     try {
       const db = getDatabase(app)
       const messageData = {
@@ -154,14 +164,14 @@ export default function MessagesPage() {
         isArchived: false,
         createdAt: new Date().toISOString()
       }
-      
+
       if (replyTo) {
         messageData.subject = `Re: ${replyTo.subject}`
       }
-      
+
       await push(ref(db, 'messages'), messageData)
       toast.success('메시지가 전송되었습니다.')
-      
+
       handleCloseCompose()
     } catch (error) {
       console.error('Error sending message:', error)
@@ -171,7 +181,7 @@ export default function MessagesPage() {
 
   const handleView = async (message: Message) => {
     setSelectedMessage(message)
-    
+
     // 읽음 처리
     if (message.toId === user?.uid && message.status === 'unread') {
       const db = getDatabase(app)
@@ -251,7 +261,7 @@ export default function MessagesPage() {
             {unreadCount > 0 ? `${unreadCount}개의 읽지 않은 메시지가 있습니다` : '모든 메시지를 확인했습니다'}
           </p>
         </div>
-        
+
         <Button onClick={() => setShowCompose(true)}>
           <Send className="mr-2 h-4 w-4" />
           메시지 작성
@@ -271,7 +281,7 @@ export default function MessagesPage() {
             </div>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
@@ -283,7 +293,7 @@ export default function MessagesPage() {
             </div>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
@@ -297,7 +307,7 @@ export default function MessagesPage() {
             </div>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
@@ -325,14 +335,13 @@ export default function MessagesPage() {
             className="pl-10"
           />
         </div>
-        
+
         <Tabs value={filterType} onValueChange={setFilterType}>
           <TabsList>
             <TabsTrigger value="all">전체</TabsTrigger>
             <TabsTrigger value="unread">읽지않음</TabsTrigger>
             <TabsTrigger value="starred">중요</TabsTrigger>
             <TabsTrigger value="project">프로젝트</TabsTrigger>
-            <TabsTrigger value="support">지원</TabsTrigger>
           </TabsList>
         </Tabs>
       </div>
@@ -353,20 +362,19 @@ export default function MessagesPage() {
       ) : (
         <div className="space-y-2">
           {filteredMessages.map((message) => {
-            const TypeIcon = typeConfig[message.type].icon
+            const TypeIcon = CHANNEL_TYPES[message.type as keyof typeof CHANNEL_TYPES]?.icon || Hash
             const isUnread = message.toId === user?.uid && message.status === 'unread'
             const isSent = message.fromId === user?.uid
-            
+
             return (
               <motion.div
                 key={message.id}
                 initial={{ opacity: 0, x: -20 }}
                 animate={{ opacity: 1, x: 0 }}
               >
-                <Card 
-                  className={`hover:shadow-md transition-all cursor-pointer ${
-                    isUnread ? 'border-primary bg-primary/5' : ''
-                  }`}
+                <Card
+                  className={`hover:shadow-md transition-all cursor-pointer ${isUnread ? 'border-primary bg-primary/5' : ''
+                    }`}
                   onClick={() => handleView(message)}
                 >
                   <CardContent className="p-4">
@@ -377,7 +385,7 @@ export default function MessagesPage() {
                             {isSent ? message.toName[0] : message.fromName[0]}
                           </AvatarFallback>
                         </Avatar>
-                        
+
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-1">
                             <h3 className={`font-medium truncate ${isUnread ? 'font-semibold' : ''}`}>
@@ -389,11 +397,13 @@ export default function MessagesPage() {
                               </Badge>
                             )}
                             <Badge variant="outline" className="ml-auto">
-                              <TypeIcon className="h-3 w-3 mr-1" />
-                              {typeConfig[message.type].label}
+                              {CHANNEL_TYPES[message.type as keyof typeof CHANNEL_TYPES]?.icon &&
+                                React.createElement(CHANNEL_TYPES[message.type as keyof typeof CHANNEL_TYPES].icon, { className: "h-3 w-3 mr-1" })
+                              }
+                              {CHANNEL_TYPES[message.type as keyof typeof CHANNEL_TYPES]?.label || message.type}
                             </Badge>
                           </div>
-                          
+
                           <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
                             <span className="font-medium">
                               {isSent ? `받는 사람: ${message.toName}` : message.fromName}
@@ -401,11 +411,11 @@ export default function MessagesPage() {
                             <span>•</span>
                             <span>{message.fromEmail}</span>
                           </div>
-                          
+
                           <p className="text-sm text-muted-foreground line-clamp-1">
                             {message.content}
                           </p>
-                          
+
                           {message.projectName && (
                             <div className="flex items-center gap-1 mt-2">
                               <Building2 className="h-3 w-3" />
@@ -414,7 +424,7 @@ export default function MessagesPage() {
                           )}
                         </div>
                       </div>
-                      
+
                       <div className="flex items-center gap-2 ml-4">
                         <Button
                           variant="ghost"
@@ -426,7 +436,7 @@ export default function MessagesPage() {
                         >
                           <Star className={`h-4 w-4 ${message.isStarred ? 'fill-yellow-400 text-yellow-400' : ''}`} />
                         </Button>
-                        
+
                         <div className="text-right">
                           <p className="text-xs text-muted-foreground">
                             {new Date(message.createdAt).toLocaleDateString('ko-KR')}
@@ -435,7 +445,7 @@ export default function MessagesPage() {
                             {new Date(message.createdAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}
                           </p>
                         </div>
-                        
+
                         {isUnread && (
                           <div className="w-2 h-2 bg-primary rounded-full" />
                         )}
@@ -552,7 +562,7 @@ export default function MessagesPage() {
                       {priorityConfig[selectedMessage.priority].label}
                     </Badge>
                     <Badge variant="outline">
-                      {typeConfig[selectedMessage.type].label}
+                      {CHANNEL_TYPES[selectedMessage.type as keyof typeof CHANNEL_TYPES]?.label || selectedMessage.type}
                     </Badge>
                     {selectedMessage.projectName && (
                       <Badge variant="secondary">{selectedMessage.projectName}</Badge>

@@ -15,7 +15,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { 
+import {
   FileText, Download, Eye, Search, Filter, Calendar,
   Building2, Clock, CheckCircle, AlertCircle, XCircle,
   Plus, Edit2, Trash2, DollarSign, User, Shield,
@@ -78,7 +78,7 @@ export default function ContractsPage() {
   const [showModal, setShowModal] = useState(false)
   const [editingContract, setEditingContract] = useState<Contract | null>(null)
   const [selectedContract, setSelectedContract] = useState<Contract | null>(null)
-  
+
   const [formData, setFormData] = useState<{
     contractNumber: string
     title: string
@@ -106,11 +106,11 @@ export default function ContractsPage() {
   })
 
   useEffect(() => {
-    if (!user || (userProfile?.role !== 'admin' && userProfile?.role !== 'developer' && userProfile?.role !== 'manager')) return
+    if (!user || (userProfile?.role !== 'admin' && userProfile?.role !== 'member')) return
 
     const db = getDatabase(app)
     const contractsRef = ref(db, 'contracts')
-    
+
     const unsubscribe = onValue(contractsRef, (snapshot) => {
       const data = snapshot.val()
       if (data) {
@@ -118,8 +118,8 @@ export default function ContractsPage() {
           id,
           ...contract
         }))
-        
-        setContracts(contractsList.sort((a, b) => 
+
+        setContracts(contractsList.sort((a, b) =>
           new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
         ))
       } else {
@@ -132,15 +132,15 @@ export default function ContractsPage() {
   }, [user, userProfile])
 
   const filteredContracts = contracts.filter(contract => {
-    const matchesSearch = 
+    const matchesSearch =
       contract.contractNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
       contract.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
       contract.clientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       contract.projectName?.toLowerCase().includes(searchTerm.toLowerCase())
-    
+
     const matchesStatus = filterStatus === 'all' || contract.status === filterStatus
     const matchesType = filterType === 'all' || contract.type === filterType
-    
+
     return matchesSearch && matchesStatus && matchesType
   })
 
@@ -163,7 +163,7 @@ export default function ContractsPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    
+
     try {
       const db = getDatabase(app)
       const contractData = {
@@ -189,7 +189,7 @@ export default function ContractsPage() {
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
       }
-      
+
       if (editingContract) {
         await update(ref(db, `contracts/${editingContract.id}`), {
           ...contractData,
@@ -200,7 +200,7 @@ export default function ContractsPage() {
         await push(ref(db, 'contracts'), contractData)
         toast.success('계약이 생성되었습니다.')
       }
-      
+
       handleCloseModal()
     } catch (error) {
       console.error('Error saving contract:', error)
@@ -210,7 +210,7 @@ export default function ContractsPage() {
 
   const handleDelete = async (contractId: string) => {
     if (!confirm('정말 이 계약을 삭제하시겠습니까?')) return
-    
+
     try {
       const db = getDatabase(app)
       await remove(ref(db, `contracts/${contractId}`))
@@ -303,7 +303,7 @@ export default function ContractsPage() {
           <h1 className="text-3xl font-bold tracking-tight">계약 관리</h1>
           <p className="text-muted-foreground mt-1">프로젝트 계약을 관리하고 추적합니다</p>
         </div>
-        
+
         <Button onClick={() => setShowModal(true)}>
           <Plus className="mr-2 h-4 w-4" />
           새 계약
@@ -323,7 +323,7 @@ export default function ContractsPage() {
             </div>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
@@ -335,7 +335,7 @@ export default function ContractsPage() {
             </div>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
@@ -347,7 +347,7 @@ export default function ContractsPage() {
             </div>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
@@ -373,7 +373,7 @@ export default function ContractsPage() {
             className="pl-10"
           />
         </div>
-        
+
         <Select value={filterStatus} onValueChange={setFilterStatus}>
           <SelectTrigger className="w-[180px]">
             <SelectValue placeholder="상태 필터" />
@@ -388,7 +388,7 @@ export default function ContractsPage() {
             <SelectItem value="expired">만료</SelectItem>
           </SelectContent>
         </Select>
-        
+
         <Select value={filterType} onValueChange={setFilterType}>
           <SelectTrigger className="w-[180px]">
             <SelectValue placeholder="유형 필터" />
@@ -423,7 +423,7 @@ export default function ContractsPage() {
             const TypeIcon = contractTypeConfig[contract.type].icon
             const statusInfo = statusConfig[contract.status]
             const daysUntilExpiry = contract.status === 'active' ? getDaysUntilExpiry(contract.endDate) : null
-            
+
             return (
               <motion.div
                 key={contract.id}
@@ -431,7 +431,7 @@ export default function ContractsPage() {
                 animate={{ opacity: 1, scale: 1 }}
                 whileHover={{ scale: 1.02 }}
               >
-                <Card 
+                <Card
                   className="h-full hover:shadow-lg transition-all cursor-pointer"
                   onClick={() => setSelectedContract(contract)}
                 >
@@ -441,45 +441,45 @@ export default function ContractsPage() {
                         <h3 className="font-semibold text-lg">{contract.contractNumber}</h3>
                         <p className="text-sm text-muted-foreground mt-1">{contract.title}</p>
                       </div>
-                      <Badge 
+                      <Badge
                         variant={statusInfo.variant}
                         className={contract.status === 'active' ? 'bg-green-500' : undefined}
                       >
                         {statusInfo.label}
                       </Badge>
                     </div>
-                    
+
                     <div className="space-y-3">
                       <div className="flex items-center gap-2 text-sm">
                         <TypeIcon className="h-4 w-4 text-muted-foreground" />
                         <span>{contractTypeConfig[contract.type].label}</span>
                       </div>
-                      
+
                       <div className="flex items-center gap-2 text-sm">
                         <Building2 className="h-4 w-4 text-muted-foreground" />
                         <span>{contract.clientName}</span>
                       </div>
-                      
+
                       {contract.projectName && (
                         <div className="flex items-center gap-2 text-sm">
                           <FileText className="h-4 w-4 text-muted-foreground" />
                           <span>{contract.projectName}</span>
                         </div>
                       )}
-                      
+
                       <div className="flex items-center gap-2 text-sm">
                         <DollarSign className="h-4 w-4 text-muted-foreground" />
                         <span className="font-medium">{formatCurrency(contract.value)}</span>
                       </div>
-                      
+
                       <div className="flex items-center gap-2 text-sm">
                         <Calendar className="h-4 w-4 text-muted-foreground" />
                         <span>
-                          {new Date(contract.startDate).toLocaleDateString('ko-KR')} - 
+                          {new Date(contract.startDate).toLocaleDateString('ko-KR')} -
                           {new Date(contract.endDate).toLocaleDateString('ko-KR')}
                         </span>
                       </div>
-                      
+
                       {daysUntilExpiry !== null && daysUntilExpiry <= 30 && daysUntilExpiry > 0 && (
                         <div className="flex items-center gap-2">
                           <AlertTriangle className="h-4 w-4 text-orange-600" />
@@ -488,14 +488,14 @@ export default function ContractsPage() {
                           </span>
                         </div>
                       )}
-                      
+
                       {contract.autoRenew && (
                         <Badge variant="outline" className="text-xs">
                           자동갱신
                         </Badge>
                       )}
                     </div>
-                    
+
                     <div className="flex gap-2 mt-4 pt-4 border-t">
                       <Button
                         size="sm"
@@ -696,7 +696,7 @@ export default function ContractsPage() {
                   <p className="text-muted-foreground mt-1">{selectedContract.title}</p>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Badge 
+                  <Badge
                     variant={statusConfig[selectedContract.status].variant}
                     className={selectedContract.status === 'active' ? 'bg-green-500' : undefined}
                   >

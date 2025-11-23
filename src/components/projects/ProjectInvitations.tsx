@@ -53,7 +53,7 @@ export default function ProjectInvitations({ projectId, projectName }: ProjectIn
         newInvitation.email || undefined,
         newInvitation.expiresInDays
       )
-      
+
       setInvitations([invitation, ...invitations])
       setShowCreateModal(false)
       setNewInvitation({
@@ -83,7 +83,7 @@ export default function ProjectInvitations({ projectId, projectName }: ProjectIn
     if (confirm('정말 이 초대를 취소하시겠습니까?')) {
       try {
         await invitationService.revokeInvitation(invitationId)
-        setInvitations(invitations.map(inv => 
+        setInvitations(invitations.map(inv =>
           inv.id === invitationId ? { ...inv, status: 'revoked' } : inv
         ))
       } catch (error) {
@@ -121,7 +121,7 @@ export default function ProjectInvitations({ projectId, projectName }: ProjectIn
     )
   }
 
-  const canManageInvitations = userProfile?.role === 'admin' || userProfile?.role === 'manager'
+  const canManageInvitations = userProfile?.role === 'admin'
 
   return (
     <div className="space-y-6">
@@ -174,7 +174,7 @@ export default function ProjectInvitations({ projectId, projectName }: ProjectIn
                       <span className="text-sm text-gray-600">{invitation.email}</span>
                     )}
                   </div>
-                  
+
                   <div className="flex items-center gap-4 text-sm text-gray-500">
                     <span>만료일: {new Date(invitation.expiresAt).toLocaleDateString('ko-KR')}</span>
                     <span>생성일: {new Date(invitation.createdAt).toLocaleDateString('ko-KR')}</span>
@@ -224,7 +224,7 @@ export default function ProjectInvitations({ projectId, projectName }: ProjectIn
             className="bg-white rounded-xl p-6 max-w-md w-full"
           >
             <h3 className="text-xl font-semibold mb-4">새 초대 생성</h3>
-            
+
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">

@@ -55,10 +55,10 @@ const priorityConfig: Record<TaskPriority, { variant: 'default' | 'secondary' | 
 }
 
 // Sortable Task Item Component
-function SortableTaskItem({ task, onEdit, onDelete }: { 
+function SortableTaskItem({ task, onEdit, onDelete }: {
   task: KanbanTask
   onEdit?: (task: KanbanTask) => void
-  onDelete?: (taskId: string) => void 
+  onDelete?: (taskId: string) => void
 }) {
   const {
     attributes,
@@ -81,9 +81,8 @@ function SortableTaskItem({ task, onEdit, onDelete }: {
       style={style}
       {...attributes}
       {...listeners}
-      className={`cursor-move transition-all ${
-        isDragging ? 'opacity-50' : ''
-      }`}
+      className={`cursor-move transition-all ${isDragging ? 'opacity-50' : ''
+        }`}
     >
       <Card className="p-3 hover:shadow-md transition-shadow">
         <div className="flex justify-between items-start mb-2">
@@ -119,33 +118,35 @@ function SortableTaskItem({ task, onEdit, onDelete }: {
             )}
           </div>
         </div>
-        
+
         {task.description && (
           <p className="text-xs text-muted-foreground mb-2 line-clamp-2">{task.description}</p>
         )}
-        
+
         <div className="flex items-center justify-between gap-2">
           <Badge variant={priorityConfig[task.priority].variant} className="text-xs">
             {React.createElement(priorityConfig[task.priority].icon, { className: "h-3 w-3 mr-1" })}
             {priorityConfig[task.priority].label}
           </Badge>
-          
+
           {task.assignee && (
             <div className="flex items-center">
               <div className="w-6 h-6 bg-muted rounded-full flex items-center justify-center text-xs font-medium">
-                {task.assignee.charAt(0).toUpperCase()}
+                {typeof task.assignee === 'string'
+                  ? task.assignee.charAt(0).toUpperCase()
+                  : (task.assignee as any)?.name?.charAt(0).toUpperCase() || '?'}
               </div>
             </div>
           )}
         </div>
-        
+
         {task.dueDate && (
           <div className="mt-2 flex items-center text-xs text-muted-foreground">
             <Calendar className="h-3 w-3 mr-1" />
             {new Date(task.dueDate).toLocaleDateString('ko-KR')}
           </div>
         )}
-        
+
         {(task.checklist || task.attachments || task.comments) && (
           <div className="flex gap-3 mt-2 text-xs text-muted-foreground">
             {task.checklist && task.checklist.length > 0 && (
@@ -174,16 +175,16 @@ function SortableTaskItem({ task, onEdit, onDelete }: {
 }
 
 // Droppable Column Component
-function DroppableColumn({ 
-  column, 
-  children, 
-  onAddTask, 
+function DroppableColumn({
+  column,
+  children,
+  onAddTask,
   showAddTask,
   setShowAddTask,
   newTaskTitle,
   setNewTaskTitle,
   onCreateTask
-}: { 
+}: {
   column: KanbanColumn
   children: React.ReactNode
   onAddTask?: (columnId: string) => void
@@ -207,9 +208,8 @@ function DroppableColumn({
   return (
     <div
       ref={setNodeRef}
-      className={`flex-shrink-0 w-80 ${
-        isOver ? 'ring-2 ring-primary ring-opacity-50' : ''
-      }`}
+      className={`flex-shrink-0 w-80 ${isOver ? 'ring-2 ring-primary ring-opacity-50' : ''
+        }`}
     >
       <Card className="bg-muted/30 p-4">
         <div className="flex items-center justify-between mb-4">
@@ -220,7 +220,7 @@ function DroppableColumn({
               {column.tasks.length}
             </Badge>
           </div>
-          
+
           {onAddTask && (
             <Button
               variant="ghost"
@@ -235,7 +235,7 @@ function DroppableColumn({
             </Button>
           )}
         </div>
-        
+
         {showAddTask && (
           <div className="mb-4">
             <Input
@@ -272,7 +272,7 @@ function DroppableColumn({
             </div>
           </div>
         )}
-        
+
         <div className="space-y-3 min-h-[100px]">
           {children}
         </div>
@@ -315,7 +315,7 @@ export default function KanbanBoardPro({
 
   const handleDragOver = (event: DragOverEvent) => {
     const { active, over } = event
-    
+
     if (!over) return
 
     const activeColumnId = findColumnByTaskId(active.id as string)
@@ -328,11 +328,11 @@ export default function KanbanBoardPro({
     setColumns((columns) => {
       const activeColumn = columns.find(col => col.id === activeColumnId)
       const overColumn = columns.find(col => col.id === overColumnId)
-      
+
       if (!activeColumn || !overColumn) return columns
 
-      const activeTaskIndex = activeColumn.tasks.findIndex(task => task.id === active.id)
-      const activeTask = activeColumn.tasks[activeTaskIndex]
+      const activeTask = activeColumn.tasks.find(task => task.id === active.id)
+      if (!activeTask) return columns
 
       const newColumns = columns.map(col => {
         if (col.id === activeColumnId) {
@@ -342,9 +342,26 @@ export default function KanbanBoardPro({
           }
         }
         if (col.id === overColumnId) {
+          const overTaskIndex = col.tasks.findIndex(t => t.id === over.id)
+
+          let newTasks = [...col.tasks]
+
+          // Calculate insertion index based on cursor position relative to the over item
+          const isBelowOverItem = over &&
+            active.rect.current.translated &&
+            active.rect.current.translated.top > over.rect.top + over.rect.height;
+
+          const modifier = isBelowOverItem ? 1 : 0;
+
+          // If over a task, insert at that index + modifier
+          // If over the column (overTaskIndex === -1), insert at the end
+          const newIndex = overTaskIndex >= 0 ? overTaskIndex + modifier : newTasks.length + 1
+
+          newTasks.splice(newIndex, 0, { ...activeTask, status: col.id as TaskStatus, columnId: col.id })
+
           return {
             ...col,
-            tasks: [...col.tasks, { ...activeTask, status: col.id as TaskStatus }]
+            tasks: newTasks
           }
         }
         return col
@@ -356,40 +373,108 @@ export default function KanbanBoardPro({
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event
-    
-    if (!over) return
 
-    const activeColumnId = findColumnByTaskId(active.id as string)
-    const overColumnId = findColumnByTaskId(over.id as string)
-
-    if (!activeColumnId || !overColumnId) return
-
-    if (activeColumnId === overColumnId) {
-      // Same column reordering
-      setColumns((columns) => {
-        const column = columns.find(col => col.id === activeColumnId)
-        if (!column) return columns
-
-        const oldIndex = column.tasks.findIndex(task => task.id === active.id)
-        const newIndex = column.tasks.findIndex(task => task.id === over.id)
-
-        const newColumns = columns.map(col => {
-          if (col.id === activeColumnId) {
-            return {
-              ...col,
-              tasks: arrayMove(col.tasks, oldIndex, newIndex)
-            }
-          }
-          return col
-        })
-
-        if (onColumnsChange) {
-          onColumnsChange(newColumns)
-        }
-
-        return newColumns
-      })
+    if (!over) {
+      setActiveId(null)
+      return
     }
+
+    // Find columns based on the *current* state when the function runs
+    // Note: handleDragOver might have already updated the local state visually
+    const activeIdStr = active.id as string
+    const overIdStr = over.id as string
+
+    setColumns((currentColumns) => {
+      const activeColumnId = currentColumns.find(col => col.tasks.some(t => t.id === activeIdStr))?.id
+      const overColumnId = currentColumns.find(col => col.tasks.some(t => t.id === overIdStr))?.id ||
+        currentColumns.find(col => col.id === overIdStr)?.id
+
+      if (!activeColumnId || !overColumnId) {
+        return currentColumns
+      }
+
+      let newColumns = [...currentColumns]
+
+      if (activeColumnId === overColumnId) {
+        // Same column reordering
+        const columnIndex = newColumns.findIndex(col => col.id === activeColumnId)
+        const column = newColumns[columnIndex]
+        const oldIndex = column.tasks.findIndex(task => task.id === activeIdStr)
+        const newIndex = column.tasks.findIndex(task => task.id === overIdStr)
+
+        // Check if task properties match the column (defensive programming)
+        const task = column.tasks[oldIndex]
+        const needsPropertyUpdate = task.columnId !== activeColumnId || task.status !== activeColumnId
+
+        if (needsPropertyUpdate || oldIndex !== newIndex) {
+          const updatedTask = needsPropertyUpdate
+            ? { ...task, columnId: activeColumnId, status: activeColumnId as TaskStatus }
+            : task
+
+          const newTasks = [...column.tasks]
+          if (needsPropertyUpdate) {
+            newTasks[oldIndex] = updatedTask
+          }
+
+          newColumns[columnIndex] = {
+            ...column,
+            tasks: arrayMove(newTasks, oldIndex, newIndex)
+          }
+        }
+      } else {
+        // Cross-column move (if handleDragOver didn't catch it or for robustness)
+        const activeColumnIndex = newColumns.findIndex(col => col.id === activeColumnId)
+        const overColumnIndex = newColumns.findIndex(col => col.id === overColumnId)
+
+        const activeColumn = newColumns[activeColumnIndex]
+        const overColumn = newColumns[overColumnIndex]
+
+        const activeTask = activeColumn.tasks.find(t => t.id === activeIdStr)
+
+        if (activeTask) {
+          // Remove from old
+          newColumns[activeColumnIndex] = {
+            ...activeColumn,
+            tasks: activeColumn.tasks.filter(t => t.id !== activeIdStr)
+          }
+
+          // Add to new
+          // Calculate insert index
+          const overTaskIndex = overColumn.tasks.findIndex(t => t.id === overIdStr)
+          const newIndex = overTaskIndex >= 0 ? overTaskIndex : overColumn.tasks.length
+
+          const newTasks = [...overColumn.tasks]
+          newTasks.splice(newIndex, 0, { ...activeTask, status: overColumnId as TaskStatus, columnId: overColumnId })
+
+          newColumns[overColumnIndex] = {
+            ...overColumn,
+            tasks: newTasks
+          }
+        }
+      }
+
+      // Final safety check: Ensure all tasks have the correct columnId and status matching their column
+      // This fixes the issue where visual state updates but data properties lag behind
+      const finalColumns = newColumns.map(col => ({
+        ...col,
+        tasks: col.tasks.map(task => ({
+          ...task,
+          columnId: col.id,
+          status: col.id as TaskStatus
+        }))
+      }))
+
+      // Trigger parent update with the final state
+      if (onColumnsChange) {
+        // Use setTimeout to ensure this runs after the state update is processed
+        setTimeout(() => {
+          console.log('Triggering onColumnsChange from handleDragEnd', finalColumns)
+          onColumnsChange(finalColumns)
+        }, 0)
+      }
+
+      return finalColumns
+    })
 
     setActiveId(null)
   }
@@ -471,12 +556,12 @@ export default function KanbanBoardPro({
   // Filter tasks based on search and priority
   const getFilteredTasks = (tasks: KanbanTask[]) => {
     return tasks.filter(task => {
-      const matchesSearch = searchQuery === '' || 
+      const matchesSearch = searchQuery === '' ||
         task.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
         task.description?.toLowerCase().includes(searchQuery.toLowerCase())
-      
+
       const matchesPriority = filterPriority === 'all' || task.priority === filterPriority
-      
+
       return matchesSearch && matchesPriority
     })
   }
@@ -499,7 +584,7 @@ export default function KanbanBoardPro({
             className="pl-10"
           />
         </div>
-        
+
         <Select value={filterPriority} onValueChange={setFilterPriority}>
           <SelectTrigger className="w-[180px]">
             <SelectValue placeholder="우선순위 선택" />
@@ -533,7 +618,7 @@ export default function KanbanBoardPro({
           </SelectContent>
         </Select>
       </div>
-      
+
       {/* 칸반 보드 */}
       <div className="flex-1 overflow-x-auto">
         <DndContext
@@ -547,7 +632,7 @@ export default function KanbanBoardPro({
             {columns.map(column => {
               const filteredTasks = getFilteredTasks(column.tasks)
               const columnWithFilteredTasks = { ...column, tasks: filteredTasks }
-              
+
               return (
                 <SortableContext
                   key={column.id}
@@ -582,7 +667,7 @@ export default function KanbanBoardPro({
               )
             })}
           </div>
-          
+
           <DragOverlay>
             {activeTask && (
               <Card className="p-3 shadow-lg opacity-90">

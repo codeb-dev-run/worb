@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { 
+import {
   FileText, Download, Eye, Search, Filter, Calendar,
   DollarSign, Clock, CheckCircle, AlertCircle, CreditCard,
   Loader2, Building2, Receipt, TrendingUp
@@ -65,12 +65,7 @@ export default function InvoicesPage() {
   const [filterStatus, setFilterStatus] = useState<string>('all')
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null)
 
-  // 고객이 아닌 경우 리다이렉트
-  useEffect(() => {
-    if (!loading && userProfile && userProfile.role !== 'customer' && userProfile.role !== 'external') {
-      router.push('/dashboard')
-    }
-  }, [userProfile, loading, router])
+
 
   // 청구서 데이터 로드
   useEffect(() => {
@@ -78,7 +73,7 @@ export default function InvoicesPage() {
 
     const db = getDatabase(app)
     const invoicesRef = ref(db, 'invoices')
-    
+
     const unsubscribe = onValue(invoicesRef, (snapshot) => {
       const data = snapshot.val()
       if (data) {
@@ -87,14 +82,14 @@ export default function InvoicesPage() {
           ...invoice,
           items: invoice.items || []
         }))
-        
+
         // 고객은 자신의 청구서만 볼 수 있음
-        const filteredInvoices = invoicesList.filter(inv => 
+        const filteredInvoices = invoicesList.filter(inv =>
           inv.clientId === user.uid ||
           (userProfile.group && inv.clientGroup === userProfile.group)
         )
-        
-        setInvoices(filteredInvoices.sort((a, b) => 
+
+        setInvoices(filteredInvoices.sort((a, b) =>
           new Date(b.issueDate).getTime() - new Date(a.issueDate).getTime()
         ))
       } else {
@@ -107,13 +102,13 @@ export default function InvoicesPage() {
   }, [user, userProfile])
 
   const filteredInvoices = invoices.filter(invoice => {
-    const matchesSearch = 
+    const matchesSearch =
       invoice.invoiceNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
       invoice.projectName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       invoice.description.toLowerCase().includes(searchTerm.toLowerCase())
-    
+
     const matchesStatus = filterStatus === 'all' || invoice.status === filterStatus
-    
+
     return matchesSearch && matchesStatus
   })
 
@@ -185,7 +180,7 @@ export default function InvoicesPage() {
             </div>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
@@ -197,7 +192,7 @@ export default function InvoicesPage() {
             </div>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
@@ -209,7 +204,7 @@ export default function InvoicesPage() {
             </div>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
@@ -235,7 +230,7 @@ export default function InvoicesPage() {
             className="pl-10"
           />
         </div>
-        
+
         <Tabs value={filterStatus} onValueChange={setFilterStatus}>
           <TabsList>
             <TabsTrigger value="all">전체</TabsTrigger>
@@ -266,14 +261,14 @@ export default function InvoicesPage() {
             const StatusIcon = statusConfig[invoice.status].icon
             const statusInfo = statusConfig[invoice.status]
             const daysUntilDue = getDaysUntilDue(invoice.dueDate)
-            
+
             return (
               <motion.div
                 key={invoice.id}
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
               >
-                <Card 
+                <Card
                   className="hover:shadow-lg transition-shadow cursor-pointer"
                   onClick={() => setSelectedInvoice(invoice)}
                 >
@@ -282,7 +277,7 @@ export default function InvoicesPage() {
                       <div className="flex-1">
                         <div className="flex items-center gap-3 mb-3">
                           <h3 className="font-semibold text-lg">{invoice.invoiceNumber}</h3>
-                          <Badge 
+                          <Badge
                             variant={statusInfo.variant}
                             className={invoice.status === 'paid' ? 'bg-green-500' : undefined}
                           >
@@ -295,7 +290,7 @@ export default function InvoicesPage() {
                             </Badge>
                           )}
                         </div>
-                        
+
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                           <div>
                             <p className="text-sm text-muted-foreground">프로젝트</p>
@@ -317,10 +312,10 @@ export default function InvoicesPage() {
                             </p>
                           </div>
                         </div>
-                        
+
                         <p className="text-sm text-muted-foreground">{invoice.description}</p>
                       </div>
-                      
+
                       <div className="flex gap-2 ml-4">
                         <Button
                           variant="outline"
@@ -351,7 +346,7 @@ export default function InvoicesPage() {
                 <div>
                   <CardTitle className="text-2xl">{selectedInvoice.invoiceNumber}</CardTitle>
                   <div className="flex items-center gap-3 mt-2">
-                    <Badge 
+                    <Badge
                       variant={statusConfig[selectedInvoice.status].variant}
                       className={selectedInvoice.status === 'paid' ? 'bg-green-500' : undefined}
                     >

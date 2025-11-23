@@ -1,81 +1,50 @@
 'use client'
 
-import React, { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useAuth } from '@/lib/auth-context'
-import { getDatabase, ref, onValue, off, set, push, update } from 'firebase/database'
-import { app } from '@/lib/firebase'
 import { motion } from 'framer-motion'
-import ProjectInvitations from '@/components/projects/ProjectInvitations'
-import { KanbanBoardPro } from '@/components/kanban'
-import GanttChartIsolated from '@/components/gantt/GanttChartIsolated'
-import GanttChartSimple from '@/components/gantt/GanttChartSimple'
-import GanttChartTest from '@/components/gantt/GanttChartTest'
-import GanttChartDebug from '@/components/gantt/GanttChartDebug'
-import GanttChartHTML from '@/components/gantt/GanttChartHTML'
-import GanttChartFinal from '@/components/gantt/GanttChartFinal'
-import GanttChartFixed from '@/components/gantt/GanttChartFixed'
-import GanttChartSimplified from '@/components/gantt/GanttChartSimplified'
-import { Task as GanttTaskReact } from 'gantt-task-react'
-import taskService, { Task as TaskType, KanbanColumn } from '@/services/task-service'
+import { useSocket } from '@/components/providers/socket-provider'
+import ProjectSidebar from '@/components/projects/ProjectSidebar'
+import KanbanBoardDnD from '@/components/kanban/KanbanBoardDnD'
+import FrappeGanttChart from '@/components/gantt/FrappeGanttChart'
+import MindmapEditor from '@/components/mindmap/MindmapEditor'
+import { Task as TaskType, KanbanColumn } from '@/services/task-service'
 import { TaskStatus, TaskPriority } from '@/types/task'
-import ganttStyles from './gantt.module.css'
+import { getProject } from '@/actions/project'
+import { getTasks, createTask, updateTask, deleteTask, updateTasksOrder } from '@/actions/task'
+import { getActivities, addActivity } from '@/actions/activity'
+import { toast } from 'react-hot-toast'
+import { ArrowLeft, Plus, Info, LayoutGrid, Calendar, FileText, Activity, PanelRightClose, PanelRightOpen } from 'lucide-react'
 
 interface ProjectDetail {
   id: string
   name: string
   description: string
-  status: 'planning' | 'design' | 'development' | 'testing' | 'completed'
+  status: 'planning' | 'design' | 'development' | 'testing' | 'completed' | 'pending'
   progress: number
-  startDate: string
-  endDate: string
-  budget: number
+  startDate: Date | null
+  endDate: Date | null
+  budget: number | null
   spentBudget?: number
   team: string[]
-  clientId: string
-  clientName?: string
-  createdAt: string
-  updatedAt: string
-  tasks?: Task[]
-  milestones?: Milestone[]
-  files?: FileItem[]
-}
-
-interface Task {
-  id: string
-  title: string
-  description: string
-  status: 'pending' | 'in_progress' | 'completed'
-  assignee: string
-  dueDate: string
-  priority: 'low' | 'medium' | 'high'
-}
-
-interface Milestone {
-  id: string
-  title: string
-  date: string
-  completed: boolean
-  description: string
-}
-
-interface FileItem {
-  id: string
-  name: string
-  size: number
-  uploadedBy: string
-  uploadedAt: string
-  type: string
-  url: string
+  teamMembers: any[]
+  clientId: string | null
+  clientName?: string | null
+  createdAt: Date
+  updatedAt: Date
+  tasks?: TaskType[]
+  files?: any[]
+  activities?: Activity[]
 }
 
 interface Activity {
   id: string
   type: string
   message: string
-  user: string
-  timestamp: string
+  userName: string
+  timestamp: Date
   icon: string
 }
 
@@ -84,500 +53,418 @@ const statusLabels = {
   design: '디자인',
   development: '개발',
   testing: '테스트',
-  completed: '완료'
+  completed: '완료',
+  pending: '대기'
 }
 
-const statusColors = {
-  planning: 'bg-gray-100 text-gray-700',
-  design: 'bg-blue-100 text-blue-700',
-  development: 'bg-yellow-100 text-yellow-700',
-  testing: 'bg-purple-100 text-purple-700',
-  completed: 'bg-green-100 text-green-700'
+interface KanbanColumnWithTasks extends KanbanColumn {
+  tasks: TaskType[]
 }
+
+const DEFAULT_COLUMNS: KanbanColumn[] = [
+  { id: 'todo', title: '할 일', color: '#ef4444', order: 0 },
+  { id: 'in_progress', title: '진행 중', color: '#eab308', order: 1 },
+  { id: 'review', title: '검토', color: '#8b5cf6', order: 2 },
+  { id: 'done', title: '완료', color: '#10b981', order: 3 }
+]
 
 export default function ProjectDetailPage() {
   const params = useParams()
   const router = useRouter()
-  const { userProfile } = useAuth()
+  const { user, userProfile } = useAuth()
+  const { socket, isConnected } = useSocket()
   const [project, setProject] = useState<ProjectDetail | null>(null)
   const [activities, setActivities] = useState<Activity[]>([])
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState<'overview' | 'kanban' | 'gantt' | 'files' | 'team' | 'activity' | 'invitations'>('overview')
+  const [activeTab, setActiveTab] = useState<'overview' | 'kanban' | 'gantt' | 'mindmap' | 'files' | 'activity'>('kanban')
+  const [tasks, setTasks] = useState<TaskType[]>([])
+  const [kanbanColumns] = useState<KanbanColumn[]>(DEFAULT_COLUMNS)
   const [showTaskModal, setShowTaskModal] = useState(false)
+  const [selectedColumnId, setSelectedColumnId] = useState<string>('todo')
+  const [editingTask, setEditingTask] = useState<TaskType | null>(null)
   const [newTask, setNewTask] = useState({
     title: '',
     description: '',
     assignee: '',
     dueDate: '',
     startDate: '',
-    priority: 'medium'
+    priority: 'medium' as 'low' | 'medium' | 'high' | 'urgent'
   })
-  const [editingTask, setEditingTask] = useState<TaskType | null>(null)
-  const [showEditModal, setShowEditModal] = useState(false)
-  const [tasks, setTasks] = useState<TaskType[]>([])
-  const [kanbanColumns, setKanbanColumns] = useState<KanbanColumn[]>([])
-  const [selectedColumnId, setSelectedColumnId] = useState<string>('todo')
-  const [showDeleteModal, setShowDeleteModal] = useState(false)
-  const [deleteConfirmText, setDeleteConfirmText] = useState('')
+
+  // Use ref to track if we're currently updating to prevent loops
+  const isUpdatingRef = useRef(false)
+
+  // Status to columnId mapping
+  const getColumnIdFromStatus = (status: string): string => {
+    const statusMap: Record<string, string> = {
+      'TODO': 'todo',
+      'IN_PROGRESS': 'in_progress',
+      'REVIEW': 'review',
+      'DONE': 'done',
+      'COMPLETED': 'done'
+    }
+    return statusMap[status] || 'todo'
+  }
+
+  const loadProjectData = async () => {
+    if (!params.id || typeof params.id !== 'string') return
+
+    try {
+      setLoading(true)
+      const [projectData, tasksData, activitiesData] = await Promise.all([
+        getProject(params.id),
+        getTasks(params.id),
+        getActivities(params.id)
+      ])
+
+      if (projectData) {
+        setProject(projectData as any)
+      }
+
+      // Ensure all tasks have columnId
+      const tasksWithColumnId = (tasksData as any[]).map(task => ({
+        ...task,
+        columnId: task.columnId || getColumnIdFromStatus(task.status)
+      }))
+
+      setTasks(tasksWithColumnId)
+      setActivities(activitiesData as any)
+    } catch (error) {
+      console.error('Failed to load project data:', error)
+      toast.error('프로젝트 데이터를 불러오는데 실패했습니다.')
+    } finally {
+      setLoading(false)
+    }
+  }
 
   useEffect(() => {
-    if (!params.id || !userProfile) return
+    loadProjectData()
+  }, [params.id])
 
-    const db = getDatabase(app)
-    const projectRef = ref(db, `projects/${params.id}`)
-    
-    onValue(projectRef, (snapshot) => {
-      const data = snapshot.val()
-      if (data) {
-        setProject({
-          id: params.id as string,
-          ...data,
-          startDate: data.startDate,
-          endDate: data.endDate,
-          createdAt: data.createdAt,
-          updatedAt: data.updatedAt || data.createdAt
-        })
-      } else {
-        router.push('/projects')
-      }
-      setLoading(false)
-    })
+  // Socket.io real-time collaboration
+  useEffect(() => {
+    if (!socket || !params.id) return
 
-    // 프로젝트 활동 내역 가져오기
-    const activitiesRef = ref(db, `projectActivities/${params.id}`)
-    onValue(activitiesRef, (snapshot) => {
-      const data = snapshot.val() || {}
-      const activitiesArray = Object.entries(data)
-        .map(([id, activity]: [string, any]) => ({
-          id,
-          ...activity
-        }))
-        .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-        .slice(0, 20)
-      
-      setActivities(activitiesArray)
-    })
+    // Join project room
+    socket.emit('join-project', params.id)
 
-    // 태스크 실시간 구독
-    const unsubscribeTasks = taskService.subscribeToTasks(params.id as string, (tasks) => {
-      console.log('Tasks loaded:', tasks)
-      setTasks(tasks)
-    })
-    const unsubscribeColumns = taskService.subscribeToColumns(params.id as string, setKanbanColumns)
+    // Listen for task movements from other users
+    const handleTaskMoved = (data: any) => {
+      console.log('Received task-moved event:', data)
+      // Reload tasks to sync with other users
+      loadProjectData()
+    }
+
+    socket.on('task-moved', handleTaskMoved)
 
     return () => {
-      off(projectRef)
-      off(activitiesRef)
-      unsubscribeTasks()
-      unsubscribeColumns()
+      socket.off('task-moved', handleTaskMoved)
     }
-  }, [params.id, userProfile, router])
+  }, [socket, params.id])
+
+  const handleColumnsChange = useCallback(async (newColumns: KanbanColumnWithTasks[]) => {
+    console.log('handleColumnsChange called', { isUpdating: isUpdatingRef.current, newColumns })
+
+    if (isUpdatingRef.current) {
+      console.log('Already updating, skipping')
+      return
+    }
+
+    isUpdatingRef.current = true
+
+    try {
+      const allTasks = newColumns.flatMap(col => col.tasks)
+
+      const taskUpdates: Array<{ id: string; columnId: string; order: number }> = []
+      newColumns.forEach((column: KanbanColumnWithTasks) => {
+        column.tasks.forEach((task: TaskType, index: number) => {
+          const originalTask = tasks.find(t => t.id === task.id)
+          if (originalTask && (originalTask.columnId !== column.id || originalTask.order !== index)) {
+            taskUpdates.push({
+              id: task.id,
+              columnId: column.id,
+              order: index
+            })
+          }
+        })
+      })
+
+      console.log('Task updates:', taskUpdates)
+
+      if (taskUpdates.length > 0 && user && project) {
+        // Update local state first for immediate feedback
+        setTasks(allTasks)
+
+        // Then update server
+        const result = await updateTasksOrder(project.id, taskUpdates)
+        console.log('Update result:', result)
+
+        // Log activities
+        for (const update of taskUpdates) {
+          const task = allTasks.find(t => t.id === update.id)
+          const newColumn = newColumns.find(c => c.id === update.columnId)
+          if (task && newColumn) {
+            await addActivity(project.id, {
+              type: 'task',
+              message: `"${task.title}" 작업을 "${newColumn.title}"(으)로 이동`,
+              userId: user.uid,
+              userName: userProfile?.displayName || '알 수 없음',
+              icon: '📋'
+            })
+          }
+        }
+
+        toast.success('작업이 이동되었습니다.')
+
+        // Emit socket event to notify other users
+        if (socket && project) {
+          socket.emit('task-moved', {
+            projectId: project.id,
+            updates: taskUpdates,
+            userId: user.uid
+          })
+        }
+      }
+    } catch (error) {
+      console.error('Failed to update tasks:', error)
+      toast.error('작업 업데이트에 실패했습니다.')
+      // Reload data on error
+      await loadProjectData()
+    } finally {
+      isUpdatingRef.current = false
+    }
+  }, [tasks, user, userProfile, project])
 
   const handleCreateTask = async () => {
-    if (!project || !newTask.title || !userProfile) return
+    if (!project || !user) return
+    if (!newTask.title.trim()) {
+      toast.error('작업 제목을 입력해주세요.')
+      return
+    }
 
     try {
-      // 현재 컬럼의 태스크 수를 기반으로 순서 결정
-      const columnTasks = tasks.filter(t => t.columnId === selectedColumnId)
-      const order = columnTasks.length
-
-      await taskService.createTask(project.id, {
+      const result = await createTask(project.id, {
         title: newTask.title,
         description: newTask.description,
-        assignee: newTask.assignee,
-        assigneeId: newTask.assignee ? project.team?.find(m => m === newTask.assignee) || '' : '',
+        status: selectedColumnId as TaskStatus,
+        priority: newTask.priority.toUpperCase() as TaskPriority,
+        startDate: newTask.startDate ? new Date(newTask.startDate) : undefined,
         dueDate: newTask.dueDate ? new Date(newTask.dueDate) : undefined,
-        startDate: newTask.startDate ? new Date(newTask.startDate) : (newTask.dueDate ? new Date(newTask.dueDate) : new Date()),
-        priority: newTask.priority as TaskPriority,
-        status: selectedColumnId === 'done' ? TaskStatus.DONE : 
-                selectedColumnId === 'review' ? TaskStatus.REVIEW : 
-                selectedColumnId === 'in-progress' ? TaskStatus.IN_PROGRESS : TaskStatus.TODO,
+        assigneeId: newTask.assignee || undefined,
+        createdBy: user.uid,
         columnId: selectedColumnId,
-        createdBy: userProfile.uid,
-        order,
-        labels: [],
-        checklist: [],
-        projectId: project.id,
-        attachments: []
+        order: tasks.filter(t => t.columnId === selectedColumnId).length
       })
 
-      // 활동 기록
-      await taskService.addActivity(project.id, {
-        type: 'task',
-        message: `새 작업 "${newTask.title}" 생성`,
-        user: userProfile.displayName || '알 수 없음',
-        icon: '✅'
-      })
+      if (result.success) {
+        toast.success('작업이 생성되었습니다.')
+        await addActivity(project.id, {
+          type: 'task',
+          message: `새 작업 "${newTask.title}" 생성`,
+          userId: user.uid,
+          userName: userProfile?.displayName || '알 수 없음',
+          icon: '✅'
+        })
 
-      // 프로젝트 진행률 업데이트
-      await taskService.updateProjectProgress(project.id)
-
-      setShowTaskModal(false)
-      setNewTask({
-        title: '',
-        description: '',
-        assignee: '',
-        dueDate: '',
-        startDate: '',
-        priority: 'medium'
-      })
+        setShowTaskModal(false)
+        setNewTask({
+          title: '',
+          description: '',
+          assignee: '',
+          dueDate: '',
+          startDate: '',
+          priority: 'medium'
+        })
+        loadProjectData()
+      }
     } catch (error) {
       console.error('Error creating task:', error)
-      alert('작업 생성 중 오류가 발생했습니다.')
+      toast.error('작업 생성 중 오류가 발생했습니다.')
     }
   }
-
-  const updateProjectStatus = async (newStatus: ProjectDetail['status']) => {
-    if (!project) return
-
-    try {
-      const db = getDatabase(app)
-      await set(ref(db, `projects/${project.id}/status`), newStatus)
-      await set(ref(db, `projects/${project.id}/updatedAt`), new Date().toISOString())
-
-      // 활동 기록
-      const activityRef = ref(db, `projectActivities/${project.id}`)
-      const newActivityRef = push(activityRef)
-      await set(newActivityRef, {
-        type: 'status',
-        message: `프로젝트 상태를 "${statusLabels[newStatus]}"로 변경`,
-        user: userProfile?.displayName,
-        timestamp: new Date().toISOString(),
-        icon: '🔄'
-      })
-    } catch (error) {
-      console.error('Error updating project status:', error)
-    }
-  }
-
-  const handleDeleteProject = async () => {
-    if (!project || deleteConfirmText !== '삭제') return
-
-    try {
-      const db = getDatabase(app)
-      
-      // 프로젝트 관련 데이터 모두 삭제
-      const updates: Record<string, null> = {
-        [`projects/${project.id}`]: null,
-        [`projectActivities/${project.id}`]: null,
-        [`files/${project.id}`]: null,
-        [`invitations/${project.id}`]: null
-      }
-      
-      await update(ref(db), updates)
-      
-      // 삭제 완료 후 프로젝트 목록으로 이동
-      router.push('/projects')
-    } catch (error) {
-      console.error('Error deleting project:', error)
-      alert('프로젝트 삭제 중 오류가 발생했습니다.')
-    }
-  }
-  
-  // 간트차트용 tasks 메모이제이션 - Hook은 조건문 전에 호출해야 함
-  const ganttTasks = useMemo(() => {
-    console.log('Creating ganttTasks from tasks:', tasks)
-    const filteredTasks = tasks
-      .filter(task => task.startDate && task.dueDate)
-      .map(task => ({
-        id: task.id,
-        name: task.title,
-        start: new Date(task.startDate!),
-        end: new Date(task.dueDate!),
-        progress: task.status === TaskStatus.DONE ? 100 : 
-                 task.status === TaskStatus.IN_PROGRESS ? 50 : 
-                 task.status === TaskStatus.REVIEW ? 75 : 0,
-        type: 'task' as const,
-        displayOrder: 1,
-        dependencies: [],
-        styles: {
-          backgroundColor: task.priority === TaskPriority.URGENT ? '#ef4444' :
-                         task.priority === TaskPriority.HIGH ? '#f97316' :
-                         task.priority === TaskPriority.MEDIUM ? '#3b82f6' : '#10b981',
-          backgroundSelectedColor: task.priority === TaskPriority.URGENT ? '#dc2626' :
-                                 task.priority === TaskPriority.HIGH ? '#ea580c' :
-                                 task.priority === TaskPriority.MEDIUM ? '#2563eb' : '#059669',
-        }
-      } as GanttTaskReact))
-    console.log('Filtered ganttTasks:', filteredTasks)
-    return filteredTasks
-  }, [tasks])
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-12">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+      <div className="flex items-center justify-center h-full">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
       </div>
     )
   }
 
   if (!project) {
-    return <div>프로젝트를 찾을 수 없습니다.</div>
+    return (
+      <div className="flex items-center justify-center h-full">
+        <div className="text-center">
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">프로젝트를 찾을 수 없습니다</h2>
+          <Link href="/projects" className="text-blue-600 hover:text-blue-700">
+            프로젝트 목록으로 돌아가기
+          </Link>
+        </div>
+      </div>
+    )
   }
 
-  const progressPercentage = project.progress || 0
-  const budgetPercentage = project.spentBudget ? (project.spentBudget / project.budget) * 100 : 0
-  const daysLeft = Math.ceil((new Date(project.endDate).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))
-  const totalDays = Math.ceil((new Date(project.endDate).getTime() - new Date(project.startDate).getTime()) / (1000 * 60 * 60 * 24))
-  const timeProgress = ((totalDays - daysLeft) / totalDays) * 100
-
   return (
-    <div className="h-full flex flex-col overflow-hidden">
-      {/* 고정 헤더 영역 */}
-      <div className="flex-shrink-0 space-y-6 p-6 pb-0">
-        {/* 헤더 */}
-        <div className="bg-white rounded-xl shadow-sm p-6">
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2 text-sm text-gray-600 mb-2">
-              <Link href="/projects" className="hover:text-primary">프로젝트</Link>
-              <span>/</span>
-              <span>{project.name}</span>
+    <div className="h-full flex overflow-hidden bg-gray-50">
+      {/* Main Content Area */}
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {/* Header */}
+        <div className="flex-shrink-0 bg-white border-b border-gray-200 px-6 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Link href="/projects" className="text-gray-400 hover:text-gray-600 transition-colors">
+                <ArrowLeft className="w-5 h-5" />
+              </Link>
+              <div>
+                <h1 className="text-xl font-semibold text-gray-900">{project.name}</h1>
+                <p className="text-sm text-gray-500 mt-0.5">{project.description}</p>
+              </div>
             </div>
-            <h1 className="text-2xl font-bold text-gray-900 mb-2">{project.name}</h1>
-            <p className="text-gray-600">{project.description}</p>
-          </div>
-          
-        </div>
-      </div>
-
-        {/* 주요 지표 */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-white rounded-xl shadow-sm p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-medium text-gray-600">진행률</h3>
-            <span className="text-2xl">📊</span>
-          </div>
-          <div className="text-2xl font-bold text-gray-900 mb-2">{progressPercentage}%</div>
-          <div className="w-full bg-gray-200 rounded-full h-2">
-            <div 
-              className="bg-blue-500 h-2 rounded-full transition-all"
-              style={{ width: `${progressPercentage}%` }}
-            />
-          </div>
-        </div>
-
-        <div className="bg-white rounded-xl shadow-sm p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-medium text-gray-600">예산 사용</h3>
-            <span className="text-2xl">💰</span>
-          </div>
-          <div className="text-2xl font-bold text-gray-900 mb-2">
-            {new Intl.NumberFormat('ko-KR').format(project.spentBudget || 0)}원
-          </div>
-          <div className="text-sm text-gray-500">
-            총 {new Intl.NumberFormat('ko-KR').format(project.budget)}원
-          </div>
-        </div>
-
-        <div className="bg-white rounded-xl shadow-sm p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-medium text-gray-600">남은 기간</h3>
-            <span className="text-2xl">📅</span>
-          </div>
-          <div className="text-2xl font-bold text-gray-900 mb-2">{daysLeft}일</div>
-          <div className="w-full bg-gray-200 rounded-full h-2">
-            <div 
-              className={`h-2 rounded-full transition-all ${
-                timeProgress > 90 ? 'bg-red-500' : 
-                timeProgress > 75 ? 'bg-yellow-500' : 'bg-green-500'
-              }`}
-              style={{ width: `${timeProgress}%` }}
-            />
-          </div>
-        </div>
-
-        <div className="bg-white rounded-xl shadow-sm p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-medium text-gray-600">팀원</h3>
-            <span className="text-2xl">👥</span>
-          </div>
-          <div className="text-2xl font-bold text-gray-900 mb-2">{project.team?.length || 0}명</div>
-          <div className="flex -space-x-2">
-            {project.team?.slice(0, 4).map((member, idx) => (
-              <div
-                key={idx}
-                className="w-8 h-8 bg-gray-300 rounded-full flex items-center justify-center text-xs font-medium text-gray-700 border-2 border-white"
-              >
-                {member.charAt(0)}
-              </div>
-            ))}
-            {(project.team?.length || 0) > 4 && (
-              <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center text-xs font-medium text-gray-600 border-2 border-white">
-                +{project.team.length - 4}
-              </div>
-            )}
-          </div>
-          </div>
-        </div>
-      </div>
-
-      {/* 스크롤 가능한 탭 영역 */}
-      <div className="flex-1 bg-white rounded-xl shadow-sm mx-6 mb-6 overflow-hidden flex flex-col min-h-0">
-        <div className="border-b border-gray-200 flex-shrink-0">
-          <nav className="flex gap-6 px-6 overflow-x-auto">
-            {[
-              { id: 'overview', label: '📋 개요' },
-              { id: 'kanban', label: '📊 칸반보드' },
-              { id: 'gantt', label: '📈 간트차트' },
-              { id: 'files', label: '📁 파일' },
-              { id: 'team', label: '👥 팀' },
-              { id: 'activity', label: '📝 활동' },
-              { id: 'invitations', label: '✉️ 초대' }
-            ].map(tab => (
+            <div className="flex items-center gap-3">
+              <span className={`px-3 py-1 rounded-full text-xs font-medium ${project.status === 'completed' ? 'bg-green-100 text-green-700' :
+                project.status === 'development' ? 'bg-blue-100 text-blue-700' :
+                  project.status === 'testing' ? 'bg-purple-100 text-purple-700' :
+                    'bg-gray-100 text-gray-700'
+                }`}>
+                {statusLabels[project.status]}
+              </span>
               <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id as any)}
-                className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors whitespace-nowrap ${
-                  activeTab === tab.id
-                    ? 'border-primary text-primary'
-                    : 'border-transparent text-gray-500 hover:text-gray-700'
-                }`}
+                onClick={() => setShowSidebar(!showSidebar)}
+                className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                title={showSidebar ? '사이드바 숨기기' : '사이드바 보기'}
               >
-                {tab.label}
+                {showSidebar ? <PanelRightClose className="w-5 h-5" /> : <PanelRightOpen className="w-5 h-5" />}
               </button>
-            ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Tabs */}
+        <div className="flex-shrink-0 bg-white border-b border-gray-200">
+          <nav className="flex gap-6 px-6">
+            {[
+              { id: 'overview', label: '개요', icon: Info },
+              { id: 'kanban', label: '보드', icon: LayoutGrid },
+              { id: 'gantt', label: '타임라인', icon: Calendar },
+              { id: 'mindmap', label: '마인드맵', icon: FileText },
+              { id: 'files', label: '파일', icon: FileText },
+              { id: 'activity', label: '활동', icon: Activity },
+            ].map(tab => {
+              const Icon = tab.icon
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id as any)}
+                  className={`py-3 px-1 border-b-2 font-medium text-sm transition-colors flex items-center gap-2 ${activeTab === tab.id
+                    ? 'border-blue-600 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                    }`}
+                >
+                  <Icon className="w-4 h-4" />
+                  {tab.label}
+                </button>
+              )
+            })}
           </nav>
         </div>
 
-        <div className="flex-1 overflow-hidden min-h-0">
+        {/* Tab Content */}
+        <div className="flex-1 overflow-hidden">
           {activeTab === 'overview' && (
-            <div className="p-6 h-full overflow-y-auto">
-              <div className="space-y-6">
-              <div>
-                <h3 className="text-lg font-medium mb-4">프로젝트 정보</h3>
-                <dl className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <dt className="text-sm font-medium text-gray-500">시작일</dt>
-                    <dd className="mt-1 text-sm text-gray-900">
-                      {new Date(project.startDate).toLocaleDateString('ko-KR')}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt className="text-sm font-medium text-gray-500">종료일</dt>
-                    <dd className="mt-1 text-sm text-gray-900">
-                      {new Date(project.endDate).toLocaleDateString('ko-KR')}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt className="text-sm font-medium text-gray-500">생성일</dt>
-                    <dd className="mt-1 text-sm text-gray-900">
-                      {new Date(project.createdAt).toLocaleDateString('ko-KR')}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt className="text-sm font-medium text-gray-500">최종 수정일</dt>
-                    <dd className="mt-1 text-sm text-gray-900">
-                      {new Date(project.updatedAt).toLocaleDateString('ko-KR')}
-                    </dd>
-                  </div>
-                </dl>
-              </div>
-
-              <div>
-                <h3 className="text-lg font-medium mb-4">마일스톤</h3>
-                {project.milestones && project.milestones.length > 0 ? (
+            <div className="h-full overflow-y-auto p-6">
+              <div className="max-w-4xl space-y-6">
+                <div className="bg-white rounded-lg border border-gray-200 p-6">
+                  <h3 className="text-sm font-semibold text-gray-900 mb-4">프로젝트 진행 상황</h3>
                   <div className="space-y-4">
-                    {project.milestones.map(milestone => (
-                      <div key={milestone.id} className="flex items-center gap-4 p-4 bg-gray-50 rounded-lg">
-                        <div className={`w-4 h-4 rounded-full ${
-                          milestone.completed ? 'bg-green-500' : 'bg-gray-300'
-                        }`} />
-                        <div className="flex-1">
-                          <h4 className="font-medium">{milestone.title}</h4>
-                          <p className="text-sm text-gray-600">{milestone.description}</p>
-                        </div>
-                        <div className="text-sm text-gray-500">
-                          {new Date(milestone.date).toLocaleDateString('ko-KR')}
-                        </div>
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm text-gray-600">진행률</span>
+                        <span className="text-sm font-medium text-gray-900">{project.progress}%</span>
                       </div>
-                    ))}
+                      <div className="w-full bg-gray-200 rounded-full h-2">
+                        <div
+                          className="bg-blue-600 h-2 rounded-full transition-all"
+                          style={{ width: `${project.progress}%` }}
+                        />
+                      </div>
+                    </div>
                   </div>
-                ) : (
-                  <p className="text-gray-500">마일스톤이 없습니다.</p>
-                )}
-              </div>
+                </div>
+
+                <div className="bg-white rounded-lg border border-gray-200 p-6">
+                  <h3 className="text-sm font-semibold text-gray-900 mb-4">프로젝트 정보</h3>
+                  <dl className="grid grid-cols-2 gap-4">
+                    <div>
+                      <dt className="text-xs text-gray-500 mb-1">시작일</dt>
+                      <dd className="text-sm text-gray-900">
+                        {project.startDate ? new Date(project.startDate).toLocaleDateString('ko-KR') : '-'}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-xs text-gray-500 mb-1">종료일</dt>
+                      <dd className="text-sm text-gray-900">
+                        {project.endDate ? new Date(project.endDate).toLocaleDateString('ko-KR') : '-'}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-xs text-gray-500 mb-1">예산</dt>
+                      <dd className="text-sm text-gray-900">
+                        {new Intl.NumberFormat('ko-KR', { style: 'currency', currency: 'KRW', maximumFractionDigits: 0 }).format(project.budget || 0)}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-xs text-gray-500 mb-1">팀원</dt>
+                      <dd className="text-sm text-gray-900">{project.team?.length || 0}명</dd>
+                    </div>
+                  </dl>
+                </div>
               </div>
             </div>
           )}
 
           {activeTab === 'kanban' && (
             <div className="h-full">
-              <KanbanBoardPro
+              <KanbanBoardDnD
                 columns={kanbanColumns.map(col => ({
                   ...col,
                   tasks: tasks.filter(task => task.columnId === col.id).map(task => ({
                     ...task,
                     dueDate: task.dueDate ? new Date(task.dueDate) : undefined,
-                    priority: task.priority === 'low' ? TaskPriority.LOW :
-                              task.priority === 'medium' ? TaskPriority.MEDIUM :
-                              task.priority === 'high' ? TaskPriority.HIGH :
-                              task.priority === 'urgent' ? TaskPriority.URGENT : TaskPriority.MEDIUM
+                    priority: (task.priority || 'MEDIUM') as TaskPriority
                   }))
                 }))}
-                onColumnsChange={async (newColumns) => {
-                  // Update column structure
-                  const columns = newColumns.map((col, index) => ({
-                    id: col.id,
-                    title: col.title,
-                    color: col.color,
-                    limit: col.limit || 0,
-                    order: index
-                  }))
-                  await taskService.updateKanbanColumns(project.id, columns)
-                  
-                  // Update task positions if they've changed
-                  const taskUpdates: Array<{ id: string; columnId: string; order: number }> = []
-                  newColumns.forEach(column => {
-                    column.tasks.forEach((task, index) => {
-                      const originalTask = tasks.find(t => t.id === task.id)
-                      if (originalTask && (originalTask.columnId !== column.id || originalTask.order !== index)) {
-                        taskUpdates.push({
-                          id: task.id,
-                          columnId: column.id,
-                          order: index
-                        })
-                      }
-                    })
-                  })
-                  
-                  if (taskUpdates.length > 0) {
-                    await taskService.updateTasksOrder(project.id, taskUpdates)
-                    await taskService.updateProjectProgress(project.id)
-                    
-                    // 태스크 이동 활동 로그 기록
-                    for (const update of taskUpdates) {
-                      const task = tasks.find(t => t.id === update.id)
-                      const newColumn = columns.find(c => c.id === update.columnId)
-                      if (task && newColumn) {
-                        await taskService.addActivity(project.id, {
-                          type: 'task',
-                          message: `"${task.title}" 작업을 "${newColumn.title}"(으)로 이동`,
-                          user: userProfile?.displayName || '알 수 없음',
-                          icon: '📋'
-                        })
-                      }
-                    }
-                  }
+                onColumnsChange={(newColumns) => {
+                  handleColumnsChange(newColumns as KanbanColumnWithTasks[])
                 }}
                 onTaskAdd={(columnId) => {
                   setSelectedColumnId(columnId)
                   setShowTaskModal(true)
                 }}
                 onTaskEdit={(task) => {
+                  // Open edit modal with task data
                   setEditingTask(task)
-                  setShowEditModal(true)
+                  setShowTaskModal(true)
+                  setSelectedColumnId(task.columnId || task.status)
+                  setNewTask({
+                    title: task.title,
+                    description: task.description || '',
+                    assignee: task.assigneeId || '',
+                    dueDate: task.dueDate ? new Date(task.dueDate).toISOString().split('T')[0] : '',
+                    startDate: task.startDate ? new Date(task.startDate).toISOString().split('T')[0] : '',
+                    priority: task.priority.toLowerCase() as 'low' | 'medium' | 'high' | 'urgent'
+                  })
                 }}
-                onTaskDelete={async (taskId) => {
-                  if (confirm('정말로 이 작업을 삭제하시겠습니까?')) {
-                    await taskService.deleteTask(project.id, taskId)
-                    await taskService.updateProjectProgress(project.id)
-                    await taskService.addActivity(project.id, {
+                onTaskDelete={async (taskId, columnId) => {
+                  if (confirm('정말로 이 작업을 삭제하시겠습니까?') && user) {
+                    await deleteTask(taskId)
+                    await addActivity(project.id, {
                       type: 'task',
                       message: '작업을 삭제했습니다',
-                      user: userProfile?.displayName || '알 수 없음',
+                      userId: user.uid,
+                      userName: userProfile?.displayName || '알 수 없음',
                       icon: '🗑️'
                     })
+                    loadProjectData()
                   }
                 }}
               />
@@ -585,205 +472,126 @@ export default function ProjectDetailPage() {
           )}
 
           {activeTab === 'gantt' && (
-            <div className="h-full">
-              {ganttTasks.length > 0 ? (
-                <GanttChartSimplified tasks={ganttTasks} />
-              ) : (
-                <div className="flex flex-col items-center justify-center h-full py-12">
-                  <div className="text-6xl mb-4 opacity-50">📊</div>
-                  <h3 className="text-lg font-medium text-gray-900 mb-2">간트차트가 비어있습니다</h3>
-                  <p className="text-gray-600 mb-6 text-center">
-                    시작일과 마감일이 설정된 태스크를 생성하면<br />
-                    간트차트에서 확인할 수 있습니다.
-                  </p>
-                  <button
-                    onClick={() => setShowTaskModal(true)}
-                    className="px-6 py-3 bg-primary text-white rounded-lg hover:bg-primary-hover transition-colors"
-                  >
-                    첫 번째 태스크 만들기
-                  </button>
-                </div>
-              )}
+            <div className="h-full w-full overflow-hidden">
+              <FrappeGanttChart tasks={tasks} />
+            </div>
+          )}
+
+          {activeTab === 'mindmap' && (
+            <div className="h-full w-full overflow-hidden p-6">
+              <MindmapEditor projectId={project.id} />
             </div>
           )}
 
           {activeTab === 'files' && (
-            <div className="p-6 h-full overflow-y-auto">
-              <h3 className="text-lg font-medium mb-4">파일</h3>
-              {project.files && project.files.length > 0 ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {project.files.map(file => (
-                    <div key={file.id} className="border rounded-lg p-4 hover:bg-gray-50">
-                      <div className="flex items-start gap-3">
-                        <div className="text-3xl">📄</div>
-                        <div className="flex-1">
-                          <h4 className="font-medium text-sm">{file.name}</h4>
-                          <p className="text-xs text-gray-500 mt-1">
-                            {(file.size / 1024 / 1024).toFixed(2)} MB
-                          </p>
-                          <p className="text-xs text-gray-500">
-                            {file.uploadedBy} • {new Date(file.uploadedAt).toLocaleDateString('ko-KR')}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-gray-500 text-center py-8">파일이 없습니다.</p>
-              )}
-            </div>
-          )}
-
-          {activeTab === 'team' && (
-            <div className="p-6 h-full overflow-y-auto">
-              <h3 className="text-lg font-medium mb-4">팀 구성원</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {project.team?.map((member, idx) => (
-                  <div key={idx} className="flex items-center gap-3 p-4 border rounded-lg">
-                    <div className="w-12 h-12 bg-gray-300 rounded-full flex items-center justify-center text-lg font-medium text-gray-700">
-                      {member.charAt(0)}
-                    </div>
-                    <div>
-                      <h4 className="font-medium">{member}</h4>
-                      <p className="text-sm text-gray-500">팀원</p>
-                    </div>
-                  </div>
-                ))}
+            <div className="h-full overflow-y-auto p-6">
+              <div className="text-center py-12">
+                <p className="text-gray-500">파일 관리 기능은 준비 중입니다.</p>
               </div>
             </div>
           )}
 
           {activeTab === 'activity' && (
-            <div className="p-6 h-full overflow-y-auto">
-              <h3 className="text-lg font-medium mb-4">활동 내역</h3>
-              {activities.length > 0 ? (
-                <div className="space-y-3">
-                  {activities.map(activity => (
-                    <div key={activity.id} className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
-                      <div className="text-2xl">{activity.icon}</div>
-                      <div className="flex-1">
-                        <p className="text-sm">
-                          <span className="font-medium">{activity.user}</span>님이 {activity.message}
-                        </p>
-                        <p className="text-xs text-gray-500 mt-1">
-                          {new Date(activity.timestamp).toLocaleString('ko-KR')}
-                        </p>
+            <div className="h-full overflow-y-auto p-6">
+              <div className="max-w-4xl">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">프로젝트 활동</h3>
+                <div className="space-y-4">
+                  {activities.length > 0 ? (
+                    activities.map((activity) => (
+                      <div key={activity.id} className="flex gap-3 p-4 bg-white rounded-lg border border-gray-200">
+                        <div className="text-2xl">{activity.icon}</div>
+                        <div className="flex-1">
+                          <p className="text-sm text-gray-900">{activity.message}</p>
+                          <p className="text-xs text-gray-500 mt-1">
+                            {activity.userName} · {new Date(activity.timestamp).toLocaleString('ko-KR')}
+                          </p>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    ))
+                  ) : (
+                    <p className="text-gray-500 text-center py-8">활동 내역이 없습니다.</p>
+                  )}
                 </div>
-              ) : (
-                <p className="text-gray-500 text-center py-8">활동 내역이 없습니다.</p>
-              )}
-            </div>
-          )}
-
-          {activeTab === 'invitations' && (
-            <div className="p-6 h-full overflow-y-auto">
-              <ProjectInvitations projectId={params.id as string} projectName={project.name} />
+              </div>
             </div>
           )}
         </div>
       </div>
 
-      {/* 작업 생성 모달 */}
+      {/* Sidebar */}
+      {showSidebar && <ProjectSidebar project={project} activities={activities} />}
+
+      {/* Task Creation Modal */}
       {showTaskModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 w-full max-w-md">
-            <h3 className="text-lg font-medium mb-4">새 작업 만들기</h3>
-            
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-white rounded-lg shadow-xl max-w-md w-full p-6"
+          >
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">새 작업 만들기</h3>
+
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  작업 제목
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">제목</label>
                 <input
                   type="text"
                   value={newTask.title}
                   onChange={(e) => setNewTask({ ...newTask, title: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-600 focus:border-transparent"
                   placeholder="작업 제목을 입력하세요"
                 />
               </div>
-              
+
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  설명
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">설명</label>
                 <textarea
                   value={newTask.description}
                   onChange={(e) => setNewTask({ ...newTask, description: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary"
                   rows={3}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-600 focus:border-transparent"
                   placeholder="작업 설명을 입력하세요"
                 />
               </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  담당자
-                </label>
-                <select
-                  value={newTask.assignee}
-                  onChange={(e) => setNewTask({ ...newTask, assignee: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary"
-                >
-                  <option value="">담당자 선택</option>
-                  {project.team?.map((member, idx) => (
-                    <option key={idx} value={member}>{member}</option>
-                  ))}
-                </select>
-              </div>
-              
+
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    시작일
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">시작일</label>
                   <input
                     type="date"
                     value={newTask.startDate}
                     onChange={(e) => setNewTask({ ...newTask, startDate: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-600 focus:border-transparent"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    마감일
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">마감일</label>
                   <input
                     type="date"
                     value={newTask.dueDate}
                     onChange={(e) => setNewTask({ ...newTask, dueDate: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-600 focus:border-transparent"
                   />
                 </div>
               </div>
-              
+
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  우선순위
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">우선순위</label>
                 <div className="flex gap-2">
                   {[
-                    { value: 'low', label: '🟢 낮음' },
-                    { value: 'medium', label: '🟡 보통' },
-                    { value: 'high', label: '🟠 높음' },
-                    { value: 'urgent', label: '🔴 긴급' }
+                    { value: 'low', label: '낮음', color: 'green' },
+                    { value: 'medium', label: '보통', color: 'blue' },
+                    { value: 'high', label: '높음', color: 'orange' },
+                    { value: 'urgent', label: '긴급', color: 'red' }
                   ].map(priority => (
                     <button
                       key={priority.value}
                       type="button"
                       onClick={() => setNewTask({ ...newTask, priority: priority.value as any })}
-                      className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                        newTask.priority === priority.value
-                          ? priority.value === 'low' ? 'bg-green-100 text-green-700' :
-                            priority.value === 'medium' ? 'bg-yellow-100 text-yellow-700' :
-                            priority.value === 'high' ? 'bg-orange-100 text-orange-700' :
-                            'bg-red-100 text-red-700'
-                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                      }`}
+                      className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${newTask.priority === priority.value
+                        ? `bg-${priority.color}-100 text-${priority.color}-700 ring-2 ring-${priority.color}-600`
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                        }`}
                     >
                       {priority.label}
                     </button>
@@ -791,228 +599,22 @@ export default function ProjectDetailPage() {
                 </div>
               </div>
             </div>
-            
+
             <div className="flex gap-3 mt-6">
               <button
                 onClick={() => setShowTaskModal(false)}
-                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
               >
                 취소
               </button>
               <button
                 onClick={handleCreateTask}
-                className="flex-1 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary-hover"
+                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
               >
                 생성
               </button>
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* 태스크 수정 모달 */}
-      {showEditModal && editingTask && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-            <h3 className="text-lg font-semibold mb-4">작업 수정</h3>
-            
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  작업 제목
-                </label>
-                <input
-                  type="text"
-                  value={editingTask.title}
-                  onChange={(e) => setEditingTask({ ...editingTask, title: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary"
-                  placeholder="작업 제목을 입력하세요"
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  설명
-                </label>
-                <textarea
-                  value={editingTask.description || ''}
-                  onChange={(e) => setEditingTask({ ...editingTask, description: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary"
-                  rows={3}
-                  placeholder="작업 설명을 입력하세요"
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  담당자
-                </label>
-                <select
-                  value={editingTask.assignee || ''}
-                  onChange={(e) => setEditingTask({ ...editingTask, assignee: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary"
-                >
-                  <option value="">담당자 선택</option>
-                  {project.team?.map((member, idx) => (
-                    <option key={idx} value={member}>{member}</option>
-                  ))}
-                </select>
-              </div>
-              
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    시작일
-                  </label>
-                  <input
-                    type="date"
-                    value={editingTask.startDate ? new Date(editingTask.startDate).toISOString().split('T')[0] : ''}
-                    onChange={(e) => setEditingTask({ ...editingTask, startDate: e.target.value ? new Date(e.target.value) : undefined })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary"
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    마감일
-                  </label>
-                  <input
-                    type="date"
-                    value={editingTask.dueDate ? new Date(editingTask.dueDate).toISOString().split('T')[0] : ''}
-                    onChange={(e) => setEditingTask({ ...editingTask, dueDate: e.target.value ? new Date(e.target.value) : undefined })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary"
-                  />
-                </div>
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  우선순위
-                </label>
-                <select
-                  value={editingTask.priority}
-                  onChange={(e) => setEditingTask({ ...editingTask, priority: e.target.value as TaskPriority })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary"
-                >
-                  <option value={TaskPriority.LOW}>낮음</option>
-                  <option value={TaskPriority.MEDIUM}>중간</option>
-                  <option value={TaskPriority.HIGH}>높음</option>
-                  <option value={TaskPriority.URGENT}>긴급</option>
-                </select>
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  상태
-                </label>
-                <select
-                  value={editingTask.columnId}
-                  onChange={(e) => setEditingTask({ ...editingTask, columnId: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary"
-                >
-                  {kanbanColumns.map(column => (
-                    <option key={column.id} value={column.id}>{column.title}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-            
-            <div className="flex gap-3 mt-6">
-              <button
-                onClick={() => {
-                  setShowEditModal(false)
-                  setEditingTask(null)
-                }}
-                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
-              >
-                취소
-              </button>
-              <button
-                onClick={async () => {
-                  if (editingTask && project) {
-                    await taskService.updateTask(project.id, editingTask.id, editingTask)
-                    await taskService.updateProjectProgress(project.id)
-                    
-                    // 태스크 수정 활동 로그 기록
-                    await taskService.addActivity(project.id, {
-                      type: 'task',
-                      message: `"${editingTask.title}" 작업을 수정했습니다`,
-                      user: userProfile?.displayName || '알 수 없음',
-                      icon: '✏️'
-                    })
-                    
-                    setShowEditModal(false)
-                    setEditingTask(null)
-                  }
-                }}
-                className="flex-1 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary-hover"
-              >
-                수정 완료
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 프로젝트 삭제 확인 모달 */}
-      {showDeleteModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 w-full max-w-md">
-            <h3 className="text-lg font-semibold text-red-800 mb-4">프로젝트 삭제 확인</h3>
-            
-            <div className="space-y-4">
-              <div className="p-4 bg-red-50 rounded-lg">
-                <p className="text-sm text-red-700 mb-2">
-                  <strong>경고:</strong> 이 작업은 되돌릴 수 없습니다!
-                </p>
-                <p className="text-sm text-gray-700">
-                  프로젝트 <strong>&quot;{project?.name}&quot;</strong>을(를) 삭제하면 다음 항목들이 모두 영구적으로 삭제됩니다:
-                </p>
-                <ul className="mt-2 text-sm text-gray-600 list-disc list-inside">
-                  <li>모든 작업 ({tasks.length}개)</li>
-                  <li>모든 파일 및 첨부파일</li>
-                  <li>모든 활동 기록</li>
-                  <li>모든 초대 링크</li>
-                </ul>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  계속하려면 <strong className="text-red-600">삭제</strong>라고 입력하세요:
-                </label>
-                <input
-                  type="text"
-                  value={deleteConfirmText}
-                  onChange={(e) => setDeleteConfirmText(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500"
-                  placeholder="삭제"
-                />
-              </div>
-            </div>
-            
-            <div className="flex gap-3 mt-6">
-              <button
-                onClick={() => {
-                  setShowDeleteModal(false)
-                  setDeleteConfirmText('')
-                }}
-                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
-              >
-                취소
-              </button>
-              <button
-                onClick={handleDeleteProject}
-                disabled={deleteConfirmText !== '삭제'}
-                className={`flex-1 px-4 py-2 rounded-lg transition-colors ${
-                  deleteConfirmText === '삭제'
-                    ? 'bg-red-600 text-white hover:bg-red-700'
-                    : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                }`}
-              >
-                프로젝트 삭제
-              </button>
-            </div>
-          </div>
+          </motion.div>
         </div>
       )}
     </div>

@@ -6,8 +6,6 @@ import Link from 'next/link'
 import { useAuth } from '@/lib/auth-context'
 import { Project } from '@/types'
 import ProjectCreateWizard from '@/components/projects/ProjectCreateWizard'
-import { getDatabase, ref, onValue, off, set, push } from 'firebase/database'
-import { app } from '@/lib/firebase'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -19,6 +17,8 @@ import { cn } from '@/lib/utils'
 import { Search, LayoutGrid, LayoutList, Plus, Calendar, Filter, ChevronRight, Users, DollarSign, FolderOpen, BarChart3, TrendingUp } from 'lucide-react'
 import { Progress } from '@/components/ui/progress'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { getProjects, createProject } from '@/actions/project'
+import { toast } from 'react-hot-toast'
 
 const statusLabels: Record<Project['status'], string> = {
   planning: '기획',
@@ -50,75 +50,50 @@ export default function ProjectsPage() {
   const [searchTerm, setSearchTerm] = useState('')
   const [sortBy, setSortBy] = useState<'name' | 'date' | 'progress'>('date')
 
-  // Firebase에서 프로젝트 데이터 로드
+  // 프로젝트 데이터 로드
   useEffect(() => {
     if (!user) return
 
-    const db = getDatabase(app)
-    const projectsRef = ref(db, 'projects')
-    
-    const unsubscribe = onValue(projectsRef, (snapshot) => {
-      const data = snapshot.val()
-      if (data) {
-        const projectsList = Object.entries(data).map(([id, project]: [string, any]) => ({
-          ...project,
-          id,
-          startDate: new Date(project.startDate),
-          endDate: new Date(project.endDate),
-          createdAt: new Date(project.createdAt),
-          updatedAt: new Date(project.updatedAt)
-        }))
-        
-        // 사용자 역할에 따른 필터링
-        let filteredProjects = projectsList
-        if (userProfile?.role === 'customer') {
-          // 클라이언트는 자신의 프로젝트 또는 초대받은 프로젝트를 볼 수 있음
-          filteredProjects = projectsList.filter(p => 
-            p.clientId === user.uid ||
-            p.permissions?.viewerIds?.includes(user.uid)
-          )
-        } else if (userProfile?.role === 'developer' || userProfile?.role === 'manager') {
-          // 직원은 자신이 팀에 포함된 프로젝트만 볼 수 있음
-          filteredProjects = projectsList.filter(p => 
-            p.team?.some((member: any) => member.userId === user.uid) ||
-            p.permissions?.editorIds?.includes(user.uid)
-          )
-        }
-        
-        setProjects(filteredProjects)
-      } else {
-        setProjects([])
+    const loadProjects = async () => {
+      setLoading(true)
+      try {
+        const data = await getProjects(user.uid)
+        setProjects(data as unknown as Project[])
+      } catch (error) {
+        console.error('Failed to load projects:', error)
+        toast.error('프로젝트 목록을 불러오는데 실패했습니다.')
+      } finally {
+        setLoading(false)
       }
-      setLoading(false)
-    })
+    }
 
-    return () => off(projectsRef)
-  }, [user, userProfile])
+    loadProjects()
+  }, [user])
 
   // 프로젝트 필터링 및 검색
   const filteredProjects = useMemo(() => {
     let filtered = projects
-    
+
     // 탭 필터링
     if (selectedTab === 'active') {
       filtered = filtered.filter(project => project.status !== 'completed')
     } else if (selectedTab === 'completed') {
       filtered = filtered.filter(project => project.status === 'completed')
     }
-    
+
     // 상태 필터링
     if (filterStatus !== 'all') {
       filtered = filtered.filter(project => project.status === filterStatus)
     }
-    
+
     // 검색어 필터링
     if (searchTerm) {
-      filtered = filtered.filter(project => 
+      filtered = filtered.filter(project =>
         project.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         project.description.toLowerCase().includes(searchTerm.toLowerCase())
       )
     }
-    
+
     // 정렬
     filtered.sort((a, b) => {
       if (sortBy === 'name') {
@@ -129,7 +104,7 @@ export default function ProjectsPage() {
         return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
       }
     })
-    
+
     return filtered
   }, [projects, selectedTab, filterStatus, searchTerm, sortBy])
 
@@ -144,44 +119,29 @@ export default function ProjectsPage() {
 
   // 프로젝트 생성 핸들러
   const handleCreateProject = async (projectData: Omit<Project, 'id' | 'createdAt' | 'updatedAt'>) => {
+    if (!user) return
+
     try {
-      const db = getDatabase(app)
-      const projectsRef = ref(db, 'projects')
-      const newProjectRef = push(projectsRef)
-      
-      const newProject = {
+      const result = await createProject({
         ...projectData,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        createdBy: user?.uid,
-        progress: 0,
-        permissions: {
-          viewerIds: [],
-          editorIds: [],
-          adminIds: [user?.uid]
-        }
-      }
-      
-      await set(newProjectRef, newProject)
-      
-      // 활동 로그 추가
-      const activitiesRef = ref(db, 'activities')
-      const newActivityRef = push(activitiesRef)
-      await set(newActivityRef, {
-        type: 'project',
-        icon: '📁',
-        title: '새 프로젝트 생성',
-        description: `${projectData.name} 프로젝트가 생성되었습니다`,
-        time: new Date().toISOString(),
-        userId: user?.uid,
-        userName: userProfile?.displayName || '알 수 없음'
+        createdBy: user.uid
       })
-      
-      setShowCreateModal(false)
-      router.push(`/projects/${newProjectRef.key}`)
+
+      if (result.success && result.project) {
+        toast.success('프로젝트가 생성되었습니다.')
+        setShowCreateModal(false)
+
+        // 목록 새로고침
+        const data = await getProjects(user.uid)
+        setProjects(data as unknown as Project[])
+
+        router.push(`/projects/${result.project.id}`)
+      } else {
+        throw new Error('Project creation failed')
+      }
     } catch (error) {
       console.error('Error creating project:', error)
-      alert('프로젝트 생성 중 오류가 발생했습니다.')
+      toast.error('프로젝트 생성 중 오류가 발생했습니다.')
     }
   }
 
@@ -201,7 +161,7 @@ export default function ProjectsPage() {
           <h1 className="text-3xl font-bold tracking-tight">프로젝트 관리</h1>
           <p className="text-muted-foreground mt-1">전체 프로젝트를 관리하고 진행 상황을 확인합니다.</p>
         </div>
-        
+
         {userProfile?.role === 'admin' && (
           <Button onClick={() => setShowCreateModal(true)}>
             <Plus className="mr-2 h-4 w-4" />
@@ -318,9 +278,9 @@ export default function ProjectsPage() {
             {searchTerm || filterStatus !== 'all' ? '검색 결과가 없습니다' : '프로젝트가 없습니다'}
           </h3>
           <p className="text-muted-foreground mb-4">
-            {searchTerm || filterStatus !== 'all' 
-              ? '다른 검색어나 필터를 시도해보세요.' 
-              : userProfile?.role === 'admin' 
+            {searchTerm || filterStatus !== 'all'
+              ? '다른 검색어나 필터를 시도해보세요.'
+              : userProfile?.role === 'admin'
                 ? '첫 번째 프로젝트를 생성해보세요.'
                 : '아직 할당된 프로젝트가 없습니다.'}
           </p>
@@ -386,9 +346,9 @@ export default function ProjectsPage() {
                       )}
                     </div>
                   </TableCell>
-                  <TableCell>{formatBudget(project.budget)}</TableCell>
+                  <TableCell>{formatBudget(project.budget || 0)}</TableCell>
                   <TableCell className="text-muted-foreground">
-                    {project.startDate.toLocaleDateString('ko-KR')} - {project.endDate.toLocaleDateString('ko-KR')}
+                    {project.startDate ? new Date(project.startDate).toLocaleDateString('ko-KR') : '-'} - {project.endDate ? new Date(project.endDate).toLocaleDateString('ko-KR') : '-'}
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex gap-2 justify-end" onClick={(e) => e.stopPropagation()}>
@@ -417,7 +377,7 @@ export default function ProjectsPage() {
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
             >
-              <Card 
+              <Card
                 className="cursor-pointer hover:shadow-lg transition-shadow h-full"
                 onClick={() => router.push(`/projects/${project.id}`)}
               >
@@ -430,7 +390,7 @@ export default function ProjectsPage() {
                   </div>
                   <CardDescription>{project.description}</CardDescription>
                 </CardHeader>
-                
+
                 <CardContent className="space-y-4">
                   <div>
                     <div className="flex justify-between text-sm mb-2">
@@ -439,14 +399,14 @@ export default function ProjectsPage() {
                     </div>
                     <Progress value={project.progress} className="h-2" />
                   </div>
-                  
+
                   <div className="grid grid-cols-2 gap-3 text-sm">
                     <div className="flex items-center gap-2">
                       <DollarSign className="h-4 w-4 text-muted-foreground" />
                       <span className="text-muted-foreground">예산</span>
                     </div>
-                    <span className="font-medium text-right">{formatBudget(project.budget)}</span>
-                    
+                    <span className="font-medium text-right">{formatBudget(project.budget || 0)}</span>
+
                     <div className="flex items-center gap-2">
                       <Users className="h-4 w-4 text-muted-foreground" />
                       <span className="text-muted-foreground">팀원</span>
@@ -466,17 +426,17 @@ export default function ProjectsPage() {
                         </div>
                       )}
                     </div>
-                    
+
                     <div className="flex items-center gap-2">
                       <Calendar className="h-4 w-4 text-muted-foreground" />
                       <span className="text-muted-foreground">기간</span>
                     </div>
                     <span className="text-xs text-right text-muted-foreground">
-                      {project.endDate.toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' })}
+                      {project.endDate ? new Date(project.endDate).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' }) : '-'}
                     </span>
                   </div>
                 </CardContent>
-                
+
                 <CardFooter className="pt-0">
                   <Button
                     asChild

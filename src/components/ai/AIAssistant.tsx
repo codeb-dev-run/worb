@@ -4,7 +4,7 @@ import React, { useState, useRef, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { AIAssistantMessage } from '@/types/ai'
 import { useAuth } from '@/lib/auth-context'
-import aiService from '@/services/ai-service'
+import { aiService } from '@/services/ai-service'
 
 interface AIAssistantProps {
   isOpen: boolean
@@ -73,7 +73,7 @@ export default function AIAssistant({ isOpen, onClose }: AIAssistantProps) {
       const startTime = Date.now()
       const aiResponse = await aiService.processMessage(userMessage.content)
       const processingTime = Date.now() - startTime
-      
+
       const assistantMessage: AIAssistantMessage = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
@@ -159,8 +159,8 @@ export default function AIAssistant({ isOpen, onClose }: AIAssistantProps) {
               >
                 <div className={`
                   max-w-[70%] rounded-2xl p-4
-                  ${message.role === 'user' 
-                    ? 'bg-primary text-white' 
+                  ${message.role === 'user'
+                    ? 'bg-primary text-white'
                     : 'bg-gray-100 text-gray-900'
                   }
                 `}>
@@ -176,7 +176,7 @@ export default function AIAssistant({ isOpen, onClose }: AIAssistantProps) {
                 </div>
               </motion.div>
             ))}
-            
+
             {isTyping && (
               <motion.div
                 initial={{ opacity: 0 }}
@@ -192,7 +192,7 @@ export default function AIAssistant({ isOpen, onClose }: AIAssistantProps) {
                 </div>
               </motion.div>
             )}
-            
+
             <div ref={messagesEndRef} />
           </div>
 

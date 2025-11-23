@@ -128,7 +128,7 @@ export default function GlobalGanttPage() {
         }
 
         // 모든 태스크를 displayOrder로 정렬
-        const sortedTasks = tasks.sort((a, b) => a.displayOrder - b.displayOrder)
+        const sortedTasks = tasks.sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0))
         setAllTasks([...sortedTasks])
         setFilteredTasks([...sortedTasks])
       })

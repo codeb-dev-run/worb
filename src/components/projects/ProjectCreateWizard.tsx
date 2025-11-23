@@ -3,8 +3,7 @@
 import React, { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Project } from '@/types'
-import { getDatabase, ref, onValue, off } from 'firebase/database'
-import { app } from '@/lib/firebase'
+import { getCustomers, getTeamMembers } from '@/actions/user'
 
 interface ProjectCreateWizardProps {
   isOpen: boolean
@@ -22,53 +21,45 @@ interface StepProps {
 // Step 1: 기본 정보
 const BasicInfoStep: React.FC<StepProps> = ({ projectData, setProjectData, onNext }) => {
   const [errors, setErrors] = useState<Record<string, string>>({})
-  const [clients, setClients] = useState<Array<{ 
-    id: string; 
-    displayName: string; 
+  const [clients, setClients] = useState<Array<{
+    id: string;
+    displayName: string;
     email: string;
     group?: string;
     company?: string;
   }>>([])
 
-  // Firebase에서 고객 목록 가져오기
+  // Prisma에서 고객 목록 가져오기
   useEffect(() => {
-    const db = getDatabase(app)
-    const usersRef = ref(db, 'users')
-    
-    const unsubscribe = onValue(usersRef, (snapshot) => {
-      const data = snapshot.val()
-      if (data) {
-        const customersList = Object.entries(data)
-          .filter(([_, user]: [string, any]) => user.role === 'customer')
-          .map(([id, user]: [string, any]) => ({
-            id,
-            displayName: user.displayName || user.email,
-            email: user.email,
-            group: user.group,
-            company: user.company
-          }))
-        setClients(customersList)
-      }
-    })
+    const loadCustomers = async () => {
+      const customers = await getCustomers()
+      setClients(customers.map(c => ({
+        id: c.id,
+        displayName: c.name || c.email || '',
+        email: c.email || '',
+        group: c.department || undefined,
+        company: c.companyName || undefined
+      })))
+    }
 
-    return () => off(usersRef)
+    loadCustomers()
   }, [])
 
   const validate = () => {
     const newErrors: Record<string, string> = {}
-    
+
     if (!projectData.name?.trim()) {
       newErrors.name = '프로젝트 이름을 입력해주세요'
     }
-    
+
     if (!projectData.description?.trim()) {
       newErrors.description = '프로젝트 설명을 입력해주세요'
     }
-    
+
     if (!projectData.clientId) {
       newErrors.clientId = '고객을 선택해주세요'
     }
-    
+
     setErrors(newErrors)
     return Object.keys(newErrors).length === 0
   }
@@ -95,9 +86,8 @@ const BasicInfoStep: React.FC<StepProps> = ({ projectData, setProjectData, onNex
             type="text"
             value={projectData.name || ''}
             onChange={(e) => setProjectData({ ...projectData, name: e.target.value })}
-            className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary ${
-              errors.name ? 'border-red-500' : 'border-gray-300'
-            }`}
+            className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary ${errors.name ? 'border-red-500' : 'border-gray-300'
+              }`}
             placeholder="예: 웹사이트 리뉴얼"
           />
           {errors.name && <p className="text-sm text-red-500 mt-1">{errors.name}</p>}
@@ -110,9 +100,8 @@ const BasicInfoStep: React.FC<StepProps> = ({ projectData, setProjectData, onNex
           <textarea
             value={projectData.description || ''}
             onChange={(e) => setProjectData({ ...projectData, description: e.target.value })}
-            className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary ${
-              errors.description ? 'border-red-500' : 'border-gray-300'
-            }`}
+            className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary ${errors.description ? 'border-red-500' : 'border-gray-300'
+              }`}
             rows={3}
             placeholder="프로젝트에 대한 간단한 설명을 입력하세요"
           />
@@ -127,14 +116,13 @@ const BasicInfoStep: React.FC<StepProps> = ({ projectData, setProjectData, onNex
             value={projectData.clientId || ''}
             onChange={(e) => {
               const selectedClient = clients.find(c => c.id === e.target.value)
-              setProjectData({ 
-                ...projectData, 
+              setProjectData({
+                ...projectData,
                 clientId: e.target.value
               })
             }}
-            className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary ${
-              errors.clientId ? 'border-red-500' : 'border-gray-300'
-            }`}
+            className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary ${errors.clientId ? 'border-red-500' : 'border-gray-300'
+              }`}
           >
             <option value="">고객을 선택하세요</option>
             {clients.map(client => (
@@ -183,24 +171,24 @@ const ScheduleBudgetStep: React.FC<StepProps> = ({ projectData, setProjectData, 
 
   const validate = () => {
     const newErrors: Record<string, string> = {}
-    
+
     if (!projectData.startDate) {
       newErrors.startDate = '시작일을 선택해주세요'
     }
-    
+
     if (!projectData.endDate) {
       newErrors.endDate = '종료일을 선택해주세요'
     }
-    
-    if (projectData.startDate && projectData.endDate && 
-        new Date(projectData.startDate) > new Date(projectData.endDate)) {
+
+    if (projectData.startDate && projectData.endDate &&
+      new Date(projectData.startDate) > new Date(projectData.endDate)) {
       newErrors.endDate = '종료일은 시작일 이후여야 합니다'
     }
-    
+
     if (!projectData.budget || projectData.budget <= 0) {
       newErrors.budget = '예산을 입력해주세요'
     }
-    
+
     setErrors(newErrors)
     return Object.keys(newErrors).length === 0
   }
@@ -228,9 +216,8 @@ const ScheduleBudgetStep: React.FC<StepProps> = ({ projectData, setProjectData, 
               type="date"
               value={projectData.startDate ? new Date(projectData.startDate).toISOString().split('T')[0] : ''}
               onChange={(e) => setProjectData({ ...projectData, startDate: new Date(e.target.value) })}
-              className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary ${
-                errors.startDate ? 'border-red-500' : 'border-gray-300'
-              }`}
+              className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary ${errors.startDate ? 'border-red-500' : 'border-gray-300'
+                }`}
             />
             {errors.startDate && <p className="text-sm text-red-500 mt-1">{errors.startDate}</p>}
           </div>
@@ -243,9 +230,8 @@ const ScheduleBudgetStep: React.FC<StepProps> = ({ projectData, setProjectData, 
               type="date"
               value={projectData.endDate ? new Date(projectData.endDate).toISOString().split('T')[0] : ''}
               onChange={(e) => setProjectData({ ...projectData, endDate: new Date(e.target.value) })}
-              className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary ${
-                errors.endDate ? 'border-red-500' : 'border-gray-300'
-              }`}
+              className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary ${errors.endDate ? 'border-red-500' : 'border-gray-300'
+                }`}
             />
             {errors.endDate && <p className="text-sm text-red-500 mt-1">{errors.endDate}</p>}
           </div>
@@ -259,9 +245,8 @@ const ScheduleBudgetStep: React.FC<StepProps> = ({ projectData, setProjectData, 
             type="number"
             value={projectData.budget || ''}
             onChange={(e) => setProjectData({ ...projectData, budget: parseInt(e.target.value) || 0 })}
-            className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary ${
-              errors.budget ? 'border-red-500' : 'border-gray-300'
-            }`}
+            className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary ${errors.budget ? 'border-red-500' : 'border-gray-300'
+              }`}
             placeholder="10000000"
           />
           {errors.budget && <p className="text-sm text-red-500 mt-1">{errors.budget}</p>}
@@ -296,29 +281,19 @@ const TeamStep: React.FC<StepProps> = ({ projectData, setProjectData, onNext, on
   const [teamMemberInput, setTeamMemberInput] = useState('')
   const [availableMembers, setAvailableMembers] = useState<Array<{ id: string; displayName: string; email: string; role: string }>>([])
 
-  // Firebase에서 팀원 가능한 사용자 목록 가져오기
+  // Prisma에서 팀원 가능한 사용자 목록 가져오기
   useEffect(() => {
-    const db = getDatabase(app)
-    const usersRef = ref(db, 'users')
-    
-    const unsubscribe = onValue(usersRef, (snapshot) => {
-      const data = snapshot.val()
-      if (data) {
-        const teamMembersList = Object.entries(data)
-          .filter(([_, user]: [string, any]) => 
-            user.role === 'admin' || user.role === 'developer' || user.role === 'manager'
-          )
-          .map(([id, user]: [string, any]) => ({
-            id,
-            displayName: user.displayName || user.email,
-            email: user.email,
-            role: user.role
-          }))
-        setAvailableMembers(teamMembersList)
-      }
-    })
+    const loadTeamMembers = async () => {
+      const members = await getTeamMembers()
+      setAvailableMembers(members.map(m => ({
+        id: m.id,
+        displayName: m.name || m.email || '',
+        email: m.email || '',
+        role: m.role || ''
+      })))
+    }
 
-    return () => off(usersRef)
+    loadTeamMembers()
   }, [])
 
   const addTeamMember = (member: string) => {
@@ -360,18 +335,17 @@ const TeamStep: React.FC<StepProps> = ({ projectData, setProjectData, onNext, on
                 key={member.id}
                 onClick={() => addTeamMember(member.email)}
                 disabled={projectData.team?.some((m: any) => m.userId === member.email)}
-                className={`p-3 text-sm border rounded-lg transition-colors ${
-                  projectData.team?.some((m: any) => m.userId === member.email)
-                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                    : 'hover:bg-gray-50 text-gray-700 border-gray-300'
-                }`}
+                className={`p-3 text-sm border rounded-lg transition-colors ${projectData.team?.some((m: any) => m.userId === member.email)
+                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                  : 'hover:bg-gray-50 text-gray-700 border-gray-300'
+                  }`}
               >
                 <div className="text-left">
                   <div className="font-medium">{member.displayName}</div>
                   <div className="text-xs text-gray-500">{member.email}</div>
                   <div className="text-xs text-gray-400 mt-1">
-                    {member.role === 'admin' ? '관리자' : 
-                     member.role === 'developer' ? '개발자' : '매니저'}
+                    {member.role === 'admin' ? '관리자' :
+                      member.role === 'developer' ? '개발자' : '매니저'}
                   </div>
                 </div>
               </button>
@@ -573,9 +547,9 @@ export default function ProjectCreateWizard({ isOpen, onClose, onSubmit }: Proje
         adminIds: []
       }
     }
-    
+
     onSubmit(completeProject)
-    
+
     // Reset
     setCurrentStep(1)
     setProjectData({
@@ -616,7 +590,7 @@ export default function ProjectCreateWizard({ isOpen, onClose, onSubmit }: Proje
               ✕
             </button>
           </div>
-          
+
           {/* Progress Bar */}
           <div className="mt-4">
             <div className="flex items-center justify-between mb-2">
@@ -653,7 +627,7 @@ export default function ProjectCreateWizard({ isOpen, onClose, onSubmit }: Proje
                 />
               </motion.div>
             )}
-            
+
             {currentStep === 2 && (
               <motion.div
                 key="step2"
@@ -669,7 +643,7 @@ export default function ProjectCreateWizard({ isOpen, onClose, onSubmit }: Proje
                 />
               </motion.div>
             )}
-            
+
             {currentStep === 3 && (
               <motion.div
                 key="step3"
@@ -685,7 +659,7 @@ export default function ProjectCreateWizard({ isOpen, onClose, onSubmit }: Proje
                 />
               </motion.div>
             )}
-            
+
             {currentStep === 4 && (
               <motion.div
                 key="step4"
@@ -696,7 +670,7 @@ export default function ProjectCreateWizard({ isOpen, onClose, onSubmit }: Proje
                 <ReviewStep
                   projectData={projectData}
                   setProjectData={setProjectData}
-                  onNext={() => {}}
+                  onNext={() => { }}
                   onBack={() => setCurrentStep(3)}
                   onSubmit={handleSubmit}
                 />

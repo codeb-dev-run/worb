@@ -42,7 +42,7 @@ export default function ProjectProgress() {
 
     const db = getDatabase(app)
     const projectsRef = ref(db, 'projects')
-    
+
     onValue(projectsRef, (snapshot) => {
       const data = snapshot.val()
       if (data) {
@@ -50,24 +50,22 @@ export default function ProjectProgress() {
           id,
           ...project
         }))
-        
+
         // 사용자 권한에 따른 필터링
         let filteredProjects = projectsList
-        if (userProfile.role === 'customer') {
-          filteredProjects = projectsList.filter(p => p.clientId === user.uid)
-        } else if (userProfile.role === 'developer') {
-          filteredProjects = projectsList.filter(p => 
+        if (userProfile.role === 'member') {
+          filteredProjects = projectsList.filter(p =>
             p.team?.includes(userProfile.email)
           )
         }
-        
+
         // 진행중인 프로젝트 우선, 최신순 정렬
         filteredProjects.sort((a, b) => {
           if (a.status !== 'completed' && b.status === 'completed') return -1
           if (a.status === 'completed' && b.status !== 'completed') return 1
           return new Date(b.startDate).getTime() - new Date(a.startDate).getTime()
         })
-        
+
         setProjects(filteredProjects)
         if (filteredProjects.length > 0) {
           setSelectedProject(filteredProjects[0])
@@ -139,20 +137,20 @@ export default function ProjectProgress() {
       {/* Progress Steps */}
       <div className="relative mb-12">
         <div className="absolute top-5 left-0 right-0 h-0.5 bg-gray-200" />
-        <div 
+        <div
           className="absolute top-5 left-0 h-0.5 bg-primary transition-all duration-500"
           style={{ width: `${(steps.filter(s => s.status === 'completed').length / steps.length) * 100}%` }}
         />
-        
+
         <div className="relative flex justify-between">
           {steps.map((step) => (
             <div key={step.id} className="flex flex-col items-center">
               <div className={`
                 w-10 h-10 rounded-full flex items-center justify-center
                 transition-all duration-300 relative z-10
-                ${step.status === 'completed' ? 'bg-success text-white' : 
-                  step.status === 'active' ? 'bg-primary text-white ring-4 ring-primary/20' : 
-                  'bg-gray-100 text-gray-400'}
+                ${step.status === 'completed' ? 'bg-success text-white' :
+                  step.status === 'active' ? 'bg-primary text-white ring-4 ring-primary/20' :
+                    'bg-gray-100 text-gray-400'}
               `}>
                 {step.status === 'completed' ? '✓' : step.id}
               </div>
@@ -174,7 +172,7 @@ export default function ProjectProgress() {
           <span className="text-sm font-medium text-primary">{progress}%</span>
         </div>
         <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
-          <div 
+          <div
             className="h-full bg-gradient-to-r from-primary to-primary-light transition-all duration-500"
             style={{ width: `${progress}%` }}
           />
@@ -188,11 +186,10 @@ export default function ProjectProgress() {
             <button
               key={project.id}
               onClick={() => setSelectedProject(project)}
-              className={`px-3 py-1 rounded-lg text-sm transition-colors ${
-                selectedProject.id === project.id 
-                  ? 'bg-primary text-white' 
+              className={`px-3 py-1 rounded-lg text-sm transition-colors ${selectedProject.id === project.id
+                  ? 'bg-primary text-white'
                   : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
+                }`}
             >
               {project.name}
             </button>
@@ -207,22 +204,22 @@ export default function ProjectProgress() {
 
       {/* Quick Actions */}
       <div className="grid grid-cols-3 gap-4 mt-8">
-        <Link 
-          href={`/projects/${selectedProject.id}`} 
+        <Link
+          href={`/projects/${selectedProject.id}`}
           className="p-4 border-2 border-gray-200 rounded-lg hover:border-primary hover:text-primary transition-all text-center"
         >
           <span className="block text-2xl mb-2">📋</span>
           <span className="text-sm font-medium">상세 보기</span>
         </Link>
-        <Link 
-          href="/files" 
+        <Link
+          href="/files"
           className="p-4 border-2 border-gray-200 rounded-lg hover:border-primary hover:text-primary transition-all text-center"
         >
           <span className="block text-2xl mb-2">📁</span>
           <span className="text-sm font-medium">파일 확인</span>
         </Link>
-        <Link 
-          href={`/projects/${selectedProject.id}?tab=kanban`} 
+        <Link
+          href={`/projects/${selectedProject.id}?tab=kanban`}
           className="p-4 border-2 border-gray-200 rounded-lg hover:border-primary hover:text-primary transition-all text-center"
         >
           <span className="block text-2xl mb-2">📊</span>

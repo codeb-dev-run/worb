@@ -11,9 +11,9 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
-import { 
+import {
   FileText, Download, Eye, Search, Filter, Calendar,
-  Package, FileIcon, Image, Video, FileCode, Archive,
+  Package, FileIcon, Image as ImageIcon, Video, FileCode, Archive,
   Loader2, FolderOpen, Clock, CheckCircle
 } from 'lucide-react'
 
@@ -36,7 +36,7 @@ interface Deliverable {
 
 const typeIcons = {
   document: FileText,
-  design: Image,
+  design: ImageIcon,
   code: FileCode,
   video: Video,
   other: FileIcon
@@ -60,18 +60,14 @@ export default function DeliverablesPage() {
   const [searchTerm, setSearchTerm] = useState('')
 
   // 고객이 아닌 경우 리다이렉트
-  useEffect(() => {
-    if (!loading && userProfile && userProfile.role !== 'customer' && userProfile.role !== 'external') {
-      router.push('/dashboard')
-    }
-  }, [userProfile, loading, router])
+
 
   // 프로젝트 및 산출물 데이터 로드
   useEffect(() => {
     if (!user || !userProfile) return
 
     const db = getDatabase(app)
-    
+
     // 프로젝트 데이터 로드
     const projectsRef = ref(db, 'projects')
     const projectsUnsubscribe = onValue(projectsRef, (snapshot) => {
@@ -81,13 +77,13 @@ export default function DeliverablesPage() {
           id,
           ...project
         }))
-        
+
         // 고객은 자신의 프로젝트만 볼 수 있음
-        const filteredProjects = projectsList.filter(p => 
+        const filteredProjects = projectsList.filter(p =>
           p.clientId === user.uid ||
           (userProfile.group && p.clientGroup === userProfile.group)
         )
-        
+
         setProjects(filteredProjects)
       }
     })
@@ -103,13 +99,13 @@ export default function DeliverablesPage() {
           type: file.category || 'other',
           status: file.status || 'final'
         }))
-        
+
         // 고객의 프로젝트에 속한 파일만 필터링
         const clientProjectIds = projects.map(p => p.id)
-        const filteredFiles = filesList.filter(f => 
+        const filteredFiles = filesList.filter(f =>
           clientProjectIds.includes(f.projectId)
         )
-        
+
         setDeliverables(filteredFiles)
       } else {
         setDeliverables([])
@@ -126,11 +122,11 @@ export default function DeliverablesPage() {
   const filteredDeliverables = deliverables.filter(item => {
     const matchesProject = selectedProject === 'all' || item.projectId === selectedProject
     const matchesType = selectedType === 'all' || item.type === selectedType
-    const matchesSearch = 
+    const matchesSearch =
       item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       item.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       item.projectName?.toLowerCase().includes(searchTerm.toLowerCase())
-    
+
     return matchesProject && matchesType && matchesSearch
   })
 
@@ -184,7 +180,7 @@ export default function DeliverablesPage() {
             </div>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
@@ -198,7 +194,7 @@ export default function DeliverablesPage() {
             </div>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
@@ -208,11 +204,11 @@ export default function DeliverablesPage() {
                   {deliverables.filter(d => d.type === 'design').length}
                 </p>
               </div>
-              <Image className="h-8 w-8 text-purple-600" />
+              <ImageIcon className="h-8 w-8 text-purple-600" />
             </div>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
@@ -240,7 +236,7 @@ export default function DeliverablesPage() {
             className="pl-10"
           />
         </div>
-        
+
         {projects.length > 1 && (
           <Tabs value={selectedProject} onValueChange={setSelectedProject}>
             <TabsList>
@@ -253,7 +249,7 @@ export default function DeliverablesPage() {
             </TabsList>
           </Tabs>
         )}
-        
+
         <Tabs value={selectedType} onValueChange={setSelectedType}>
           <TabsList>
             <TabsTrigger value="all">모든 유형</TabsTrigger>
@@ -283,7 +279,7 @@ export default function DeliverablesPage() {
           {filteredDeliverables.map((deliverable) => {
             const Icon = typeIcons[deliverable.type] || FileIcon
             const statusInfo = statusConfig[deliverable.status]
-            
+
             return (
               <motion.div
                 key={deliverable.id}
@@ -296,21 +292,21 @@ export default function DeliverablesPage() {
                       <div className="p-3 bg-muted rounded-lg">
                         <Icon className="h-8 w-8 text-primary" />
                       </div>
-                      <Badge 
+                      <Badge
                         variant={statusInfo.variant}
                         className={deliverable.status === 'final' ? 'bg-green-500' : undefined}
                       >
                         {statusInfo.label}
                       </Badge>
                     </div>
-                    
+
                     <h3 className="font-semibold mb-1">{deliverable.name}</h3>
                     {deliverable.description && (
                       <p className="text-sm text-muted-foreground mb-3 line-clamp-2">
                         {deliverable.description}
                       </p>
                     )}
-                    
+
                     <div className="space-y-2 mb-4">
                       <div className="flex items-center gap-2 text-sm text-muted-foreground">
                         <FolderOpen className="h-4 w-4" />
@@ -325,7 +321,7 @@ export default function DeliverablesPage() {
                         <span>{new Date(deliverable.uploadedAt).toLocaleDateString('ko-KR')}</span>
                       </div>
                     </div>
-                    
+
                     <div className="flex gap-2">
                       <Button
                         size="sm"
