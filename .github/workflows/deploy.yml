@@ -71,7 +71,9 @@ jobs:
               --exclude='build' \
               --exclude='.env.local' \
               --exclude='*.log' \
-              -czf deploy.tar.gz .
+              --exclude='deploy.tar.gz' \
+              --warning=no-file-changed \
+              -czf deploy.tar.gz . || [[ $? -eq 1 ]]
 
       - name: Upload to server
         run: |
