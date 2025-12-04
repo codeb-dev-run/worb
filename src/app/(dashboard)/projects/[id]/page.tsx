@@ -266,7 +266,7 @@ export default function ProjectDetailPage() {
         const result = await updateTask(editingTask.id, {
           title: newTask.title,
           description: newTask.description,
-          priority: newTask.priority.toUpperCase() as TaskPriority,
+          priority: newTask.priority as TaskPriority,
           startDate: newTask.startDate ? new Date(newTask.startDate) : undefined,
           dueDate: newTask.dueDate ? new Date(newTask.dueDate) : undefined,
           assigneeId: newTask.assignee || null,
@@ -303,7 +303,7 @@ export default function ProjectDetailPage() {
           title: newTask.title,
           description: newTask.description,
           status: selectedColumnId as TaskStatus,
-          priority: newTask.priority.toUpperCase() as TaskPriority,
+          priority: newTask.priority as TaskPriority,
           startDate: newTask.startDate ? new Date(newTask.startDate) : undefined,
           dueDate: newTask.dueDate ? new Date(newTask.dueDate) : undefined,
           assigneeId: newTask.assignee || undefined,
@@ -1029,7 +1029,7 @@ export default function ProjectDetailPage() {
                   tasks: tasks.filter(task => task.columnId === col.id).map(task => ({
                     ...task,
                     dueDate: task.dueDate ? new Date(task.dueDate) : undefined,
-                    priority: (task.priority || 'MEDIUM') as TaskPriority
+                    priority: (task.priority || TaskPriority.MEDIUM) as TaskPriority
                   }))
                 }))}
                 onColumnsChange={(newColumns) => {
