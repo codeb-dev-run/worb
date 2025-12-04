@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useState, useMemo } from 'react'
+import React, { useEffect, useState, useMemo, useCallback } from 'react'
 import { useAuth } from '@/lib/auth-context'
 import { useWorkspace } from '@/lib/workspace-context'
 import { getDashboardStats } from '@/actions/dashboard'
@@ -8,6 +8,7 @@ import { getRandomQuote } from '@/constants/quotes'
 import { HRDashboard } from '@/components/dashboard/layouts/HRDashboard'
 import { ProjectDashboard } from '@/components/dashboard/layouts/ProjectDashboard'
 import { EnterpriseDashboard } from '@/components/dashboard/layouts/EnterpriseDashboard'
+import { format } from 'date-fns'
 
 // ===========================================
 // Glass Morphism Dashboard Page
@@ -29,12 +30,12 @@ export default function DashboardPage() {
 
   // HR 통계 상태
   const [hrStats, setHrStats] = useState({
-    totalEmployees: 12,
-    presentToday: 10,
-    absentToday: 2,
-    onLeave: 1,
+    totalEmployees: 0,
+    presentToday: 0,
+    absentToday: 0,
+    onLeave: 0,
     lateArrivals: 0,
-    pendingApprovals: 3
+    pendingApprovals: 0
   })
   const [loading, setLoading] = useState(true)
   const [currentTime, setCurrentTime] = useState(new Date())
@@ -45,20 +46,129 @@ export default function DashboardPage() {
     wind: 12
   })
   const [todayAttendance, setTodayAttendance] = useState<any>(null)
-  const [announcements, setAnnouncements] = useState([
-    { id: 1, title: '11월 전사 회의 안내', date: '2025-11-23', isNew: true },
-    { id: 2, title: '연말 휴가 신청 마감 안내', date: '2025-11-22', isNew: true },
-    { id: 3, title: '보안 정책 업데이트', date: '2025-11-20', isNew: false },
-  ])
-  const [boardPosts, setBoardPosts] = useState([
-    { id: 1, title: '점심 메뉴 추천 받습니다', author: '김철수', team: '개발팀', date: '11.29', comments: 5 },
-    { id: 2, title: '개발팀 스터디 모집', author: '이영희', team: '디자인팀', date: '11.28', comments: 12 },
-    { id: 3, title: '주차장 이용 관련 문의', author: '박민수', team: '인사팀', date: '11.27', comments: 3 },
-    { id: 4, title: '다음 주 워크샵 장소 투표해주세요', author: '정수진', team: '경영지원팀', date: '11.26', comments: 24 },
-  ])
+  const [announcements, setAnnouncements] = useState<Array<{
+    id: string
+    title: string
+    date: string
+    isNew: boolean
+  }>>([])
+  const [boardPosts, setBoardPosts] = useState<Array<{
+    id: string
+    title: string
+    author: string
+    team: string
+    date: string
+    comments: number
+  }>>([])
+  const [recentActivities, setRecentActivities] = useState<Array<{
+    id: string
+    title: string
+    desc: string
+    time: string
+    status: string
+    taskId?: string
+  }>>([])
+  const [attendanceList, setAttendanceList] = useState<Array<{
+    id: string
+    name: string
+    team: string
+    checkIn: string
+    status: string
+  }>>([])
 
   // 명언 - 페이지 로드 시 한번만 생성
   const quote = useMemo(() => getRandomQuote(), [])
+
+  // 공지사항 로드
+  const loadAnnouncements = useCallback(async () => {
+    if (!currentWorkspace?.id) return
+    try {
+      const response = await fetch(`/api/announcements?workspaceId=${currentWorkspace.id}&limit=3`)
+      if (!response.ok) return
+      const data = await response.json()
+      setAnnouncements(data.map((a: any) => ({
+        id: a.id,
+        title: a.title,
+        date: format(new Date(a.createdAt), 'yyyy-MM-dd'),
+        isNew: a.isNew || a.isPinned
+      })))
+    } catch (error) {
+      console.error('Failed to load announcements:', error)
+    }
+  }, [currentWorkspace?.id])
+
+  // 게시글 로드
+  const loadBoardPosts = useCallback(async () => {
+    if (!currentWorkspace?.id) return
+    try {
+      const response = await fetch(`/api/board?workspaceId=${currentWorkspace.id}&limit=4`)
+      if (!response.ok) return
+      const data = await response.json()
+      setBoardPosts(data.map((post: any) => ({
+        id: post.id,
+        title: post.title,
+        author: post.author?.name || '익명',
+        team: post.category || '일반',
+        date: format(new Date(post.createdAt), 'MM.dd'),
+        comments: post.commentCount || post._count?.comments || 0
+      })))
+    } catch (error) {
+      console.error('Failed to load board posts:', error)
+    }
+  }, [currentWorkspace?.id])
+
+  // 최근 활동 로드 (최근 수정된 Task 기반)
+  const loadRecentActivities = useCallback(async () => {
+    if (!currentWorkspace?.id) return
+    try {
+      const response = await fetch(`/api/activities?workspaceId=${currentWorkspace.id}&limit=4`)
+      if (!response.ok) return
+      const data = await response.json()
+      setRecentActivities(data)
+    } catch (error) {
+      console.error('Failed to load recent activities:', error)
+    }
+  }, [currentWorkspace?.id])
+
+  // HR 통계 로드
+  const loadHRStats = useCallback(async () => {
+    if (!currentWorkspace?.id) return
+    try {
+      const response = await fetch(`/api/dashboard/hr-stats?workspaceId=${currentWorkspace.id}`)
+      if (!response.ok) return
+      const data = await response.json()
+      setHrStats(data)
+    } catch (error) {
+      console.error('Failed to load HR stats:', error)
+    }
+  }, [currentWorkspace?.id])
+
+  // 출근 현황 리스트 로드 (HR 대시보드용)
+  const loadAttendanceList = useCallback(async () => {
+    if (!currentWorkspace?.id) return
+    try {
+      const response = await fetch(`/api/dashboard/attendance-list?workspaceId=${currentWorkspace.id}&limit=4`)
+      if (!response.ok) return
+      const data = await response.json()
+      setAttendanceList(data)
+    } catch (error) {
+      console.error('Failed to load attendance list:', error)
+    }
+  }, [currentWorkspace?.id])
+
+  // 개인 출근 기록 로드
+  const loadAttendance = useCallback(async () => {
+    if (!userProfile?.uid) return
+    try {
+      const response = await fetch('/api/attendance', {
+        headers: { 'x-user-id': userProfile.uid }
+      })
+      const data = await response.json()
+      setTodayAttendance(data.today)
+    } catch (error) {
+      console.error('Failed to load attendance:', error)
+    }
+  }, [userProfile?.uid])
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000)
@@ -81,24 +191,19 @@ export default function DashboardPage() {
       if (userProfile && currentWorkspace) {
         fetchData()
         loadAttendance()
+        loadAnnouncements()
+        loadBoardPosts()
+        loadRecentActivities()
+        // HR 통계와 출근 현황은 HR_ONLY 또는 ENTERPRISE 타입에서만 로드
+        if (currentWorkspace.type === 'HR_ONLY' || currentWorkspace.type === 'ENTERPRISE') {
+          loadHRStats()
+          loadAttendanceList()
+        }
       } else {
         setLoading(false)
       }
     }
-  }, [userProfile, currentWorkspace, workspaceLoading])
-
-  const loadAttendance = async () => {
-    if (!userProfile?.uid) return
-    try {
-      const response = await fetch('/api/attendance', {
-        headers: { 'x-user-id': userProfile.uid }
-      })
-      const data = await response.json()
-      setTodayAttendance(data.today)
-    } catch (error) {
-      console.error('Failed to load attendance:', error)
-    }
-  }
+  }, [userProfile, currentWorkspace, workspaceLoading, loadAttendance, loadAnnouncements, loadBoardPosts, loadRecentActivities, loadHRStats, loadAttendanceList])
 
   const getGreeting = () => {
     const hour = currentTime.getHours()
@@ -130,6 +235,7 @@ export default function DashboardPage() {
         hrStats={hrStats}
         announcements={announcements}
         boardPosts={boardPosts}
+        attendanceList={attendanceList}
         getGreeting={getGreeting}
       />
     )
@@ -149,6 +255,7 @@ export default function DashboardPage() {
         stats={stats}
         announcements={announcements}
         boardPosts={boardPosts}
+        recentActivities={recentActivities}
         getGreeting={getGreeting}
       />
     )
@@ -167,6 +274,7 @@ export default function DashboardPage() {
       stats={stats}
       announcements={announcements}
       boardPosts={boardPosts}
+      recentActivities={recentActivities}
       getGreeting={getGreeting}
     />
   )

@@ -13,6 +13,14 @@ import { AttendanceWidget } from '../widgets/AttendanceWidget'
 import { NoticeWidget } from '../widgets/NoticeWidget'
 import { BoardWidget } from '../widgets/BoardWidget'
 
+interface AttendanceRecord {
+    id: string
+    name: string
+    team: string
+    checkIn: string
+    status: string
+}
+
 interface HRDashboardProps {
     userProfile: any
     currentWorkspace: any
@@ -23,6 +31,7 @@ interface HRDashboardProps {
     hrStats: any
     announcements: any[]
     boardPosts: any[]
+    attendanceList?: AttendanceRecord[]
     getGreeting: () => string
 }
 
@@ -36,6 +45,7 @@ export function HRDashboard({
     hrStats,
     announcements,
     boardPosts,
+    attendanceList = [],
     getGreeting
 }: HRDashboardProps) {
     return (
@@ -165,32 +175,36 @@ export function HRDashboard({
                         </div>
                     </CardHeader>
                     <CardContent className="p-0">
-                        {[
-                            { name: '김철수', team: '개발팀', checkIn: '08:55', status: 'present' },
-                            { name: '이영희', team: '디자인팀', checkIn: '09:02', status: 'present' },
-                            { name: '박민수', team: '마케팅팀', checkIn: '09:15', status: 'late' },
-                            { name: '정수진', team: '인사팀', checkIn: '--:--', status: 'absent' },
-                        ].map((employee, i) => (
-                            <div key={i} className="flex items-center gap-4 p-4 hover:bg-white/50 transition-colors border-b border-slate-50 last:border-0 cursor-pointer group">
-                                <Avatar className="h-10 w-10 border-2 border-white shadow-sm group-hover:scale-105 transition-transform">
-                                    <AvatarFallback className="bg-black text-lime-400 font-bold text-xs">
-                                        {employee.name.charAt(0)}
-                                    </AvatarFallback>
-                                </Avatar>
-                                <div className="flex-1 min-w-0">
-                                    <div className="flex items-center justify-between mb-1">
-                                        <p className="text-sm font-semibold text-slate-900">{employee.name}</p>
-                                        <Badge className={`rounded-full text-[10px] ${employee.status === 'present' ? 'bg-emerald-100 text-emerald-700' :
-                                                employee.status === 'late' ? 'bg-amber-100 text-amber-700' :
-                                                    'bg-rose-100 text-rose-700'
-                                            }`}>
-                                            {employee.status === 'present' ? '출근' : employee.status === 'late' ? '지각' : '미출근'}
-                                        </Badge>
+                        {attendanceList.length > 0 ? (
+                            attendanceList.map((employee) => (
+                                <div key={employee.id} className="flex items-center gap-4 p-4 hover:bg-white/50 transition-colors border-b border-slate-50 last:border-0 cursor-pointer group">
+                                    <Avatar className="h-10 w-10 border-2 border-white shadow-sm group-hover:scale-105 transition-transform">
+                                        <AvatarFallback className="bg-black text-lime-400 font-bold text-xs">
+                                            {employee.name.charAt(0)}
+                                        </AvatarFallback>
+                                    </Avatar>
+                                    <div className="flex-1 min-w-0">
+                                        <div className="flex items-center justify-between mb-1">
+                                            <p className="text-sm font-semibold text-slate-900">{employee.name}</p>
+                                            <Badge className={`rounded-full text-[10px] ${employee.status === 'present' || employee.status === 'remote' ? 'bg-emerald-100 text-emerald-700' :
+                                                    employee.status === 'late' ? 'bg-amber-100 text-amber-700' :
+                                                        'bg-rose-100 text-rose-700'
+                                                }`}>
+                                                {employee.status === 'present' ? '출근' :
+                                                 employee.status === 'remote' ? '재택' :
+                                                 employee.status === 'late' ? '지각' : '미출근'}
+                                            </Badge>
+                                        </div>
+                                        <p className="text-xs text-slate-500">{employee.team} · 출근 {employee.checkIn}</p>
                                     </div>
-                                    <p className="text-xs text-slate-500">{employee.team} · 출근 {employee.checkIn}</p>
                                 </div>
+                            ))
+                        ) : (
+                            <div className="p-8 text-center text-slate-400">
+                                <Users className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                                <p className="text-sm">오늘 출근 기록이 없습니다</p>
                             </div>
-                        ))}
+                        )}
                     </CardContent>
                 </Card>
             </div>

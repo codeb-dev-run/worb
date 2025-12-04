@@ -14,6 +14,15 @@ import { RecentActivityWidget } from '../widgets/RecentActivityWidget'
 import { NoticeWidget } from '../widgets/NoticeWidget'
 import { BoardWidget } from '../widgets/BoardWidget'
 
+interface Activity {
+    id: string
+    title: string
+    desc: string
+    time: string
+    status: string
+    taskId?: string
+}
+
 interface ProjectDashboardProps {
     userProfile: any
     currentWorkspace: any
@@ -23,6 +32,7 @@ interface ProjectDashboardProps {
     stats: any
     announcements: any[]
     boardPosts: any[]
+    recentActivities?: Activity[]
     getGreeting: () => string
 }
 
@@ -35,6 +45,7 @@ export function ProjectDashboard({
     stats,
     announcements,
     boardPosts,
+    recentActivities = [],
     getGreeting
 }: ProjectDashboardProps) {
     return (
@@ -125,7 +136,7 @@ export function ProjectDashboard({
             {/* Quick Actions & Recent Activity */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <QuickActionsWidget />
-                <RecentActivityWidget userProfile={userProfile} />
+                <RecentActivityWidget userProfile={userProfile} activities={recentActivities} />
             </div>
 
             {/* Notices & Board Row */}
