@@ -16,6 +16,7 @@ const createMockTask = (
   title: string,
   description: string,
   priority: TaskPriority,
+  department: string = 'development',
   extras: Partial<KanbanTask> = {}
 ): KanbanTask => ({
   id,
@@ -36,6 +37,7 @@ const createMockTask = (
   createdBy: 'user-1',
   attachmentCount: 0,
   commentCount: 0,
+  department,
   ...extras
 })
 
@@ -54,6 +56,7 @@ const mockKanbanColumns = [
         'API 설계 문서 작성',
         'RESTful API 엔드포인트 설계 및 문서화',
         TaskPriority.HIGH,
+        'development',
         {
           labels: ['백엔드', '문서화'],
           dueDate: new Date('2024-02-01'),
@@ -68,6 +71,7 @@ const mockKanbanColumns = [
         '데이터베이스 스키마 설계',
         'MySQL 데이터베이스 테이블 구조 설계',
         TaskPriority.URGENT,
+        'development',
         {
           labels: ['DB', '설계'],
           dueDate: new Date('2024-01-25'),
@@ -94,6 +98,7 @@ const mockKanbanColumns = [
         '홈페이지 UI 디자인',
         '메인 페이지 및 서브 페이지 UI 디자인 작업',
         TaskPriority.MEDIUM,
+        'design',
         {
           labels: ['디자인', 'UI/UX'],
           assignee: '이디자인',
@@ -116,6 +121,7 @@ const mockKanbanColumns = [
         '로그인 기능 구현',
         'JWT 기반 사용자 인증 시스템 구현',
         TaskPriority.HIGH,
+        'development',
         {
           labels: ['프론트엔드', '백엔드'],
           assignee: '최개발',
@@ -137,6 +143,7 @@ const mockKanbanColumns = [
         '회원가입 플로우 검토',
         '회원가입 프로세스 UX 개선점 검토',
         TaskPriority.MEDIUM,
+        'planning',
         {
           labels: ['UX', '검토'],
           assignee: '박기획',
@@ -158,6 +165,7 @@ const mockKanbanColumns = [
         '프로젝트 킥오프 미팅',
         '프로젝트 시작 미팅 및 요구사항 정리',
         TaskPriority.LOW,
+        'planning',
         {
           labels: ['미팅'],
           assignee: '박기획',
@@ -176,6 +184,7 @@ const mockKanbanColumns = [
         '개발 환경 설정',
         'Next.js, TypeScript, Tailwind CSS 환경 구축',
         TaskPriority.MEDIUM,
+        'operations',
         {
           labels: ['설정'],
         }
@@ -221,7 +230,14 @@ export default function KanbanPage() {
     setColumns(prevColumns => prevColumns.map(col => ({
       ...col,
       tasks: col.tasks.map(task =>
-        task.id === updatedTask.id ? { ...task, ...updatedTask } : task
+        task.id === updatedTask.id
+          ? {
+              ...task,
+              ...updatedTask,
+              // department 변경 시 명시적으로 반영
+              department: updatedTask.department || task.department
+            }
+          : task
       )
     })))
     setIsModalOpen(false)
