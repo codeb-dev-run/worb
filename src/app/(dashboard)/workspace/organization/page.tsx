@@ -13,10 +13,9 @@ import MemberCard from '@/components/organization/MemberCard'
 import DepartmentManageModal from '@/components/organization/DepartmentManageModal'
 import { customToast as toast } from '@/components/notification/NotificationToast'
 import { useWorkspace } from '@/lib/workspace-context'
-import { DEPARTMENTS } from '@/constants/departments'
 
 export default function OrganizationPage() {
-    const { currentWorkspace, loading: workspaceLoading } = useWorkspace()
+    const { currentWorkspace, loading: workspaceLoading, departments, refreshDepartments } = useWorkspace()
     const [members, setMembers] = useState<any[]>([])
     const [loading, setLoading] = useState(true)
     const [activeMember, setActiveMember] = useState<any>(null)
@@ -276,7 +275,7 @@ export default function OrganizationPage() {
                 <div className="space-y-4">
                     <h2 className="text-lg font-bold text-slate-900 px-2">부서별 조직도</h2>
                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-7 gap-4">
-                        {DEPARTMENTS.map(dept => (
+                        {departments.map(dept => (
                             <DepartmentColumn
                                 key={dept.id}
                                 department={dept}
@@ -326,8 +325,6 @@ export default function OrganizationPage() {
             <DepartmentManageModal
                 isOpen={isDeptManageOpen}
                 onClose={() => setIsDeptManageOpen(false)}
-                departments={DEPARTMENTS}
-                onUpdate={loadMembers}
             />
         </div>
     )

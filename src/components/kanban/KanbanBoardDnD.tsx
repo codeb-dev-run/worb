@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react'
 import { DragDropContext, Droppable, Draggable, DropResult, DroppableProvided, DraggableProvided, DraggableStateSnapshot, DroppableStateSnapshot } from '@hello-pangea/dnd'
 import { KanbanTask, TaskPriority, TaskStatus } from '@/types/task'
-import { getDepartmentColor } from '@/constants/departments'
+import { useWorkspace } from '@/lib/workspace-context'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -60,6 +60,7 @@ function TaskItem({ task, index, onEdit, onDelete }: {
     onEdit?: (task: KanbanTask) => void
     onDelete?: (taskId: string) => void
 }) {
+    const { getDepartmentColor } = useWorkspace()
     // 부서 기반 컬러 사용 (미지정시 회색)
     const displayColor = getDepartmentColor(task.department)
 

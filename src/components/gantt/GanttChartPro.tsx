@@ -4,7 +4,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import { Gantt, Task, ViewMode } from 'gantt-task-react'
 import "gantt-task-react/dist/index.css"
 import { motion, AnimatePresence } from 'framer-motion'
-import { getDepartmentColor } from '@/constants/departments'
+import { useWorkspace } from '@/lib/workspace-context'
 import styles from './GanttChartPro.module.css'
 
 // 확장된 Task 타입 (담당자 부서 정보 포함)
@@ -72,6 +72,7 @@ const TaskListTable: React.FC<{
   onExpanderClick: (task: ExtendedTask) => void
   onTaskDoubleClick?: (task: ExtendedTask) => void
 }> = ({ tasks, rowHeight, rowWidth, fontFamily, fontSize, locale, onExpanderClick, onTaskDoubleClick }) => {
+  const { getDepartmentColor } = useWorkspace()
   const formatDate = (date: Date) => {
     return date.toLocaleDateString('ko-KR', {
       year: 'numeric',

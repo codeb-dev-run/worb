@@ -1,38 +1,37 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Edit2, Trash2, Plus, Save, X, Settings, Palette } from 'lucide-react'
+import { Edit2, Trash2, Plus, Save, X, Settings, Palette, Loader2 } from 'lucide-react'
 import { customToast as toast } from '@/components/notification/NotificationToast'
-
-interface Department {
-    id: string
-    name: string
-    color: string
-}
+import { useWorkspace, Department } from '@/lib/workspace-context'
 
 interface DepartmentManageModalProps {
     isOpen: boolean
     onClose: () => void
-    departments: Department[]
-    onUpdate: () => void
 }
 
 export default function DepartmentManageModal({
     isOpen,
     onClose,
-    departments: initialDepartments,
-    onUpdate,
 }: DepartmentManageModalProps) {
-    const [departments, setDepartments] = useState<Department[]>(initialDepartments)
+    const { currentWorkspace, departments, refreshDepartments, isAdmin } = useWorkspace()
     const [editingId, setEditingId] = useState<string | null>(null)
     const [editName, setEditName] = useState('')
     const [editColor, setEditColor] = useState('')
     const [newName, setNewName] = useState('')
     const [newColor, setNewColor] = useState('#3B82F6')
+    const [loading, setLoading] = useState(false)
+
+    // 모달이 열릴 때 데이터 새로고침
+    useEffect(() => {
+        if (isOpen) {
+            refreshDepartments()
+        }
+    }, [isOpen])
 
     const handleEdit = (dept: Department) => {
         setEditingId(dept.id)
@@ -46,16 +45,28 @@ export default function DepartmentManageModal({
             return
         }
 
+        if (!currentWorkspace?.id || !editingId) return
+
+        setLoading(true)
         try {
-            // TODO: API call to update department
-            setDepartments(prev =>
-                prev.map(d => (d.id === editingId ? { ...d, name: editName, color: editColor } : d))
-            )
+            const response = await fetch(`/api/workspace/${currentWorkspace.id}/teams/${editingId}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: editName.trim(), color: editColor }),
+            })
+
+            if (!response.ok) {
+                const error = await response.json()
+                throw new Error(error.error || 'Failed to update department')
+            }
+
             toast.success('부서가 수정되었습니다')
             setEditingId(null)
-            onUpdate()
+            await refreshDepartments()
         } catch (error) {
-            toast.error('부서 수정에 실패했습니다')
+            toast.error(error instanceof Error ? error.message : '부서 수정에 실패했습니다')
+        } finally {
+            setLoading(false)
         }
     }
 
@@ -64,13 +75,25 @@ export default function DepartmentManageModal({
             return
         }
 
+        if (!currentWorkspace?.id) return
+
+        setLoading(true)
         try {
-            // TODO: API call to delete department
-            setDepartments(prev => prev.filter(d => d.id !== id))
+            const response = await fetch(`/api/workspace/${currentWorkspace.id}/teams/${id}`, {
+                method: 'DELETE',
+            })
+
+            if (!response.ok) {
+                const error = await response.json()
+                throw new Error(error.error || 'Failed to delete department')
+            }
+
             toast.success('부서가 삭제되었습니다')
-            onUpdate()
+            await refreshDepartments()
         } catch (error) {
-            toast.error('부서 삭제에 실패했습니다')
+            toast.error(error instanceof Error ? error.message : '부서 삭제에 실패했습니다')
+        } finally {
+            setLoading(false)
         }
     }
 
@@ -80,20 +103,29 @@ export default function DepartmentManageModal({
             return
         }
 
+        if (!currentWorkspace?.id) return
+
+        setLoading(true)
         try {
-            // TODO: API call to create department
-            const newDept: Department = {
-                id: `dept-${Date.now()}`,
-                name: newName,
-                color: newColor,
+            const response = await fetch(`/api/workspace/${currentWorkspace.id}/teams`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: newName.trim(), color: newColor }),
+            })
+
+            if (!response.ok) {
+                const error = await response.json()
+                throw new Error(error.error || 'Failed to create department')
             }
-            setDepartments(prev => [...prev, newDept])
+
             toast.success('부서가 추가되었습니다')
             setNewName('')
             setNewColor('#3B82F6')
-            onUpdate()
+            await refreshDepartments()
         } catch (error) {
-            toast.error('부서 추가에 실패했습니다')
+            toast.error(error instanceof Error ? error.message : '부서 추가에 실패했습니다')
+        } finally {
+            setLoading(false)
         }
     }
 
@@ -146,19 +178,28 @@ export default function DepartmentManageModal({
                                                 onChange={(e) => setEditName(e.target.value)}
                                                 className="flex-1 rounded-xl bg-white border-slate-200 focus:border-lime-400 focus:ring-lime-400/20"
                                                 placeholder="부서 이름"
+                                                disabled={loading}
                                             />
                                             <Button
                                                 size="sm"
                                                 onClick={handleSaveEdit}
+                                                disabled={loading}
                                                 className="rounded-xl bg-lime-500 hover:bg-lime-600 text-white font-medium shadow-lg shadow-lime-500/30"
                                             >
-                                                <Save className="w-4 h-4 mr-1.5" />
-                                                저장
+                                                {loading ? (
+                                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                                ) : (
+                                                    <>
+                                                        <Save className="w-4 h-4 mr-1.5" />
+                                                        저장
+                                                    </>
+                                                )}
                                             </Button>
                                             <Button
                                                 size="sm"
                                                 variant="outline"
                                                 onClick={() => setEditingId(null)}
+                                                disabled={loading}
                                                 className="rounded-xl border-slate-200 hover:bg-slate-50"
                                             >
                                                 <X className="w-4 h-4" />
@@ -176,24 +217,30 @@ export default function DepartmentManageModal({
                                                 <div className="font-bold text-slate-900">{dept.name}</div>
                                                 <div className="text-xs text-slate-400 font-medium">{dept.color}</div>
                                             </div>
-                                            <Button
-                                                size="sm"
-                                                variant="outline"
-                                                onClick={() => handleEdit(dept)}
-                                                className="rounded-xl border-slate-200 hover:border-lime-300 hover:bg-lime-50 hover:text-lime-600 transition-all"
-                                            >
-                                                <Edit2 className="w-4 h-4 mr-1.5" />
-                                                수정
-                                            </Button>
-                                            <Button
-                                                size="sm"
-                                                variant="outline"
-                                                onClick={() => handleDelete(dept.id)}
-                                                className="rounded-xl border-slate-200 hover:border-rose-300 hover:bg-rose-50 hover:text-rose-600 transition-all"
-                                            >
-                                                <Trash2 className="w-4 h-4 mr-1.5" />
-                                                삭제
-                                            </Button>
+                                            {isAdmin && (
+                                                <>
+                                                    <Button
+                                                        size="sm"
+                                                        variant="outline"
+                                                        onClick={() => handleEdit(dept)}
+                                                        disabled={loading}
+                                                        className="rounded-xl border-slate-200 hover:border-lime-300 hover:bg-lime-50 hover:text-lime-600 transition-all"
+                                                    >
+                                                        <Edit2 className="w-4 h-4 mr-1.5" />
+                                                        수정
+                                                    </Button>
+                                                    <Button
+                                                        size="sm"
+                                                        variant="outline"
+                                                        onClick={() => handleDelete(dept.id)}
+                                                        disabled={loading}
+                                                        className="rounded-xl border-slate-200 hover:border-rose-300 hover:bg-rose-50 hover:text-rose-600 transition-all"
+                                                    >
+                                                        <Trash2 className="w-4 h-4 mr-1.5" />
+                                                        삭제
+                                                    </Button>
+                                                </>
+                                            )}
                                         </>
                                     )}
                                 </div>
@@ -208,43 +255,53 @@ export default function DepartmentManageModal({
                         </div>
                     </div>
 
-                    {/* 새 부서 추가 */}
-                    <div className="space-y-4 pt-4 border-t border-slate-100/50">
-                        <h3 className="font-bold text-slate-800 text-sm flex items-center gap-2">
-                            <Plus className="w-4 h-4 text-lime-500" />
-                            새 부서 추가
-                        </h3>
-                        <div className="flex items-end gap-4 p-4 bg-slate-50/70 rounded-2xl border border-slate-100">
-                            <div className="space-y-2">
-                                <Label className="text-xs font-bold text-slate-500 uppercase tracking-wider">색상</Label>
-                                <div className="relative">
-                                    <input
-                                        type="color"
-                                        value={newColor}
-                                        onChange={(e) => setNewColor(e.target.value)}
-                                        className="w-14 h-12 rounded-xl cursor-pointer border-2 border-white shadow-md"
+                    {/* 새 부서 추가 - 관리자만 */}
+                    {isAdmin && (
+                        <div className="space-y-4 pt-4 border-t border-slate-100/50">
+                            <h3 className="font-bold text-slate-800 text-sm flex items-center gap-2">
+                                <Plus className="w-4 h-4 text-lime-500" />
+                                새 부서 추가
+                            </h3>
+                            <div className="flex items-end gap-4 p-4 bg-slate-50/70 rounded-2xl border border-slate-100">
+                                <div className="space-y-2">
+                                    <Label className="text-xs font-bold text-slate-500 uppercase tracking-wider">색상</Label>
+                                    <div className="relative">
+                                        <input
+                                            type="color"
+                                            value={newColor}
+                                            onChange={(e) => setNewColor(e.target.value)}
+                                            className="w-14 h-12 rounded-xl cursor-pointer border-2 border-white shadow-md"
+                                        />
+                                    </div>
+                                </div>
+                                <div className="flex-1 space-y-2">
+                                    <Label className="text-xs font-bold text-slate-500 uppercase tracking-wider">부서 이름</Label>
+                                    <Input
+                                        value={newName}
+                                        onChange={(e) => setNewName(e.target.value)}
+                                        placeholder="예: 인사팀, 총무팀"
+                                        className="rounded-xl bg-white border-slate-200 focus:border-lime-400 focus:ring-lime-400/20 h-12"
+                                        onKeyDown={(e) => e.key === 'Enter' && !loading && handleAdd()}
+                                        disabled={loading}
                                     />
                                 </div>
+                                <Button
+                                    onClick={handleAdd}
+                                    disabled={loading}
+                                    className="rounded-xl h-12 px-6 bg-slate-900 text-lime-400 hover:bg-lime-400 hover:text-slate-900 transition-colors font-bold shadow-lg shadow-slate-900/10"
+                                >
+                                    {loading ? (
+                                        <Loader2 className="w-4 h-4 animate-spin" />
+                                    ) : (
+                                        <>
+                                            <Plus className="w-4 h-4 mr-1.5" />
+                                            추가
+                                        </>
+                                    )}
+                                </Button>
                             </div>
-                            <div className="flex-1 space-y-2">
-                                <Label className="text-xs font-bold text-slate-500 uppercase tracking-wider">부서 이름</Label>
-                                <Input
-                                    value={newName}
-                                    onChange={(e) => setNewName(e.target.value)}
-                                    placeholder="예: 인사팀, 총무팀"
-                                    className="rounded-xl bg-white border-slate-200 focus:border-lime-400 focus:ring-lime-400/20 h-12"
-                                    onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
-                                />
-                            </div>
-                            <Button
-                                onClick={handleAdd}
-                                className="rounded-xl h-12 px-6 bg-slate-900 text-lime-400 hover:bg-lime-400 hover:text-slate-900 transition-colors font-bold shadow-lg shadow-slate-900/10"
-                            >
-                                <Plus className="w-4 h-4 mr-1.5" />
-                                추가
-                            </Button>
                         </div>
-                    </div>
+                    )}
                 </div>
             </DialogContent>
         </Dialog>

@@ -24,7 +24,7 @@ import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { motion } from 'framer-motion'
 import { KanbanTask, TaskPriority, TaskStatus } from '@/types/task'
-import { getDepartmentColor } from '@/constants/departments'
+import { useWorkspace } from '@/lib/workspace-context'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -60,6 +60,7 @@ function SortableTaskItem({ task, onEdit, onDelete }: {
   onEdit?: (task: KanbanTask) => void
   onDelete?: (taskId: string) => void
 }) {
+  const { getDepartmentColor } = useWorkspace()
   const {
     attributes,
     listeners,
