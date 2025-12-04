@@ -103,8 +103,11 @@ export default function Sidebar() {
   // Fetch Projects from API
   useEffect(() => {
     const fetchProjects = async () => {
+      // workspaceId가 없으면 API 호출하지 않음
+      if (!currentWorkspace?.id) return
+
       try {
-        const response = await fetch('/api/projects')
+        const response = await fetch(`/api/projects?workspaceId=${currentWorkspace.id}`)
         if (response.ok) {
           const data = await response.json()
           setProjects(data)
@@ -115,7 +118,7 @@ export default function Sidebar() {
     }
 
     fetchProjects()
-  }, [])
+  }, [currentWorkspace?.id])
 
   // 메인 네비게이션 (항상 표시)
   const navMain: MenuItem[] = React.useMemo(() => {
