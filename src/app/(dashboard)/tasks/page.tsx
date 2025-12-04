@@ -395,7 +395,11 @@ export default function TasksPage() {
       column.tasks.forEach((task: TaskType) => {
         const originalTask = tasks.find(t => t.id === task.id)
         if (originalTask && originalTask.status !== column.id) {
-          updates.push(updateTask(task.id, { status: column.id as TaskStatus }))
+          // status와 columnId를 함께 업데이트하여 두 페이지 간 동기화 보장
+          updates.push(updateTask(task.id, {
+            status: column.id as TaskStatus,
+            columnId: column.id
+          }))
         }
       })
     })
