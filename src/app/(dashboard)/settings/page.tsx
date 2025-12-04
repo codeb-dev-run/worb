@@ -5,7 +5,7 @@
 // ===========================================
 
 import React, { useState, useEffect } from 'react'
-import { useSearchParams } from 'next/navigation'
+import { useSearchParams, useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/auth-context'
 import { useWorkspace } from '@/lib/workspace-context'
 import toast from 'react-hot-toast'
@@ -19,12 +19,12 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Separator } from '@/components/ui/separator'
 import { Badge } from '@/components/ui/badge'
 import {
-  User, Bell, Shield, Palette, Globe, Key, Database,
-  Mail, Phone, Building, Camera, Save, RefreshCcw,
+  User, Bell, Shield, Palette, Key, Database,
+  Mail, Save, RefreshCcw,
   Sun, Moon, Monitor, Loader2, AlertCircle, CheckCircle,
-  Lock, Smartphone, Languages, CreditCard, Zap, Clock,
+  Lock, Smartphone, CreditCard, Zap, Clock,
   Settings2, Kanban, Calendar, Users, FileText, Briefcase,
-  DollarSign, BarChart3, MessageSquare, Megaphone
+  DollarSign, BarChart3, MessageSquare, Megaphone, Building
 } from 'lucide-react'
 
 interface Settings {
@@ -177,6 +177,7 @@ const defaultWorkspaceFeatures: WorkspaceFeatureSettings = {
 
 export default function SettingsPage() {
   const searchParams = useSearchParams()
+  const router = useRouter()
   const { user, userProfile } = useAuth()
   const { currentWorkspace, features, refreshWorkspaces, isAdmin } = useWorkspace()
   const [settings, setSettings] = useState<Settings>(defaultSettings)
@@ -184,7 +185,7 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [savingFeatures, setSavingFeatures] = useState(false)
-  const initialTab = searchParams?.get('tab') || 'profile'
+  const initialTab = searchParams?.get('tab') || 'notifications'
   const [activeTab, setActiveTab] = useState(initialTab)
   const [hasChanges, setHasChanges] = useState(false)
   const [hasFeatureChanges, setHasFeatureChanges] = useState(false)
@@ -238,13 +239,17 @@ export default function SettingsPage() {
     }
   }, [features])
 
-  // URL 파라미터로 탭 변경 시 반영
+  // URL 파라미터로 탭 변경 시 반영 (profile 탭은 /profile 페이지로 리다이렉트)
   useEffect(() => {
     const tab = searchParams?.get('tab')
+    if (tab === 'profile') {
+      router.push('/profile')
+      return
+    }
     if (tab) {
       setActiveTab(tab)
     }
-  }, [searchParams])
+  }, [searchParams, router])
 
   const handleSave = async () => {
     setSaving(true)
@@ -358,9 +363,8 @@ export default function SettingsPage() {
       {/* 설정 탭 - Glass Morphism */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <div className="bg-white/60 backdrop-blur-sm rounded-2xl shadow-lg shadow-black/5 p-1.5 border border-white/40 max-w-[900px]">
-          <div className="grid grid-cols-6 gap-1">
+          <div className="grid grid-cols-5 gap-1">
             {[
-              { id: 'profile', label: '프로필', icon: User },
               { id: 'notifications', label: '알림', icon: Bell },
               { id: 'preferences', label: '환경설정', icon: Palette },
               { id: 'privacy', label: '개인정보', icon: Shield },
@@ -382,106 +386,6 @@ export default function SettingsPage() {
             ))}
           </div>
         </div>
-
-        {/* 프로필 설정 - Glass Morphism */}
-        <TabsContent value="profile" className="space-y-4 mt-6">
-          <Card variant="glass">
-            <CardHeader>
-              <CardTitle className="text-slate-900">프로필 정보</CardTitle>
-              <CardDescription className="text-slate-500">다른 사용자에게 표시되는 정보입니다</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="flex items-start gap-6">
-                <div className="relative">
-                  <div className="w-24 h-24 bg-lime-100 rounded-full flex items-center justify-center">
-                    {settings.profile.avatar ? (
-                      <img
-                        src={settings.profile.avatar}
-                        alt="Avatar"
-                        className="w-full h-full rounded-full object-cover"
-                      />
-                    ) : (
-                      <User className="h-12 w-12 text-lime-600" />
-                    )}
-                  </div>
-                  <Button
-                    size="icon"
-                    variant="glass"
-                    className="absolute bottom-0 right-0 rounded-xl"
-                  >
-                    <Camera className="h-4 w-4" />
-                  </Button>
-                </div>
-
-                <div className="flex-1 space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <Label htmlFor="displayName">표시 이름</Label>
-                      <Input
-                        id="displayName"
-                        value={settings.profile.displayName}
-                        onChange={(e) => updateSettings('profile', 'displayName', e.target.value)}
-                        placeholder="홍길동"
-                      />
-                    </div>
-
-                    <div>
-                      <Label htmlFor="email">이메일</Label>
-                      <div className="relative">
-                        <Input
-                          id="email"
-                          value={settings.profile.email}
-                          disabled
-                          className="pr-10"
-                        />
-                        <Mail className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <Label htmlFor="phone">전화번호</Label>
-                      <div className="relative">
-                        <Input
-                          id="phone"
-                          value={settings.profile.phone}
-                          onChange={(e) => updateSettings('profile', 'phone', e.target.value)}
-                          placeholder="010-1234-5678"
-                        />
-                        <Phone className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                      </div>
-                    </div>
-
-                    <div>
-                      <Label htmlFor="company">회사</Label>
-                      <div className="relative">
-                        <Input
-                          id="company"
-                          value={settings.profile.company}
-                          onChange={(e) => updateSettings('profile', 'company', e.target.value)}
-                          placeholder="코드비"
-                        />
-                        <Building className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                      </div>
-                    </div>
-                  </div>
-
-                  <div>
-                    <Label htmlFor="bio">소개</Label>
-                    <Textarea
-                      id="bio"
-                      value={settings.profile.bio}
-                      onChange={(e) => updateSettings('profile', 'bio', e.target.value)}
-                      placeholder="간단한 자기소개를 작성해주세요"
-                      rows={3}
-                    />
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
 
         {/* 알림 설정 - Glass Morphism */}
         <TabsContent value="notifications" className="space-y-4 mt-6">

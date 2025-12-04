@@ -301,7 +301,7 @@ export default function Header({ showSidebarToggle = true, onSidebarToggle }: He
 
                   <div className="py-2">
                     <Link
-                      href="/settings?tab=profile"
+                      href="/profile"
                       className="flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
                       onClick={() => setShowUserMenu(false)}
                     >
