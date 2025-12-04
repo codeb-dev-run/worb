@@ -50,10 +50,10 @@ export default function DashboardLayout({
           )}>
             <Header />
             <main className={cn(
-              "flex-1 overflow-hidden",
+              "flex-1 overflow-y-auto",
               mode === 'dock' && "pb-32"
             )}>
-              <div className="w-full h-full">
+              <div className="w-full min-h-full">
                 {children}
               </div>
             </main>

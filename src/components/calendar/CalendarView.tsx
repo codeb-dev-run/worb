@@ -798,11 +798,11 @@ export default function CalendarView() {
 
             {/* Create Event Modal */}
             <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
-                <DialogContent className="max-w-lg bg-white/95 backdrop-blur-2xl border-white/40 rounded-3xl">
-                    <DialogHeader>
+                <DialogContent className="max-w-lg max-h-[90vh] bg-white/95 backdrop-blur-2xl border-white/40 rounded-3xl flex flex-col">
+                    <DialogHeader className="shrink-0">
                         <DialogTitle className="text-xl font-bold text-slate-900">새 일정 만들기</DialogTitle>
                     </DialogHeader>
-                    <div className="space-y-4 py-4">
+                    <div className="space-y-4 py-4 overflow-y-auto flex-1">
                         <div className="space-y-2">
                             <Label className="text-xs font-bold text-slate-400 uppercase tracking-wider">제목</Label>
                             <Input
@@ -949,7 +949,7 @@ export default function CalendarView() {
                             </div>
                         </div>
                     </div>
-                    <DialogFooter>
+                    <DialogFooter className="shrink-0">
                         <Button variant="ghost" onClick={() => setIsCreateModalOpen(false)} className="rounded-xl">취소</Button>
                         <Button variant="limePrimary" onClick={handleCreateEvent} className="rounded-xl">저장</Button>
                     </DialogFooter>
@@ -958,14 +958,14 @@ export default function CalendarView() {
 
             {/* Meeting Request Modal */}
             <Dialog open={isMeetingModalOpen} onOpenChange={setIsMeetingModalOpen}>
-                <DialogContent className="max-w-lg bg-white/95 backdrop-blur-2xl border-white/40 rounded-3xl">
-                    <DialogHeader>
+                <DialogContent className="max-w-lg max-h-[90vh] bg-white/95 backdrop-blur-2xl border-white/40 rounded-3xl flex flex-col">
+                    <DialogHeader className="shrink-0">
                         <DialogTitle className="text-xl font-bold text-slate-900 flex items-center gap-2">
                             <Video className="w-5 h-5 text-violet-500" />
                             미팅 신청
                         </DialogTitle>
                     </DialogHeader>
-                    <div className="space-y-4 py-4">
+                    <div className="space-y-4 py-4 overflow-y-auto flex-1">
                         <div className="space-y-2">
                             <Label className="text-xs font-bold text-slate-400 uppercase tracking-wider">미팅 제목</Label>
                             <Input
@@ -1075,7 +1075,7 @@ export default function CalendarView() {
                             />
                         </div>
                     </div>
-                    <DialogFooter>
+                    <DialogFooter className="shrink-0">
                         <Button variant="ghost" onClick={() => setIsMeetingModalOpen(false)} className="rounded-xl">취소</Button>
                         <Button
                             onClick={handleCreateMeeting}
@@ -1089,15 +1089,15 @@ export default function CalendarView() {
 
             {/* Edit Event Modal */}
             <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
-                <DialogContent className="max-w-lg bg-white/95 backdrop-blur-2xl border-white/40 rounded-3xl">
-                    <DialogHeader>
+                <DialogContent className="max-w-lg max-h-[90vh] bg-white/95 backdrop-blur-2xl border-white/40 rounded-3xl flex flex-col">
+                    <DialogHeader className="shrink-0">
                         <DialogTitle className="text-xl font-bold text-slate-900 flex items-center gap-2">
                             <Edit3 className="w-5 h-5 text-lime-500" />
                             일정 수정
                         </DialogTitle>
                     </DialogHeader>
                     {editingEvent && (
-                        <div className="space-y-4 py-4">
+                        <div className="space-y-4 py-4 overflow-y-auto flex-1">
                             <div className="space-y-2">
                                 <Label className="text-xs font-bold text-slate-400 uppercase tracking-wider">제목</Label>
                                 <Input
@@ -1192,7 +1192,7 @@ export default function CalendarView() {
                             </div>
                         </div>
                     )}
-                    <DialogFooter className="flex justify-between">
+                    <DialogFooter className="flex justify-between shrink-0">
                         <Button
                             variant="ghost"
                             onClick={handleDeleteEvent}

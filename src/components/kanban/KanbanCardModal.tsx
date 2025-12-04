@@ -115,11 +115,11 @@ export default function KanbanCardModal({
           initial={{ scale: 0.9, y: 20 }}
           animate={{ scale: 1, y: 0 }}
           exit={{ scale: 0.9, y: 20 }}
-          className="bg-white rounded-xl w-full max-w-2xl mt-8 mb-8"
+          className="bg-white rounded-xl w-full max-w-2xl my-8 max-h-[90vh] flex flex-col"
           onClick={(e) => e.stopPropagation()}
         >
           {/* 헤더 */}
-          <div className="flex items-center justify-between p-6 border-b">
+          <div className="flex items-center justify-between p-6 border-b shrink-0">
             <div className="flex items-center gap-3">
               <span className={`px-2 py-1 text-xs font-medium rounded-full ${getPriorityColor(card.priority)}`}>
                 {card.priority.toUpperCase()}
@@ -177,7 +177,7 @@ export default function KanbanCardModal({
             </div>
           </div>
 
-          <div className="p-6 space-y-6">
+          <div className="p-6 space-y-6 overflow-y-auto flex-1">
             {/* 제목 */}
             <div>
               {editMode ? (
@@ -418,7 +418,7 @@ export default function KanbanCardModal({
 
           {/* 하단 버튼 */}
           {editMode && (
-            <div className="flex gap-3 p-6 border-t">
+            <div className="flex gap-3 p-6 border-t shrink-0">
               <button
                 onClick={() => {
                   setEditMode(false)

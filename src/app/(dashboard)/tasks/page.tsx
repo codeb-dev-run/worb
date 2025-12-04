@@ -814,14 +814,14 @@ export default function TasksPage() {
 
       {/* Edit Modal - Glass Style */}
       <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
-        <DialogContent className="max-w-2xl bg-white/95 backdrop-blur-2xl border-white/40 rounded-3xl shadow-2xl">
-          <DialogHeader className="pb-4 border-b border-slate-100">
+        <DialogContent className="max-w-2xl max-h-[90vh] bg-white/95 backdrop-blur-2xl border-white/40 rounded-3xl shadow-2xl flex flex-col">
+          <DialogHeader className="pb-4 border-b border-slate-100 shrink-0">
             <div className="space-y-1">
               <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Task</p>
               <DialogTitle className="text-xl font-bold text-slate-900">작업 수정</DialogTitle>
             </div>
           </DialogHeader>
-          <div className="space-y-5 py-6">
+          <div className="space-y-5 py-6 overflow-y-auto flex-1">
             <div className="space-y-2">
               <Label className="text-xs font-bold text-slate-400 uppercase tracking-wider">작업명</Label>
               <Input
@@ -1034,7 +1034,7 @@ export default function TasksPage() {
               </div>
             )}
           </div>
-          <DialogFooter className="pt-4 border-t border-slate-100">
+          <DialogFooter className="pt-4 border-t border-slate-100 shrink-0">
             <Button variant="glass" onClick={() => setIsEditModalOpen(false)} className="rounded-xl">
               취소
             </Button>
