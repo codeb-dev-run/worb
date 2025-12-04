@@ -1028,7 +1028,12 @@ export default function ProjectDetailPage() {
               <KanbanBoardDnD
                 columns={kanbanColumns.map(col => ({
                   ...col,
-                  tasks: tasks.filter(task => task.columnId === col.id).map(task => ({
+                  // status를 기준으로 필터링하여 /tasks 페이지와 동기화 (columnId fallback 포함)
+                  tasks: tasks.filter(task =>
+                    task.status === col.id ||
+                    (task.columnId === col.id && !task.status) ||
+                    (col.id === 'todo' && !task.status && !task.columnId)
+                  ).map(task => ({
                     ...task,
                     dueDate: task.dueDate ? new Date(task.dueDate) : undefined,
                     priority: (task.priority || TaskPriority.MEDIUM) as TaskPriority
