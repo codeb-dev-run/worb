@@ -4,7 +4,7 @@ import React from 'react'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { User, Mail } from 'lucide-react'
-import { DEPARTMENTS, getDepartmentColor, getDepartmentName } from '@/constants/departments'
+import { useWorkspace } from '@/lib/workspace-context'
 
 interface MemberCardProps {
     member: any
@@ -13,6 +13,7 @@ interface MemberCardProps {
 }
 
 export default function MemberCard({ member, isDragging = false, showDepartment = false }: MemberCardProps) {
+    const { getDepartmentColor, getDepartmentName } = useWorkspace()
     const {
         attributes,
         listeners,
@@ -28,7 +29,7 @@ export default function MemberCard({ member, isDragging = false, showDepartment 
         opacity: isSortableDragging ? 0.5 : 1,
     }
 
-    // Get department color using centralized function
+    // Get department color using workspace context
     const departmentColor = getDepartmentColor(member.department)
     const deptBgClass = member.department ? `bg-[${departmentColor}]` : 'bg-slate-200'
 

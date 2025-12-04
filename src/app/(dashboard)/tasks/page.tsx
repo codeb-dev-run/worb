@@ -8,7 +8,6 @@ import { Task as TaskType, KanbanColumn } from '@/types/task'
 import { TaskStatus, TaskPriority } from '@/types/task'
 import { getAllTasks, updateTask, deleteTask, createTask } from '@/actions/task'
 import { getProjects } from '@/actions/project'
-import { getDepartmentColor } from '@/constants/departments'
 import { customToast as toast } from '@/components/notification/NotificationToast'
 import Link from 'next/link'
 import {
@@ -69,7 +68,7 @@ const priorityConfig = {
 
 export default function TasksPage() {
   const { userProfile } = useAuth()
-  const { currentWorkspace, loading: workspaceLoading } = useWorkspace()
+  const { currentWorkspace, loading: workspaceLoading, getDepartmentColor } = useWorkspace()
   const [tasks, setTasks] = useState<TaskType[]>([])
   const [projects, setProjects] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
