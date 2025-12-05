@@ -61,8 +61,8 @@ function TaskItem({ task, index, onEdit, onDelete }: {
     onDelete?: (taskId: string) => void
 }) {
     const { getDepartmentColor } = useWorkspace()
-    // 부서 기반 컬러 사용 (미지정시 회색)
-    const displayColor = getDepartmentColor(task.department)
+    // Task에 포함된 색상 정보 우선 사용, 없으면 context에서 조회 (초기 로딩 시 색상 즉시 적용)
+    const displayColor = (task as any).departmentColor || getDepartmentColor(task.department)
 
     return (
         <Draggable draggableId={task.id} index={index}>

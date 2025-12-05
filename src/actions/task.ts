@@ -39,6 +39,9 @@ export async function getTasks(projectId: string) {
             assigneeId: t.assigneeId,
             // teamId를 department로 매핑 (프론트엔드 호환)
             department: t.teamId,
+            // Team 색상 정보 포함 (초기 로딩 시 색상 즉시 적용)
+            departmentColor: t.team?.color || null,
+            departmentName: t.team?.name || null,
             // Ensure dates are Date objects (Prisma returns Date objects)
             startDate: t.startDate?.toISOString() || null,
             dueDate: t.dueDate?.toISOString() || null,

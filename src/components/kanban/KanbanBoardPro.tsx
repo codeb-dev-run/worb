@@ -61,6 +61,8 @@ function SortableTaskItem({ task, onEdit, onDelete }: {
   onDelete?: (taskId: string) => void
 }) {
   const { getDepartmentColor } = useWorkspace()
+  // Task에 포함된 색상 정보 우선 사용, 없으면 context에서 조회 (초기 로딩 시 색상 즉시 적용)
+  const displayColor = (task as any).departmentColor || getDepartmentColor(task.department)
   const {
     attributes,
     listeners,
@@ -87,7 +89,7 @@ function SortableTaskItem({ task, onEdit, onDelete }: {
     >
       <Card
         className="p-3 hover:shadow-md transition-shadow"
-        style={{ borderLeft: `4px solid ${getDepartmentColor(task.department)}` }}
+        style={{ borderLeft: `4px solid ${displayColor}` }}
       >
         <div className="flex justify-between items-start mb-2">
           <h4 className="text-sm font-medium flex-1">{task.title}</h4>
@@ -137,7 +139,7 @@ function SortableTaskItem({ task, onEdit, onDelete }: {
             <div className="flex items-center">
               <div
                 className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium text-white"
-                style={{ backgroundColor: getDepartmentColor(task.department) }}
+                style={{ backgroundColor: displayColor }}
               >
                 {typeof task.assignee === 'string'
                   ? task.assignee.charAt(0).toUpperCase()

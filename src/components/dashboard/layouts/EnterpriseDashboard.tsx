@@ -14,6 +14,15 @@ import { NoticeWidget } from '../widgets/NoticeWidget'
 import { BoardWidget } from '../widgets/BoardWidget'
 import { BirthdayBanner } from '../widgets/BirthdayBanner'
 
+interface Activity {
+    id: string
+    title: string
+    desc: string
+    time: string
+    status: string
+    taskId?: string
+}
+
 interface EnterpriseDashboardProps {
     userProfile: any
     currentTime: Date
@@ -23,6 +32,7 @@ interface EnterpriseDashboardProps {
     stats: any
     announcements: any[]
     boardPosts: any[]
+    recentActivities?: Activity[]
     getGreeting: () => string
 }
 
@@ -35,6 +45,7 @@ export function EnterpriseDashboard({
     stats,
     announcements,
     boardPosts,
+    recentActivities = [],
     getGreeting
 }: EnterpriseDashboardProps) {
     return (
@@ -82,7 +93,7 @@ export function EnterpriseDashboard({
                 {/* Left Column: Stats Widgets + Activity Widget */}
                 <div className="lg:col-span-2 space-y-6">
                     <StatsWidget stats={stats} />
-                    <RecentActivityWidget userProfile={userProfile} />
+                    <RecentActivityWidget userProfile={userProfile} activities={recentActivities} />
                 </div>
 
                 {/* Right Column: Project Summary */}
