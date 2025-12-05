@@ -18,6 +18,7 @@ import { validateBody, employeeCreateSchema, validationErrorResponse } from '@/l
 // =============================================================================
 
 // GET: 워크스페이스의 전체 직원 목록 조회 - 캐싱 최적화
+// WorkspaceMember 중 Employee가 없는 멤버는 자동으로 Employee 레코드 생성
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
@@ -51,7 +52,15 @@ export async function GET(request: NextRequest) {
     // 캐시 키 (관리자와 일반 사용자 구분)
     const cacheKey = `${CacheKeys.employees(workspaceId)}:${isAdmin ? 'admin' : 'user'}`
 
-    const result = await getOrSet(cacheKey, async () => {
+    // 기존 캐시가 빈 배열인 경우 무효화 (마이그레이션 대응)
+    await invalidateEmptyCache(workspaceId, cacheKey)
+
+    // WorkspaceMember 중 Employee가 없는 멤버 자동 생성 (최초 조회 시)
+    // 생성된 경우 true 반환하여 캐시 우회
+    const employeesCreated = await ensureEmployeesForWorkspaceMembers(workspaceId)
+
+    // Employee가 새로 생성된 경우 캐시 우회하고 직접 조회
+    const fetchEmployees = async () => {
       const employees = await readClient.employee.findMany({
         where: { workspaceId },
         include: {
@@ -94,13 +103,112 @@ export async function GET(request: NextRequest) {
       }))
 
       return { employees: sanitizedEmployees }
-    }, CacheTTL.EMPLOYEES)
+    }
+
+    // 새 Employee 생성된 경우 캐시 우회
+    const result = employeesCreated
+      ? await fetchEmployees()
+      : await getOrSet(cacheKey, fetchEmployees, CacheTTL.EMPLOYEES)
 
     return NextResponse.json(result)
   } catch (error) {
     // CVE-CB-005: Secure logging
     secureLogger.error('Failed to fetch employees', error as Error, { operation: 'employees.list' })
     return createErrorResponse('Failed to fetch employees', 500, 'FETCH_FAILED')
+  }
+}
+
+// 빈 배열 캐시 무효화 (마이그레이션 대응)
+// 기존에 Employee가 없어서 빈 배열이 캐시된 경우 무효화
+async function invalidateEmptyCache(workspaceId: string, cacheKey: string): Promise<void> {
+  try {
+    // Employee가 DB에 존재하는지 확인
+    const employeeCount = await prisma.employee.count({
+      where: { workspaceId }
+    })
+
+    // Employee가 있는데 캐시가 빈 배열일 수 있으므로 무효화
+    if (employeeCount > 0) {
+      await invalidateCache(cacheKey)
+      // admin/user 둘 다 무효화
+      await invalidateCache(`${CacheKeys.employees(workspaceId)}:admin`)
+      await invalidateCache(`${CacheKeys.employees(workspaceId)}:user`)
+    }
+  } catch {
+    // Silent fail
+  }
+}
+
+// WorkspaceMember 중 Employee가 없는 멤버에 대해 Employee 레코드 자동 생성
+// 생성된 경우 true 반환 (캐시 우회용)
+async function ensureEmployeesForWorkspaceMembers(workspaceId: string): Promise<boolean> {
+  try {
+    // 1. 워크스페이스의 모든 멤버 조회
+    const workspaceMembers = await prisma.workspaceMember.findMany({
+      where: { workspaceId },
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            avatar: true
+          }
+        }
+      }
+    })
+
+    // 2. 이미 Employee가 있는 userId 목록 조회
+    const existingEmployees = await prisma.employee.findMany({
+      where: { workspaceId },
+      select: { userId: true }
+    })
+    const existingUserIds = new Set(existingEmployees.map(e => e.userId).filter(Boolean))
+
+    // 3. Employee가 없는 멤버 필터링
+    const membersWithoutEmployee = workspaceMembers.filter(
+      wm => wm.user && !existingUserIds.has(wm.user.id)
+    )
+
+    if (membersWithoutEmployee.length === 0) {
+      return false // 생성할 Employee 없음
+    }
+
+    // 4. Employee 레코드 일괄 생성
+    const employeesToCreate = membersWithoutEmployee.map(wm => ({
+      workspaceId,
+      userId: wm.user.id,
+      nameKor: wm.user.name || wm.user.email.split('@')[0],
+      email: wm.user.email,
+      profileImage: wm.user.avatar,
+      status: 'ACTIVE' as const,
+      employmentType: 'FULL_TIME' as const,
+      payrollType: 'MONTHLY' as const
+    }))
+
+    await prisma.employee.createMany({
+      data: employeesToCreate,
+      skipDuplicates: true
+    })
+
+    // 5. 캐시 무효화 (새 Employee 생성됨)
+    await invalidateCache(CacheKeys.employees(workspaceId))
+    await invalidateCache(CacheKeys.hrStats(workspaceId))
+
+    secureLogger.info('Auto-created employees for workspace members', {
+      operation: 'employees.autoCreate',
+      workspaceId,
+      count: membersWithoutEmployee.length
+    })
+
+    return true // Employee 생성됨
+  } catch (error) {
+    // 자동 생성 실패해도 기존 조회는 계속 진행
+    secureLogger.error('Failed to auto-create employees', error as Error, {
+      operation: 'employees.autoCreate',
+      workspaceId
+    })
+    return false
   }
 }
 
