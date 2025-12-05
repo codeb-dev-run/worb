@@ -79,16 +79,11 @@ function AuthProviderContent({ children }: { children: React.ReactNode }) {
         localStorage.setItem('user', JSON.stringify(userData))
         localStorage.setItem('userProfile', JSON.stringify(profileData))
       } else {
-        // 세션 없음 - 로컬 스토리지 확인
-        const storedUser = localStorage.getItem('user')
-        const storedProfile = localStorage.getItem('userProfile')
-        if (storedUser && storedProfile) {
-          setUser(JSON.parse(storedUser))
-          setUserProfile(JSON.parse(storedProfile))
-        } else {
-          setUser(null)
-          setUserProfile(null)
-        }
+        // 세션 없음 - localStorage 정리 및 상태 초기화
+        localStorage.removeItem('user')
+        localStorage.removeItem('userProfile')
+        setUser(null)
+        setUserProfile(null)
       }
       setLoading(false)
     }
