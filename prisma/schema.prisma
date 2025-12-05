@@ -227,7 +227,7 @@ model User {
   email       String    @unique
   name        String
   role        Role      @default(member) // Kept for backward compatibility during migration
-  department  String? // Planning/Development/Design/Operations/Marketing
+  department  String? // @deprecated - 레거시: 프로필용. 워크스페이스별 부서는 TeamMember 사용
   avatar      String?
   phoneNumber String?
   companyName String?

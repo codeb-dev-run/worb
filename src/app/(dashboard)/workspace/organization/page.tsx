@@ -51,24 +51,35 @@ export default function OrganizationPage() {
     const handleDragEnd = async (event: DragEndEvent) => {
         const { active, over } = event
 
-        if (!over) return
+        if (!over || !currentWorkspace) return
 
         const memberId = active.id as string
         const newDepartment = over.id as string
 
+        // 드롭 대상이 부서인지 확인 (departments 배열에 있는 id인지)
+        const targetDept = departments.find(d => d.id === newDepartment)
+
         // Update UI optimistically
         setMembers(prev =>
             prev.map(m =>
-                m.id === memberId ? { ...m, department: newDepartment } : m
+                m.id === memberId ? {
+                    ...m,
+                    department: newDepartment,
+                    departmentName: targetDept?.name || null,
+                    departmentColor: targetDept?.color || null,
+                } : m
             )
         )
 
-        // Update DB
+        // Update DB (TeamMember 기반)
         try {
             await fetch(`/api/workspace/current/members/${memberId}`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ department: newDepartment }),
+                body: JSON.stringify({
+                    department: newDepartment,
+                    workspaceId: currentWorkspace.id
+                }),
             })
             toast.success('부서가 변경되었습니다')
         } catch (error) {

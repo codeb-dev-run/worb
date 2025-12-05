@@ -7,7 +7,17 @@ import { User, Mail } from 'lucide-react'
 import { useWorkspace } from '@/lib/workspace-context'
 
 interface MemberCardProps {
-    member: any
+    member: {
+        id: string
+        name?: string
+        email?: string
+        role?: string
+        avatar?: string
+        department?: string | null
+        departmentName?: string | null
+        departmentColor?: string | null
+        teamMembershipId?: string | null
+    }
     isDragging?: boolean
     showDepartment?: boolean
 }
@@ -29,9 +39,9 @@ export default function MemberCard({ member, isDragging = false, showDepartment 
         opacity: isSortableDragging ? 0.5 : 1,
     }
 
-    // Get department color using workspace context
-    const departmentColor = getDepartmentColor(member.department)
-    const deptBgClass = member.department ? `bg-[${departmentColor}]` : 'bg-slate-200'
+    // API에서 반환된 색상을 우선 사용, 없으면 context에서 조회 (레거시 호환)
+    const departmentColor = member.departmentColor || getDepartmentColor(member.department || undefined)
+    const departmentName = member.departmentName || getDepartmentName(member.department || undefined)
 
     // Compact layout for member list
     if (showDepartment) {
@@ -81,7 +91,7 @@ export default function MemberCard({ member, isDragging = false, showDepartment 
                             className="text-[10px] px-2 py-1 rounded-lg text-white font-medium shrink-0 shadow-sm"
                             style={{ backgroundColor: departmentColor }}
                         >
-                            {getDepartmentName(member.department)}
+                            {departmentName}
                         </div>
                     )}
                 </div>
