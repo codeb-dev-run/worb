@@ -5,8 +5,7 @@
 // =============================================================================
 
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth-options'
+import { auth } from '@/auth'
 import { prisma, getReadClient } from '@/lib/prisma'
 import { getOrSet, CacheKeys, CacheTTL, invalidateCache } from '@/lib/redis'
 import { secureLogger, createErrorResponse } from '@/lib/security'
@@ -21,7 +20,7 @@ import { validateBody, employeeCreateSchema, validationErrorResponse } from '@/l
 // WorkspaceMember 중 Employee가 없는 멤버는 자동으로 Employee 레코드 생성
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
+    const session = await auth()
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
@@ -215,7 +214,7 @@ async function ensureEmployeesForWorkspaceMembers(workspaceId: string): Promise<
 // POST: 새 직원 생성 (관리자/HR 전용) - 캐시 무효화 포함
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
+    const session = await auth()
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }

@@ -9,7 +9,7 @@ import React, { useState, useEffect, Suspense } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useWorkspace } from '@/lib/workspace-context'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { useSession } from 'next-auth/react'
+import { SessionProvider, useSession } from 'next-auth/react'
 import {
   Plus,
   Link as LinkIcon,
@@ -540,8 +540,10 @@ function WorkspaceCreateLoading() {
 // Main page component with Suspense boundary
 export default function WorkspaceCreatePage() {
   return (
-    <Suspense fallback={<WorkspaceCreateLoading />}>
-      <WorkspaceCreateContent />
-    </Suspense>
+    <SessionProvider>
+      <Suspense fallback={<WorkspaceCreateLoading />}>
+        <WorkspaceCreateContent />
+      </Suspense>
+    </SessionProvider>
   )
 }

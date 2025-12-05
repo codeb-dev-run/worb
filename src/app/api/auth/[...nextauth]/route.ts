@@ -1,6 +1,10 @@
-import NextAuth from 'next-auth'
-import { authOptions } from '@/lib/auth-options'
+// =============================================================================
+// Auth.js v5 API Route Handler
+// =============================================================================
 
-const handler = NextAuth(authOptions)
+import { handlers } from '@/auth'
 
-export { handler as GET, handler as POST }
+export const { GET, POST } = handlers
+
+// Edge Runtime 비활성화 (Prisma 호환성)
+export const runtime = 'nodejs'

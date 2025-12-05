@@ -4,8 +4,7 @@
 
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth-options'
+import { auth } from '@/auth'
 import { secureLogger, createErrorResponse } from '@/lib/security'
 
 // 기능별 관리자 목록 조회
@@ -14,7 +13,7 @@ export async function GET(
     { params }: { params: { workspaceId: string } }
 ) {
     try {
-        const session = await getServerSession(authOptions)
+        const session = await auth()
         if (!session?.user?.email) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
         }
@@ -104,7 +103,7 @@ export async function POST(
     { params }: { params: { workspaceId: string } }
 ) {
     try {
-        const session = await getServerSession(authOptions)
+        const session = await auth()
         if (!session?.user?.email) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
         }
@@ -232,7 +231,7 @@ export async function DELETE(
     { params }: { params: { workspaceId: string } }
 ) {
     try {
-        const session = await getServerSession(authOptions)
+        const session = await auth()
         if (!session?.user?.email) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
         }

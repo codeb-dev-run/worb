@@ -45,7 +45,7 @@ async function debugAuth() {
             console.log('[Debug] User created:', dbUser.id)
         }
 
-        // 2. Add user to first workspace (Simulate logic from auth-options.ts)
+        // 2. Add user to first workspace (Simulate logic from auth.ts)
         console.log('[Debug] Checking user workspace membership...')
         const userWorkspaces = await prisma.workspaceMember.findFirst({
             where: { userId: dbUser.id }

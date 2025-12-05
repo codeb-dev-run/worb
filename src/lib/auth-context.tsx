@@ -1,11 +1,11 @@
 'use client'
 // =============================================================================
-// Auth Context - CVE-CB-005 Fixed: Development-only Logging
+// Auth Context - Auth.js v5 호환
 // =============================================================================
 
-import { createContext, useContext, useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
-import { SessionProvider, useSession, signIn as nextAuthSignIn, signOut as nextAuthSignOut } from 'next-auth/react'
+import { createContext, useContext, useEffect, useState, useTransition } from 'react'
+import { SessionProvider, useSession } from 'next-auth/react'
+import { credentialsSignIn, googleSignIn, authSignOut } from './auth-actions'
 
 const isDev = process.env.NODE_ENV === 'development'
 
@@ -45,29 +45,26 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | null>(null)
 
 function AuthProviderContent({ children }: { children: React.ReactNode }) {
-  const { data: session, status } = useSession()
+  const { data: session, status, update } = useSession()
   const [user, setUser] = useState<User | null>(null)
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null)
   const [loading, setLoading] = useState(true)
-  const router = useRouter()
+  const [isPending, startTransition] = useTransition()
 
   useEffect(() => {
     const initAuth = async () => {
       if (status === 'loading') return
 
       if (session?.user) {
-        // Session exists (Google Login or NextAuth Credentials)
         const sessionUser = session.user as any
-
         const userData: User = {
-          uid: sessionUser.uid || sessionUser.id || 'google-user',
+          uid: sessionUser.uid || sessionUser.id || sessionUser.email,
           email: sessionUser.email || '',
           displayName: sessionUser.name || '',
           photoURL: sessionUser.image || ''
         }
-
         const profileData: UserProfile = {
-          uid: sessionUser.uid || sessionUser.id || 'google-user',
+          uid: sessionUser.uid || sessionUser.id || sessionUser.email,
           email: sessionUser.email || '',
           displayName: sessionUser.name || '',
           role: sessionUser.role || 'member',
@@ -77,19 +74,20 @@ function AuthProviderContent({ children }: { children: React.ReactNode }) {
           avatar: sessionUser.image || '',
           department: sessionUser.department
         }
-
         setUser(userData)
         setUserProfile(profileData)
         localStorage.setItem('user', JSON.stringify(userData))
         localStorage.setItem('userProfile', JSON.stringify(profileData))
       } else {
-        // No session, check local storage (Legacy/Local Auth)
+        // 세션 없음 - 로컬 스토리지 확인
         const storedUser = localStorage.getItem('user')
         const storedProfile = localStorage.getItem('userProfile')
-
         if (storedUser && storedProfile) {
           setUser(JSON.parse(storedUser))
           setUserProfile(JSON.parse(storedProfile))
+        } else {
+          setUser(null)
+          setUserProfile(null)
         }
       }
       setLoading(false)
@@ -98,39 +96,29 @@ function AuthProviderContent({ children }: { children: React.ReactNode }) {
     initAuth()
   }, [session, status])
 
+  // 이메일/패스워드 로그인 (서버 액션 사용)
   const signIn = async (email: string, password: string) => {
-    try {
-      const result = await nextAuthSignIn('credentials', {
-        redirect: false,
-        email,
-        password,
-      })
+    const result = await credentialsSignIn(email, password)
 
-      if (result?.error) {
-        throw new Error(result.error)
-      }
-
-      // Session update will be handled by the useEffect hook
-    } catch (error) {
-      // CVE-CB-005: Development-only error logging
-      if (isDev) console.log('[DEV] Login failed')
-      throw error
+    if (!result.success) {
+      throw new Error(result.error || '로그인에 실패했습니다.')
     }
+
+    // 세션 업데이트 트리거
+    await update()
   }
 
+  // Google OAuth 로그인 (서버 액션 사용)
   const signInWithGoogle = async () => {
-    await nextAuthSignIn('google', { callbackUrl: '/dashboard' })
+    await googleSignIn()
   }
 
   const signUp = async (email: string, password: string, displayName: string, role: 'admin' | 'member' = 'member') => {
-    // Implement sign up API call if needed
-    // CVE-CB-005: Development-only warning
-    if (isDev) console.log('[DEV] Sign up not implemented for local DB')
+    if (isDev) console.log('[DEV] Sign up not implemented')
   }
 
   const updateUserProfile = async (data: Partial<UserProfile>) => {
     if (!user) return
-    // Implement update API call
     const updated = { ...userProfile!, ...data }
     setUserProfile(updated)
     localStorage.setItem('userProfile', JSON.stringify(updated))
@@ -141,7 +129,7 @@ function AuthProviderContent({ children }: { children: React.ReactNode }) {
     setUserProfile(null)
     localStorage.removeItem('user')
     localStorage.removeItem('userProfile')
-    await nextAuthSignOut({ redirect: true, callbackUrl: '/login' })
+    await authSignOut()
   }
 
   const value = {

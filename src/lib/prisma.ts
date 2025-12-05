@@ -306,15 +306,24 @@ if (process.env.DATABASE_LOGGING === 'true' && process.env.NODE_ENV === 'develop
 // =============================================================================
 
 // CVE-CB-005: Graceful shutdown with development-only logging
-async function gracefulShutdown() {
-    if (process.env.NODE_ENV === 'development') {
-        console.log('[DEV] Closing database connections...')
+async function gracefulShutdown(signal?: string) {
+    if (process.env.NODE_ENV === 'development' && signal) {
+        console.log(`[DEV] Received ${signal}, closing database connections...`)
     }
     await prisma.$disconnect()
     if (prismaReplica) {
         await prismaReplica.$disconnect()
     }
+    process.exit(0)
 }
 
-// Handle graceful shutdown
-process.on('beforeExit', gracefulShutdown)
+// Handle graceful shutdown - only register once using global flag
+const globalWithShutdown = globalThis as typeof globalThis & {
+    shutdownRegistered?: boolean
+}
+
+if (!globalWithShutdown.shutdownRegistered) {
+    process.on('SIGTERM', () => gracefulShutdown('SIGTERM'))
+    process.on('SIGINT', () => gracefulShutdown('SIGINT'))
+    globalWithShutdown.shutdownRegistered = true
+}

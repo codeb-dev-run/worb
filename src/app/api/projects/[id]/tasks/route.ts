@@ -5,8 +5,7 @@
 // =============================================================================
 
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth-options'
+import { auth } from '@/auth'
 import { prisma, getReadClient } from '@/lib/prisma'
 import { getOrSet, CacheKeys, CacheTTL, invalidateCache } from '@/lib/redis'
 import { secureLogger, createErrorResponse } from '@/lib/security'
@@ -22,7 +21,7 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
-    const session = await getServerSession(authOptions)
+    const session = await auth()
     if (!session?.user?.id) {
       return createErrorResponse('Unauthorized', 401, 'AUTH_REQUIRED')
     }
@@ -73,7 +72,7 @@ export async function POST(
   { params }: { params: { id: string } }
 ) {
   try {
-    const session = await getServerSession(authOptions)
+    const session = await auth()
     if (!session?.user?.id) {
       return createErrorResponse('Unauthorized', 401, 'AUTH_REQUIRED')
     }

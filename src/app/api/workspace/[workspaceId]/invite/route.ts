@@ -4,8 +4,7 @@
 
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth-options'
+import { auth } from '@/auth'
 import { sendInviteEmail } from '@/lib/email'
 import { v4 as uuidv4 } from 'uuid'
 import { secureLogger, createErrorResponse, validateBody, ValidationError } from '@/lib/security'
@@ -22,7 +21,7 @@ export async function POST(
     { params }: { params: { workspaceId: string } }
 ) {
     try {
-        const session = await getServerSession(authOptions)
+        const session = await auth()
         if (!session?.user?.email) {
             return createErrorResponse('Unauthorized', 401, 'AUTH_REQUIRED')
         }

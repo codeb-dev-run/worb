@@ -4,8 +4,7 @@
 
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth-options'
+import { auth } from '@/auth'
 import { secureLogger, createErrorResponse, validateBody, ValidationError } from '@/lib/security'
 import { z } from 'zod'
 
@@ -21,7 +20,7 @@ export async function GET(
 ) {
     try {
         // CVE-CB-002: Add authentication
-        const session = await getServerSession(authOptions)
+        const session = await auth()
         if (!session?.user?.email) {
             return createErrorResponse('Unauthorized', 401, 'AUTH_REQUIRED')
         }
@@ -51,7 +50,7 @@ export async function POST(
 ) {
     try {
         // CVE-CB-002, CVE-CB-003: Session-based authentication (not header-based authorId)
-        const session = await getServerSession(authOptions)
+        const session = await auth()
         if (!session?.user?.email) {
             return createErrorResponse('Unauthorized', 401, 'AUTH_REQUIRED')
         }

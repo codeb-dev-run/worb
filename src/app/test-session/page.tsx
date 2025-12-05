@@ -1,9 +1,8 @@
 
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth-options'
+import { auth } from '@/auth'
 
 export default async function Page() {
-    const session = await getServerSession(authOptions)
+    const session = await auth()
     return (
         <div>
             <h1>Session Check</h1>

@@ -3,15 +3,14 @@
 // =============================================================================
 
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth-options'
+import { auth } from '@/auth'
 import { prisma } from '@/lib/prisma'
 import { secureLogger, createErrorResponse } from '@/lib/security'
 
 // GET: 현재 로그인한 사용자의 직원 프로필 조회
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
+    const session = await auth()
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
@@ -83,7 +82,7 @@ export async function GET(request: NextRequest) {
 // PUT: 현재 사용자의 직원 프로필 업데이트
 export async function PUT(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
+    const session = await auth()
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }

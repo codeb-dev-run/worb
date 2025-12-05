@@ -3,8 +3,7 @@
 // =============================================================================
 
 import { NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth-options'
+import { auth } from '@/auth'
 import { prisma } from '@/lib/prisma'
 import { secureLogger, createErrorResponse } from '@/lib/security'
 
@@ -12,7 +11,7 @@ import { secureLogger, createErrorResponse } from '@/lib/security'
 // 현재 워크스페이스의 모든 프로젝트, 데이터, 테스트 계정 삭제 (1회용)
 export async function DELETE() {
   try {
-    const session = await getServerSession(authOptions)
+    const session = await auth()
 
     if (!session?.user?.email) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })

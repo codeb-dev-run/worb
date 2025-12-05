@@ -3,13 +3,12 @@
 // =============================================================================
 
 import { NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth-options'
+import { auth } from '@/auth'
 import { secureLogger, createErrorResponse } from '@/lib/security'
 
 export async function POST(request: Request) {
   try {
-    const session = await getServerSession(authOptions)
+    const session = await auth()
 
     if (!session || !session.user) {
       return createErrorResponse('Unauthorized', 401, 'AUTH_REQUIRED')

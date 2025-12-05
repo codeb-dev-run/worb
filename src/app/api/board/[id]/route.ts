@@ -4,8 +4,7 @@
 
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth-options'
+import { auth } from '@/auth'
 import { secureLogger, createErrorResponse, authenticateRequest } from '@/lib/security'
 
 // GET - Get single post with view count increment
@@ -15,7 +14,7 @@ export async function GET(
 ) {
     try {
         // CVE-CB-002: Add authentication
-        const session = await getServerSession(authOptions)
+        const session = await auth()
         if (!session?.user?.email) {
             return createErrorResponse('Unauthorized', 401, 'AUTH_REQUIRED')
         }

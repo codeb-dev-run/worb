@@ -2,14 +2,13 @@
 
 import { prisma } from '@/lib/prisma'
 import { WorkspaceType, BusinessType, Prisma } from '@prisma/client'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth-options'
+import { auth } from '@/auth'
 
 /**
  * 사용자의 워크스페이스 목록을 조회합니다.
  */
 export async function getWorkspaces() {
-  const session = await getServerSession(authOptions)
+  const session = await auth()
   if (!session?.user?.email) {
     // Return empty array instead of throwing - prevents JSON parse errors on client
     return []
@@ -236,7 +235,7 @@ export async function completeOnboarding(workspaceId: string) {
  * 워크스페이스 기능 설정 조회
  */
 export async function getWorkspaceFeatures(workspaceId: string) {
-  const session = await getServerSession(authOptions)
+  const session = await auth()
   if (!session?.user?.email) return null
 
   // Check membership

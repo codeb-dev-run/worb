@@ -5,8 +5,7 @@
 
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth-options'
+import { auth } from '@/auth'
 import { secureLogger, createErrorResponse } from '@/lib/security'
 
 export async function PATCH(
@@ -14,7 +13,7 @@ export async function PATCH(
     { params }: { params: { id: string } }
 ) {
     try {
-        const session = await getServerSession(authOptions)
+        const session = await auth()
         if (!session?.user?.email) {
             return createErrorResponse('Unauthorized', 401, 'AUTH_REQUIRED')
         }

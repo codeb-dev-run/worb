@@ -6,8 +6,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth-options'
+import { auth } from '@/auth'
 import { createSampleData } from '@/lib/sample-data'
 import { generateSecureToken, secureLogger, createErrorResponse } from '@/lib/security'
 import { validateBody, workspaceCreateSchema, validationErrorResponse } from '@/lib/validation'
@@ -128,7 +127,7 @@ const DEFAULT_DEPARTMENTS = [
 // 사용자의 워크스페이스 목록 조회
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
+    const session = await auth()
     console.log('[DEBUG] Session in GET /api/workspaces:', JSON.stringify(session, null, 2))
 
     if (!session?.user?.email) {
@@ -180,7 +179,7 @@ export async function GET(request: NextRequest) {
 // 새 워크스페이스 생성
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
+    const session = await auth()
     console.log('[DEBUG] Session in POST /api/workspaces:', JSON.stringify(session, null, 2))
 
     if (!session?.user?.email) {

@@ -3,8 +3,7 @@
 // =============================================================================
 
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth-options'
+import { auth } from '@/auth'
 import { prisma, getReadClient, parallelQueries } from '@/lib/prisma'
 import { getOrSet, CacheKeys, CacheTTL, invalidateCache } from '@/lib/redis'
 import { secureLogger, createErrorResponse } from '@/lib/security'
@@ -17,7 +16,7 @@ import { secureLogger, createErrorResponse } from '@/lib/security'
 // GET: HR 통계 데이터 조회 (캐싱 + 병렬 쿼리 최적화)
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
+    const session = await auth()
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
@@ -299,7 +298,7 @@ export async function GET(request: NextRequest) {
 // POST: HR 통계 캐시 무효화 (관리자 전용)
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
+    const session = await auth()
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
