@@ -5,7 +5,7 @@
 // =============================================================================
 
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
+import { getServerSession } from 'next-auth/next'
 import { authOptions } from '@/lib/auth-options'
 import { prisma, getReadClient } from '@/lib/prisma'
 import { getOrSet, CacheKeys, CacheTTL, invalidateCache } from '@/lib/redis'

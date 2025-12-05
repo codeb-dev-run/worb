@@ -2,7 +2,7 @@
 
 import { prisma } from '@/lib/prisma'
 import { WorkspaceType, BusinessType, Prisma } from '@prisma/client'
-import { getServerSession } from 'next-auth'
+import { getServerSession } from 'next-auth/next'
 import { authOptions } from '@/lib/auth-options'
 
 /**
