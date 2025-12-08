@@ -17,6 +17,66 @@ const inviteSchema = z.object({
     name: z.string().max(100).optional(),
 })
 
+// 초대 목록 조회
+export async function GET(
+    request: Request,
+    { params }: { params: { workspaceId: string } }
+) {
+    try {
+        const session = await getServerSession(authOptions)
+        if (!session?.user?.email) {
+            return createErrorResponse('Unauthorized', 401, 'AUTH_REQUIRED')
+        }
+
+        const workspaceId = params.workspaceId
+
+        // 권한 확인 (워크스페이스 멤버인지)
+        const user = await prisma.user.findUnique({
+            where: { email: session.user.email },
+        })
+
+        if (!user) {
+            return createErrorResponse('User not found', 404, 'USER_NOT_FOUND')
+        }
+
+        const membership = await prisma.workspaceMember.findUnique({
+            where: {
+                workspaceId_userId: {
+                    workspaceId,
+                    userId: user.id,
+                },
+            },
+        })
+
+        if (!membership) {
+            return createErrorResponse('Not a member of this workspace', 403, 'NOT_A_MEMBER')
+        }
+
+        // 초대 목록 조회
+        const invitations = await prisma.invitation.findMany({
+            where: { workspaceId },
+            include: {
+                inviter: {
+                    select: { name: true, email: true },
+                },
+            },
+            orderBy: { createdAt: 'desc' },
+        })
+
+        // inviteUrl 추가
+        const baseUrl = process.env.NEXTAUTH_URL || 'http://localhost:3000'
+        const invitationsWithUrl = invitations.map(inv => ({
+            ...inv,
+            inviteUrl: `${baseUrl}/invite/${inv.token}`,
+        }))
+
+        return NextResponse.json(invitationsWithUrl)
+    } catch (error) {
+        secureLogger.error('Failed to get invitations', error as Error, { operation: 'workspace.invite.list' })
+        return createErrorResponse('Failed to get invitations', 500, 'GET_INVITATIONS_FAILED')
+    }
+}
+
 export async function POST(
     request: Request,
     { params }: { params: { workspaceId: string } }
@@ -122,7 +182,13 @@ export async function POST(
             inviterId: inviter.id,
         })
 
-        return NextResponse.json({ success: true, invite })
+        // 응답에 inviteUrl 포함 (메일 발송 실패 시에도 링크 직접 공유 가능)
+        return NextResponse.json({
+            success: true,
+            invite,
+            inviteUrl,
+            emailSent,
+        })
     } catch (error) {
         // CVE-CB-005: Secure logging
         secureLogger.error('Failed to invite member', error as Error, { operation: 'workspace.invite' })
