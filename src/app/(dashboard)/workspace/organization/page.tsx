@@ -4,10 +4,8 @@ import React, { useState, useEffect } from 'react'
 import { DndContext, DragEndEvent, DragOverlay, closestCenter } from '@dnd-kit/core'
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { Button } from '@/components/ui/button'
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Plus, Users, Mail, UserPlus, Settings, Search, Lightbulb } from 'lucide-react'
+import { Users, UserPlus, Settings, Search, Lightbulb } from 'lucide-react'
 import DepartmentColumn from '@/components/organization/DepartmentColumn'
 import MemberCard from '@/components/organization/MemberCard'
 import DepartmentManageModal from '@/components/organization/DepartmentManageModal'
@@ -19,11 +17,7 @@ export default function OrganizationPage() {
     const [members, setMembers] = useState<any[]>([])
     const [loading, setLoading] = useState(true)
     const [activeMember, setActiveMember] = useState<any>(null)
-    const [inviteEmail, setInviteEmail] = useState('')
-    const [inviteName, setInviteName] = useState('')
-    const [isInviteOpen, setIsInviteOpen] = useState(false)
     const [isDeptManageOpen, setIsDeptManageOpen] = useState(false)
-    const [sending, setSending] = useState(false)
     const [searchQuery, setSearchQuery] = useState('')
 
     useEffect(() => {
@@ -91,37 +85,6 @@ export default function OrganizationPage() {
         setActiveMember(null)
     }
 
-    const handleInvite = async () => {
-        if (!inviteEmail || !inviteName) {
-            toast.error('이메일과 이름을 입력해주세요')
-            return
-        }
-
-        setSending(true)
-        try {
-            const response = await fetch('/api/workspace/current/invite', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    email: inviteEmail,
-                    name: inviteName,
-                }),
-            })
-
-            if (!response.ok) throw new Error('Failed to send invite')
-
-            toast.success('초대 이메일이 발송되었습니다')
-            setInviteEmail('')
-            setInviteName('')
-            setIsInviteOpen(false)
-        } catch (error) {
-            console.error('Failed to send invite:', error)
-            toast.error('초대 발송에 실패했습니다')
-        } finally {
-            setSending(false)
-        }
-    }
-
     const getMembersByDepartment = (departmentId: string) => {
         return members.filter(m => m.department === departmentId)
     }
@@ -179,53 +142,6 @@ export default function OrganizationPage() {
                         <Settings className="w-4 h-4 mr-2" />
                         부서 관리
                     </Button>
-
-                    <Dialog open={isInviteOpen} onOpenChange={setIsInviteOpen}>
-                        <DialogTrigger asChild>
-                            <Button className="rounded-xl h-10 bg-slate-900 text-lime-400 hover:bg-lime-400 hover:text-slate-900 transition-colors font-bold shadow-lg shadow-slate-900/10">
-                                <Mail className="w-4 h-4 mr-2" />
-                                멤버 초대
-                            </Button>
-                        </DialogTrigger>
-                        <DialogContent className="bg-white/90 backdrop-blur-2xl border-white/60 rounded-3xl">
-                            <DialogHeader>
-                                <DialogTitle className="text-xl font-bold text-slate-900">멤버 초대</DialogTitle>
-                                <DialogDescription className="text-slate-500">
-                                    이메일로 새로운 팀원을 초대합니다
-                                </DialogDescription>
-                            </DialogHeader>
-                            <div className="space-y-4 py-4">
-                                <div className="space-y-2">
-                                    <Label htmlFor="name" className="text-slate-700 font-medium">이름</Label>
-                                    <Input
-                                        id="name"
-                                        placeholder="홍길동"
-                                        value={inviteName}
-                                        onChange={(e) => setInviteName(e.target.value)}
-                                        className="rounded-xl bg-white/70 border-slate-200 focus:border-lime-400 focus:ring-lime-400/20"
-                                    />
-                                </div>
-                                <div className="space-y-2">
-                                    <Label htmlFor="email" className="text-slate-700 font-medium">이메일</Label>
-                                    <Input
-                                        id="email"
-                                        type="email"
-                                        placeholder="example@company.com"
-                                        value={inviteEmail}
-                                        onChange={(e) => setInviteEmail(e.target.value)}
-                                        className="rounded-xl bg-white/70 border-slate-200 focus:border-lime-400 focus:ring-lime-400/20"
-                                    />
-                                </div>
-                                <Button
-                                    onClick={handleInvite}
-                                    disabled={sending}
-                                    className="w-full rounded-xl h-11 bg-slate-900 text-lime-400 hover:bg-lime-400 hover:text-slate-900 transition-colors font-bold"
-                                >
-                                    {sending ? '발송 중...' : '초대 이메일 발송'}
-                                </Button>
-                            </div>
-                        </DialogContent>
-                    </Dialog>
                 </div>
             </div>
 
