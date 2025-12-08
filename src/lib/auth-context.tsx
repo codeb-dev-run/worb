@@ -36,7 +36,7 @@ interface AuthContextType {
   userProfile: UserProfile | null
   loading: boolean
   signIn: (email: string, password: string) => Promise<void>
-  signInWithGoogle: () => Promise<void>
+  signInWithGoogle: (callbackUrl?: string) => Promise<void>
   signUp: (email: string, password: string, displayName: string, role?: 'admin' | 'member') => Promise<void>
   logout: () => Promise<void>
   updateUserProfile: (data: Partial<UserProfile>) => Promise<void>
@@ -118,8 +118,8 @@ function AuthProviderContent({ children }: { children: React.ReactNode }) {
     }
   }
 
-  const signInWithGoogle = async () => {
-    await nextAuthSignIn('google', { callbackUrl: '/dashboard' })
+  const signInWithGoogle = async (callbackUrl?: string) => {
+    await nextAuthSignIn('google', { callbackUrl: callbackUrl || '/dashboard' })
   }
 
   const signUp = async (email: string, password: string, displayName: string, role: 'admin' | 'member' = 'member') => {

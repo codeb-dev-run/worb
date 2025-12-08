@@ -19,8 +19,8 @@ function LoginContent() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
-  // 로그인 후 리다이렉트 URL
-  const redirectUrl = searchParams?.get('redirect') || '/dashboard'
+  // 로그인 후 리다이렉트 URL (redirect 또는 callbackUrl 파라미터 지원)
+  const redirectUrl = searchParams?.get('redirect') || searchParams?.get('callbackUrl') || '/dashboard'
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -130,11 +130,10 @@ function LoginContent() {
               setError('')
               setLoading(true)
               try {
-                await signInWithGoogle()
-                router.push(redirectUrl)
+                // redirectUrl을 Google 로그인에 전달
+                await signInWithGoogle(redirectUrl)
               } catch (err: any) {
                 setError(err.message || 'Google 로그인에 실패했습니다.')
-              } finally {
                 setLoading(false)
               }
             }}
