@@ -525,7 +525,7 @@ export default function WorkspaceInvitations({ workspaceId }: { workspaceId: str
                 <div className="text-center py-12 text-slate-500">
                     <UserPlus className="h-12 w-12 mx-auto mb-4 text-slate-300" />
                     <p>아직 멤버가 없습니다.</p>
-                    <p className="text-sm">위의 "멤버 초대" 버튼을 클릭하여 팀원을 초대하세요.</p>
+                    <p className="text-sm">위의 &ldquo;멤버 초대&rdquo; 버튼을 클릭하여 팀원을 초대하세요.</p>
                 </div>
             )}
 

@@ -1,8 +1,9 @@
 'use client'
 
-import React, { useState, Suspense } from 'react'
+import React, { useState, Suspense, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
+import { useSession } from 'next-auth/react'
 import { useAuth } from '@/lib/auth-context'
 import toast from 'react-hot-toast'
 import QuickLoginButtons from '@/components/auth/QuickLoginButtons'
@@ -10,6 +11,7 @@ import QuickLoginButtons from '@/components/auth/QuickLoginButtons'
 function LoginContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
+  const { status } = useSession()
   const { signIn, signInWithGoogle } = useAuth()
   const [formData, setFormData] = useState({
     email: '',
@@ -21,6 +23,23 @@ function LoginContent() {
 
   // 로그인 후 리다이렉트 URL (redirect 또는 callbackUrl 파라미터 지원)
   const redirectUrl = searchParams?.get('redirect') || searchParams?.get('callbackUrl') || '/dashboard'
+
+  // 이미 로그인된 경우 대시보드로 리다이렉트
+  useEffect(() => {
+    if (status === 'authenticated') {
+      router.replace('/dashboard')
+    }
+  }, [status, router])
+
+  // 로그인 체크 중이면 로딩 표시
+  if (status === 'loading') {
+    return <LoginLoading />
+  }
+
+  // 이미 로그인된 경우 렌더링 방지
+  if (status === 'authenticated') {
+    return <LoginLoading />
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -46,7 +65,19 @@ function LoginContent() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary via-purple-600 to-pink-600">
-      <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md">
+      <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md relative">
+        {/* 뒤로 가기 버튼 */}
+        <button
+          type="button"
+          onClick={() => router.back()}
+          className="absolute top-4 left-4 p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-full transition-colors"
+          aria-label="뒤로 가기"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+          </svg>
+        </button>
+
         <div className="text-center mb-8">
           <h1 className="text-4xl font-bold text-primary mb-2">CodeB</h1>
           <p className="text-gray-600">AI 기반 개발 플랫폼</p>

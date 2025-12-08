@@ -1,13 +1,43 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
+import { useSession } from 'next-auth/react'
 
 export default function ForgotPasswordPage() {
+  const router = useRouter()
+  const { status } = useSession()
   const [email, setEmail] = useState('')
   const [isSubmitted, setIsSubmitted] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+
+  // 이미 로그인된 경우 대시보드로 리다이렉트
+  useEffect(() => {
+    if (status === 'authenticated') {
+      router.replace('/dashboard')
+    }
+  }, [status, router])
+
+  // 로그인 체크 중이면 로딩 표시
+  if (status === 'loading') {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary via-purple-600 to-pink-600">
+        <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md">
+          <div className="text-center">
+            <h1 className="text-4xl font-bold text-primary mb-2">CodeB</h1>
+            <p className="text-gray-600">로딩 중...</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // 이미 로그인된 경우 렌더링 방지
+  if (status === 'authenticated') {
+    return null
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
