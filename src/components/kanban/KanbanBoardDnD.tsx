@@ -24,6 +24,7 @@ interface KanbanBoardDnDProps {
     onTaskAdd?: (columnId: string) => void
     onTaskEdit?: (task: KanbanTask) => void
     onTaskDelete?: (taskId: string, columnId: string) => void
+    onTaskCreate?: (columnId: string, title: string) => Promise<KanbanTask | null>
 }
 
 const priorityConfig: Record<TaskPriority, { variant: 'default' | 'secondary' | 'destructive' | 'outline', icon: any, label: string, color: string }> = {
@@ -203,6 +204,7 @@ function Column({
     newTaskTitle,
     setNewTaskTitle,
     onCreateTask,
+    isCreating = false,
     onTaskEdit,
     onTaskDelete
 }: {
@@ -214,6 +216,7 @@ function Column({
     newTaskTitle: string
     setNewTaskTitle: (title: string) => void
     onCreateTask: () => void
+    isCreating?: boolean
     onTaskEdit?: (task: KanbanTask) => void
     onTaskDelete?: (taskId: string) => void
 }) {
@@ -262,14 +265,15 @@ function Column({
                         <div className="flex gap-2">
                             <Button
                                 onClick={onCreateTask}
-                                disabled={!newTaskTitle.trim()}
+                                disabled={!newTaskTitle.trim() || isCreating}
                                 size="sm"
                             >
-                                추가
+                                {isCreating ? '추가 중...' : '추가'}
                             </Button>
                             <Button
                                 variant="ghost"
                                 size="sm"
+                                disabled={isCreating}
                                 onClick={() => {
                                     setShowAddTask(false)
                                     setNewTaskTitle('')
@@ -311,7 +315,8 @@ export default function KanbanBoardDnD({
     onColumnsChange,
     onTaskAdd,
     onTaskEdit,
-    onTaskDelete
+    onTaskDelete,
+    onTaskCreate
 }: KanbanBoardDnDProps) {
     const [columns, setColumns] = useState(initialColumns)
     const [showAddTask, setShowAddTask] = useState<string | null>(null)
@@ -319,6 +324,7 @@ export default function KanbanBoardDnD({
     const [searchQuery, setSearchQuery] = useState('')
     const [filterPriority, setFilterPriority] = useState<string>('all')
     const [isBrowser, setIsBrowser] = useState(false)
+    const [isCreatingTask, setIsCreatingTask] = useState(false)
 
     useEffect(() => {
         setIsBrowser(true)
@@ -394,7 +400,29 @@ export default function KanbanBoardDnD({
         }
     }
 
-    const handleAddTask = (columnId: string, title: string) => {
+    const handleAddTask = async (columnId: string, title: string) => {
+        // onTaskCreate 콜백이 있으면 서버에 생성 요청
+        if (onTaskCreate) {
+            const createdTask = await onTaskCreate(columnId, title)
+            if (createdTask) {
+                // 서버에서 생성된 실제 작업으로 로컬 상태 업데이트
+                const newColumns = columns.map(col => {
+                    if (col.id === columnId) {
+                        return {
+                            ...col,
+                            tasks: [...col.tasks, createdTask]
+                        }
+                    }
+                    return col
+                })
+
+                setColumns(newColumns)
+                if (onColumnsChange) onColumnsChange(newColumns)
+            }
+            return
+        }
+
+        // onTaskCreate가 없으면 임시 ID로 로컬에만 추가 (기존 방식)
         const newTask: KanbanTask = {
             id: `task-${Date.now()}`,
             columnId,
@@ -507,13 +535,19 @@ export default function KanbanBoardDnD({
                                     setShowAddTask={(show) => setShowAddTask(show ? column.id : null)}
                                     newTaskTitle={newTaskTitle}
                                     setNewTaskTitle={setNewTaskTitle}
-                                    onCreateTask={() => {
-                                        if (newTaskTitle.trim()) {
-                                            handleAddTask(column.id, newTaskTitle.trim())
-                                            setNewTaskTitle('')
-                                            setShowAddTask(null)
+                                    onCreateTask={async () => {
+                                        if (newTaskTitle.trim() && !isCreatingTask) {
+                                            setIsCreatingTask(true)
+                                            try {
+                                                await handleAddTask(column.id, newTaskTitle.trim())
+                                                setNewTaskTitle('')
+                                                setShowAddTask(null)
+                                            } finally {
+                                                setIsCreatingTask(false)
+                                            }
                                         }
                                     }}
+                                    isCreating={isCreatingTask}
                                     onTaskEdit={onTaskEdit}
                                     onTaskDelete={(taskId) => onTaskDelete?.(taskId, column.id)}
                                 />
