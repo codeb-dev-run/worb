@@ -25,7 +25,7 @@ import {
   Lock, Smartphone, CreditCard, Zap, Clock,
   Settings2, Kanban, Calendar, Users, FileText, Briefcase,
   DollarSign, BarChart3, MessageSquare, Megaphone, Building,
-  UserPlus
+  UsersRound
 } from 'lucide-react'
 import WorkspaceInvitations from '@/components/workspace/WorkspaceInvitations'
 
@@ -371,7 +371,7 @@ export default function SettingsPage() {
               { id: 'preferences', label: '환경설정', icon: Palette },
               { id: 'privacy', label: '개인정보', icon: Shield },
               { id: 'security', label: '보안', icon: Lock },
-              { id: 'members', label: '멤버 초대', icon: UserPlus, adminOnly: true },
+              { id: 'members', label: '멤버', icon: UsersRound },
               { id: 'features', label: '기능 설정', icon: Settings2, adminOnly: true }
             ].filter(tab => !tab.adminOnly || isAdmin).map((tab) => (
               <button
@@ -815,8 +815,8 @@ export default function SettingsPage() {
           </Card>
         </TabsContent>
 
-        {/* 멤버 초대 - 워크스페이스 관리자 전용 */}
-        {isAdmin && currentWorkspace?.id && (
+        {/* 멤버 관리 */}
+        {currentWorkspace?.id && (
           <TabsContent value="members" className="space-y-4 mt-6">
             <Card variant="glass">
               <CardContent className="pt-6">
