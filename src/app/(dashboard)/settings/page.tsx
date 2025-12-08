@@ -24,8 +24,10 @@ import {
   Sun, Moon, Monitor, Loader2, AlertCircle, CheckCircle,
   Lock, Smartphone, CreditCard, Zap, Clock,
   Settings2, Kanban, Calendar, Users, FileText, Briefcase,
-  DollarSign, BarChart3, MessageSquare, Megaphone, Building
+  DollarSign, BarChart3, MessageSquare, Megaphone, Building,
+  UserPlus
 } from 'lucide-react'
+import WorkspaceInvitations from '@/components/workspace/WorkspaceInvitations'
 
 interface Settings {
   profile: {
@@ -362,13 +364,14 @@ export default function SettingsPage() {
 
       {/* 설정 탭 - Glass Morphism */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <div className="bg-white/60 backdrop-blur-sm rounded-2xl shadow-lg shadow-black/5 p-1.5 border border-white/40 max-w-[900px]">
-          <div className="grid grid-cols-5 gap-1">
+        <div className="bg-white/60 backdrop-blur-sm rounded-2xl shadow-lg shadow-black/5 p-1.5 border border-white/40 max-w-[1000px]">
+          <div className="grid grid-cols-4 sm:grid-cols-6 gap-1">
             {[
               { id: 'notifications', label: '알림', icon: Bell },
               { id: 'preferences', label: '환경설정', icon: Palette },
               { id: 'privacy', label: '개인정보', icon: Shield },
               { id: 'security', label: '보안', icon: Lock },
+              { id: 'members', label: '멤버 초대', icon: UserPlus, adminOnly: true },
               { id: 'features', label: '기능 설정', icon: Settings2, adminOnly: true }
             ].filter(tab => !tab.adminOnly || isAdmin).map((tab) => (
               <button
@@ -811,6 +814,17 @@ export default function SettingsPage() {
             </CardContent>
           </Card>
         </TabsContent>
+
+        {/* 멤버 초대 - 워크스페이스 관리자 전용 */}
+        {isAdmin && currentWorkspace?.id && (
+          <TabsContent value="members" className="space-y-4 mt-6">
+            <Card variant="glass">
+              <CardContent className="pt-6">
+                <WorkspaceInvitations workspaceId={currentWorkspace.id} />
+              </CardContent>
+            </Card>
+          </TabsContent>
+        )}
 
         {/* 기능 설정 - 워크스페이스 관리자 전용 */}
         {isAdmin && (

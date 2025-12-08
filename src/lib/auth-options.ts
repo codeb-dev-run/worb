@@ -95,59 +95,9 @@ export const authOptions: NextAuthOptions = {
                         devLog(`[Auth] User created: ${dbUser.id}`)
                     }
 
-                    // Check for pending invitations
-                    const invitations = await prisma.invitation.findMany({
-                        where: {
-                            email: user.email,
-                            status: 'PENDING'
-                        },
-                        include: {
-                            workspace: true
-                        }
-                    })
-
-                    if (invitations.length > 0) {
-                        devLog(`[Auth] Found ${invitations.length} pending invitations for ${user.email}`)
-
-                        for (const invite of invitations) {
-                            try {
-                                // Check if already a member
-                                const existingMember = await prisma.workspaceMember.findUnique({
-                                    where: {
-                                        workspaceId_userId: {
-                                            workspaceId: invite.workspaceId,
-                                            userId: dbUser.id
-                                        }
-                                    }
-                                })
-
-                                if (!existingMember) {
-                                    // Add to workspace
-                                    await prisma.workspaceMember.create({
-                                        data: {
-                                            workspaceId: invite.workspaceId,
-                                            userId: dbUser.id,
-                                            role: invite.role
-                                        }
-                                    })
-                                    devLog(`[Auth] Added user to workspace: ${invite.workspace.name}`)
-                                }
-
-                                // Update invitation status
-                                await prisma.invitation.update({
-                                    where: { id: invite.id },
-                                    data: {
-                                        status: 'ACCEPTED',
-                                        acceptedAt: new Date()
-                                    }
-                                })
-                                devLog('[Auth] Marked invitation as accepted')
-                            } catch {
-                                // CVE-CB-005: Silent fail for invite processing
-                                devLog(`[Auth] Failed to process invite ${invite.id}`)
-                            }
-                        }
-                    }
+                    // NOTE: 초대 자동 수락 로직 제거됨
+                    // 사용자가 /invite/{token} 페이지에서 명시적으로 수락 버튼을 클릭해야만 초대가 수락됩니다.
+                    // 관련 API: /api/invite/[code]/accept
 
                     // Check if user has any workspace
                     const userWorkspaces = await prisma.workspaceMember.findFirst({
@@ -155,16 +105,9 @@ export const authOptions: NextAuthOptions = {
                     })
 
                     if (!userWorkspaces) {
-                        // Check if we just added them via invitation
-                        const updatedUserWorkspaces = await prisma.workspaceMember.findFirst({
-                            where: { userId: dbUser.id }
-                        })
-
-                        if (!updatedUserWorkspaces) {
-                            devLog('[Auth] User has no workspace. Redirecting to setup page handled by client.')
-                            // We do NOT create a default workspace here anymore.
-                            // The client-side WorkspaceProvider or layout will redirect to /workspace/create
-                        }
+                        devLog('[Auth] User has no workspace. Redirecting to setup page handled by client.')
+                        // We do NOT create a default workspace here anymore.
+                        // The client-side WorkspaceProvider or layout will redirect to /workspace/create
                     }
 
                     // Store uid for later use in jwt callback

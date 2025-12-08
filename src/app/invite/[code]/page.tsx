@@ -53,7 +53,8 @@ export default function InviteAcceptPage({ params }: { params: { code: string } 
       }
 
       toast.success('워크스페이스에 참여했습니다!')
-      router.push('/dashboard')
+      // 워크스페이스 목록을 새로고침하기 위해 전체 페이지 리로드
+      window.location.href = '/dashboard'
     } catch (err: any) {
       toast.error(err.message)
       setError(err.message)
