@@ -31,6 +31,7 @@ import {
   AlertCircle, BarChart3, ListTodo, CircleDot, Zap, Trophy, Settings
 } from 'lucide-react'
 import ProjectInvitations from '@/components/projects/ProjectInvitations'
+import ProjectInviteBanner from '@/components/projects/ProjectInviteBanner'
 import ProjectSettingsCard from '@/components/projects/ProjectSettingsCard'
 import { cn } from '@/lib/utils'
 
@@ -466,6 +467,15 @@ export default function ProjectDetailPage() {
           {activeTab === 'overview' && (
             <div className="h-full overflow-y-auto p-6">
               <div className="max-w-6xl mx-auto space-y-6">
+                {/* 초대 배너 - 초대받은 사용자에게만 표시 */}
+                {!isProjectAdmin && (
+                  <ProjectInviteBanner
+                    projectId={project.id}
+                    isAdmin={isProjectAdmin}
+                    onAccepted={loadProjectData}
+                  />
+                )}
+
                 {/* Hero Progress Section */}
                 <motion.div
                   initial={{ opacity: 0, y: 20 }}
@@ -1246,7 +1256,7 @@ export default function ProjectDetailPage() {
 
           {activeTab === 'team' && (
             <div className="h-full overflow-y-auto p-6">
-              <ProjectInvitations projectId={project.id} />
+              <ProjectInvitations projectId={project.id} isAdmin={isProjectAdmin} />
             </div>
           )}
 

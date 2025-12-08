@@ -31,6 +31,8 @@ import {
     UserMinus,
     Shield,
     AlertTriangle,
+    PartyPopper,
+    UserCheck,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import toast from 'react-hot-toast'
@@ -83,7 +85,28 @@ const roleColors: Record<string, { bg: string; text: string; border: string }> =
     Viewer: { bg: 'bg-slate-50', text: 'text-slate-700', border: 'border-slate-200' },
 }
 
-export default function ProjectInvitations({ projectId }: { projectId: string }) {
+// 내 초대 정보 타입
+interface MyInvitation {
+    id: string
+    token: string
+    role: string
+    expiresAt: string
+    inviter: {
+        name: string
+        email: string
+    }
+    project: {
+        id: string
+        name: string
+    }
+}
+
+interface ProjectInvitationsProps {
+    projectId: string
+    isAdmin?: boolean
+}
+
+export default function ProjectInvitations({ projectId, isAdmin = false }: ProjectInvitationsProps) {
     const { data: session } = useSession()
     const [invitations, setInvitations] = useState<ProjectInvitation[]>([])
     const [members, setMembers] = useState<ProjectMember[]>([])
@@ -99,25 +122,41 @@ export default function ProjectInvitations({ projectId }: { projectId: string })
     const [success, setSuccess] = useState<string | null>(null)
     const [newInviteUrl, setNewInviteUrl] = useState<string | null>(null)
 
+    // 내 초대 상태
+    const [myInvitation, setMyInvitation] = useState<MyInvitation | null>(null)
+    const [acceptingInvite, setAcceptingInvite] = useState(false)
+
     // Admin 수 계산
     const adminCount = members.filter(m => m.role === 'Admin').length
 
     const fetchData = async () => {
         try {
             setLoading(true)
-            const [invitationsRes, membersRes] = await Promise.all([
-                fetch(`/api/projects/${projectId}/invitations`),
-                fetch(`/api/projects/${projectId}/members`)
-            ])
 
-            if (invitationsRes.ok) {
-                const invData = await invitationsRes.json()
-                setInvitations(invData)
-            }
-
+            // 멤버 목록은 항상 조회
+            const membersRes = await fetch(`/api/projects/${projectId}/members`)
             if (membersRes.ok) {
                 const memData = await membersRes.json()
                 setMembers(memData)
+            }
+
+            // 초대 목록은 Admin만 조회 가능
+            if (isAdmin) {
+                const invitationsRes = await fetch(`/api/projects/${projectId}/invitations`)
+                if (invitationsRes.ok) {
+                    const invData = await invitationsRes.json()
+                    setInvitations(invData)
+                }
+            }
+
+            // 내 초대 확인 API 연동
+            // Admin이 아닌 경우에만 내 초대 확인 (Admin은 이미 멤버)
+            if (!isAdmin) {
+                const myInviteRes = await fetch(`/api/projects/${projectId}/invitations/me`)
+                if (myInviteRes.ok) {
+                    const myInviteData = await myInviteRes.json()
+                    setMyInvitation(myInviteData)
+                }
             }
         } catch (err) {
             console.error('Failed to fetch data:', err)
@@ -126,11 +165,52 @@ export default function ProjectInvitations({ projectId }: { projectId: string })
         }
     }
 
+    // 초대 수락 핸들러
+    const handleAcceptInvite = async () => {
+        if (!myInvitation) return
+
+        setAcceptingInvite(true)
+        try {
+            const response = await fetch(`/api/project-invitations/${myInvitation.token}/accept`, {
+                method: 'POST',
+            })
+
+            if (response.ok) {
+                toast.success('초대를 수락했습니다. 프로젝트 멤버가 되었습니다!')
+                setMyInvitation(null)
+                fetchData()
+            } else {
+                const data = await response.json()
+                toast.error(data.error || '초대 수락에 실패했습니다.')
+            }
+        } catch (err) {
+            toast.error('초대 수락 중 오류가 발생했습니다.')
+        } finally {
+            setAcceptingInvite(false)
+        }
+    }
+
+    // 초대 거절 핸들러
+    const handleDeclineInvite = async () => {
+        if (!myInvitation) return
+
+        try {
+            await fetch(`/api/project-invitations/${myInvitation.token}/decline`, {
+                method: 'POST',
+            })
+
+            toast.success('초대를 거절했습니다.')
+            setMyInvitation(null)
+        } catch (err) {
+            toast.error('초대 거절 중 오류가 발생했습니다.')
+        }
+    }
+
     useEffect(() => {
         if (projectId) {
             fetchData()
         }
-    }, [projectId])
+    }, [projectId, isAdmin])
 
     const handleSendInvite = async () => {
         if (!email) {
@@ -278,6 +358,65 @@ export default function ProjectInvitations({ projectId }: { projectId: string })
 
     return (
         <div className="space-y-8">
+            {/* 내 초대 배너 - 초대받은 사용자에게만 표시 */}
+            {myInvitation && (
+                <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-lime-500/10 via-emerald-500/10 to-teal-500/10 border border-lime-200/60 p-6">
+                    {/* 배경 장식 */}
+                    <div className="absolute top-0 right-0 w-32 h-32 bg-lime-400/20 rounded-full blur-3xl" />
+                    <div className="absolute bottom-0 left-0 w-24 h-24 bg-emerald-400/20 rounded-full blur-2xl" />
+
+                    <div className="relative">
+                        <div className="flex items-start gap-4">
+                            <div className="flex-shrink-0 p-3 bg-lime-500 rounded-2xl shadow-lg shadow-lime-500/30">
+                                <PartyPopper className="h-6 w-6 text-white" />
+                            </div>
+                            <div className="flex-1">
+                                <h4 className="text-lg font-bold text-slate-900 mb-1">
+                                    이 프로젝트에 초대되었습니다!
+                                </h4>
+                                <p className="text-sm text-slate-600 mb-4">
+                                    <span className="font-semibold text-slate-800">{myInvitation.inviter.name}</span>님이
+                                    당신을 <Badge className={cn('mx-1', roleColors[myInvitation.role]?.bg, roleColors[myInvitation.role]?.text, roleColors[myInvitation.role]?.border, 'border')}>
+                                        {myInvitation.role}
+                                    </Badge> 역할로 초대했습니다.
+                                </p>
+                                <div className="flex items-center gap-3">
+                                    <Button
+                                        variant="outline"
+                                        onClick={handleDeclineInvite}
+                                        className="rounded-xl border-slate-300 text-slate-600 hover:bg-slate-100"
+                                    >
+                                        <XCircle className="h-4 w-4 mr-2" />
+                                        거절
+                                    </Button>
+                                    <Button
+                                        onClick={handleAcceptInvite}
+                                        disabled={acceptingInvite}
+                                        className="rounded-xl bg-lime-500 hover:bg-lime-600 text-black font-bold shadow-lg shadow-lime-500/30"
+                                    >
+                                        {acceptingInvite ? (
+                                            <>
+                                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                                처리 중...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <UserCheck className="h-4 w-4 mr-2" />
+                                                초대 수락하기
+                                            </>
+                                        )}
+                                    </Button>
+                                </div>
+                                <p className="text-xs text-slate-400 mt-3">
+                                    <Clock className="h-3 w-3 inline mr-1" />
+                                    {formatDate(myInvitation.expiresAt)}까지 유효
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Header */}
             <div className="flex items-center justify-between">
                 <div>
@@ -293,6 +432,7 @@ export default function ProjectInvitations({ projectId }: { projectId: string })
                     >
                         <RefreshCw className="h-4 w-4" />
                     </Button>
+                    {isAdmin && (
                     <Dialog open={dialogOpen} onOpenChange={(open) => open ? setDialogOpen(true) : closeDialog()}>
                         <DialogTrigger asChild>
                             <Button className="rounded-xl bg-lime-500 hover:bg-lime-600 text-black font-bold gap-2">
@@ -429,6 +569,7 @@ export default function ProjectInvitations({ projectId }: { projectId: string })
                             </div>
                         </DialogContent>
                     </Dialog>
+                    )}
                 </div>
             </div>
 
