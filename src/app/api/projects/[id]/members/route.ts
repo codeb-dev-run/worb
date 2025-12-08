@@ -27,19 +27,8 @@ export async function GET(
             return NextResponse.json({ error: 'User not found' }, { status: 404 })
         }
 
-        // Check if user has access to project
-        const projectMember = await prisma.projectMember.findUnique({
-            where: {
-                projectId_userId: {
-                    projectId: params.id,
-                    userId: user.id,
-                },
-            },
-        })
-
-        if (!projectMember) {
-            return NextResponse.json({ error: 'Access denied' }, { status: 403 })
-        }
+        // 로그인한 사용자는 프로젝트 멤버 목록을 조회할 수 있음
+        // (프로젝트 멤버가 아니어도 팀 탭에서 멤버 확인 가능)
 
         // Get all project members with user details
         const members = await prisma.projectMember.findMany({

@@ -29,7 +29,7 @@ export async function GET(
             return NextResponse.json({ error: 'User not found' }, { status: 404 })
         }
 
-        // Check if user has access to project
+        // Check if user has Admin role on project (only Admin can view invitations)
         const projectMember = await prisma.projectMember.findUnique({
             where: {
                 projectId_userId: {
@@ -39,8 +39,8 @@ export async function GET(
             },
         })
 
-        if (!projectMember) {
-            return NextResponse.json({ error: 'Access denied' }, { status: 403 })
+        if (!projectMember || projectMember.role !== 'Admin') {
+            return NextResponse.json({ error: 'Only project admins can view invitations' }, { status: 403 })
         }
 
         // Get invitations
