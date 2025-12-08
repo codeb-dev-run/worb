@@ -358,7 +358,10 @@ export default function BoardPage() {
         post.author?.name?.toLowerCase().includes(searchQuery.toLowerCase())
     )
 
-    const canEdit = selectedPost && userProfile && selectedPost.authorId === userProfile.uid
+    // 본인 게시물이거나 관리자인 경우 수정/삭제 가능
+    const isAuthor = selectedPost && userProfile && selectedPost.authorId === userProfile.uid
+    const isAdmin = userProfile?.role === 'admin'
+    const canEdit = selectedPost && userProfile && (isAuthor || isAdmin)
 
     // List View - Glass Style
     if (viewMode === 'list') {

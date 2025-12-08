@@ -196,7 +196,10 @@ export default function AnnouncementsPage() {
         setDeleteDialogOpen(true)
     }
 
-    const canEdit = selectedAnnouncement && userProfile && selectedAnnouncement.authorId === userProfile.uid
+    // 본인 게시물이거나 관리자인 경우 수정/삭제 가능
+    const isAuthor = selectedAnnouncement && userProfile && selectedAnnouncement.authorId === userProfile.uid
+    const isAdmin = userProfile?.role === 'admin'
+    const canEdit = selectedAnnouncement && userProfile && (isAuthor || isAdmin)
 
     // List View - Glass Style
     if (viewMode === 'list') {
