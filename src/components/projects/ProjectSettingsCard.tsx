@@ -3,7 +3,6 @@
 import React, { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Slider } from '@/components/ui/slider'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
     Settings,
@@ -74,7 +73,6 @@ export default function ProjectSettingsCard({
     initialPriority,
     onUpdate,
 }: ProjectSettingsCardProps) {
-    const [progress, setProgress] = useState(initialProgress)
     const [status, setStatus] = useState(initialStatus)
     const [priority, setPriority] = useState(initialPriority || 'medium')
     const [saving, setSaving] = useState(false)
@@ -82,17 +80,15 @@ export default function ProjectSettingsCard({
 
     useEffect(() => {
         const changed =
-            progress !== initialProgress ||
             status !== initialStatus ||
             priority !== (initialPriority || 'medium')
         setHasChanges(changed)
-    }, [progress, status, priority, initialProgress, initialStatus, initialPriority])
+    }, [status, priority, initialStatus, initialPriority])
 
     const handleSave = async () => {
         setSaving(true)
         try {
             const result = await updateProject(projectId, {
-                progress,
                 status: status as any,
                 priority: priority as any,
             })
@@ -112,16 +108,16 @@ export default function ProjectSettingsCard({
     }
 
     const getProgressColor = () => {
-        if (progress >= 80) return 'bg-emerald-500'
-        if (progress >= 50) return 'bg-lime-500'
-        if (progress >= 30) return 'bg-amber-500'
+        if (initialProgress >= 80) return 'bg-emerald-500'
+        if (initialProgress >= 50) return 'bg-lime-500'
+        if (initialProgress >= 30) return 'bg-amber-500'
         return 'bg-slate-400'
     }
 
     const getProgressLabel = () => {
-        if (progress >= 80) return '거의 완료'
-        if (progress >= 50) return '절반 이상'
-        if (progress >= 30) return '진행 중'
+        if (initialProgress >= 80) return '거의 완료'
+        if (initialProgress >= 50) return '절반 이상'
+        if (initialProgress >= 30) return '진행 중'
         return '시작 단계'
     }
 
@@ -158,8 +154,8 @@ export default function ProjectSettingsCard({
                 </div>
             </CardHeader>
             <CardContent className="space-y-6">
-                {/* Progress Slider */}
-                <div className="space-y-4">
+                {/* Progress Display (Read-only) */}
+                <div className="space-y-3">
                     <div className="flex items-center justify-between">
                         <label className="text-sm font-semibold text-slate-700 flex items-center gap-2">
                             <TrendingUp className="w-4 h-4 text-lime-500" />
@@ -169,25 +165,18 @@ export default function ProjectSettingsCard({
                             <Badge className={cn("rounded-lg text-xs", getProgressColor(), "text-white")}>
                                 {getProgressLabel()}
                             </Badge>
-                            <span className="text-2xl font-black text-slate-900">{progress}%</span>
+                            <span className="text-2xl font-black text-slate-900">{initialProgress}%</span>
                         </div>
                     </div>
-                    <div className="relative pt-2">
-                        <Slider
-                            value={[progress]}
-                            onValueChange={([value]) => setProgress(value)}
-                            max={100}
-                            step={5}
-                            className="w-full"
+                    <div className="relative h-3 bg-slate-200 rounded-full overflow-hidden">
+                        <div
+                            className="h-full bg-gradient-to-r from-lime-400 to-emerald-500 transition-all duration-500"
+                            style={{ width: `${initialProgress}%` }}
                         />
-                        <div className="flex justify-between mt-2 text-xs text-slate-400">
-                            <span>0%</span>
-                            <span>25%</span>
-                            <span>50%</span>
-                            <span>75%</span>
-                            <span>100%</span>
-                        </div>
                     </div>
+                    <p className="text-xs text-slate-500">
+                        작업 완료율에 따라 자동으로 계산됩니다
+                    </p>
                 </div>
 
                 {/* Status Selection */}

@@ -115,6 +115,11 @@ export default function ProjectDetailPage() {
   // Use ref to track if we're currently updating to prevent loops
   const isUpdatingRef = useRef(false)
 
+  // Calculate progress locally based on tasks (real-time update)
+  const calculatedProgress = tasks.length === 0
+    ? 0
+    : Math.round((tasks.filter(t => t.columnId === 'done' || t.status === 'done').length / tasks.length) * 100)
+
   // Check if current user is project admin
   const isProjectAdmin = project?.teamMembers?.some(
     (member: any) => member.userId === user?.uid && member.role === 'Admin'
@@ -501,14 +506,14 @@ export default function ProjectDetailPage() {
                             </div>
                             <Badge className={cn(
                               "text-sm font-bold px-4 py-2 border-0 rounded-xl shadow-lg",
-                              project.progress >= 80 ? 'bg-emerald-500 text-white shadow-emerald-500/30' :
-                              project.progress >= 50 ? 'bg-lime-500 text-black shadow-lime-500/30' :
-                              project.progress >= 30 ? 'bg-amber-500 text-white shadow-amber-500/30' :
+                              calculatedProgress >= 80 ? 'bg-emerald-500 text-white shadow-emerald-500/30' :
+                              calculatedProgress >= 50 ? 'bg-lime-500 text-black shadow-lime-500/30' :
+                              calculatedProgress >= 30 ? 'bg-amber-500 text-white shadow-amber-500/30' :
                               'bg-slate-400 text-white shadow-slate-400/30'
                             )}>
-                              {project.progress >= 80 ? '순조로움' :
-                               project.progress >= 50 ? '진행 중' :
-                               project.progress >= 30 ? '시작 단계' : '준비 중'}
+                              {calculatedProgress >= 80 ? '순조로움' :
+                               calculatedProgress >= 50 ? '진행 중' :
+                               calculatedProgress >= 30 ? '시작 단계' : '준비 중'}
                             </Badge>
                           </div>
 
@@ -529,7 +534,7 @@ export default function ProjectDetailPage() {
                                   stroke="url(#progressGradient)"
                                   strokeWidth="12"
                                   strokeLinecap="round"
-                                  strokeDasharray={`${project.progress * 2.64} 264`}
+                                  strokeDasharray={`${calculatedProgress * 2.64} 264`}
                                   className="transition-all duration-1000"
                                 />
                                 <defs>
@@ -540,7 +545,7 @@ export default function ProjectDetailPage() {
                                 </defs>
                               </svg>
                               <div className="absolute inset-0 flex flex-col items-center justify-center">
-                                <span className="text-3xl font-black text-slate-900">{project.progress}%</span>
+                                <span className="text-3xl font-black text-slate-900">{calculatedProgress}%</span>
                                 <span className="text-xs text-slate-500">완료</span>
                               </div>
                             </div>
@@ -593,12 +598,12 @@ export default function ProjectDetailPage() {
                           <div className="space-y-2">
                             <div className="flex justify-between text-xs font-medium text-slate-500">
                               <span>전체 진행률</span>
-                              <span>{tasks.filter(t => t.columnId === 'done').length}/{tasks.length} 작업 완료</span>
+                              <span>{tasks.filter(t => t.columnId === 'done' || t.status === 'done').length}/{tasks.length} 작업 완료</span>
                             </div>
                             <div className="h-3 bg-slate-200/60 rounded-full overflow-hidden">
                               <motion.div
                                 initial={{ width: 0 }}
-                                animate={{ width: `${project.progress}%` }}
+                                animate={{ width: `${calculatedProgress}%` }}
                                 transition={{ duration: 1, ease: "easeOut" }}
                                 className="h-full bg-gradient-to-r from-lime-400 to-emerald-500 rounded-full"
                               />
@@ -1326,7 +1331,7 @@ export default function ProjectDetailPage() {
               <div className="max-w-2xl mx-auto">
                 <ProjectSettingsCard
                   projectId={project.id}
-                  initialProgress={project.progress}
+                  initialProgress={calculatedProgress}
                   initialStatus={project.status}
                   initialPriority={(project as any).priority || 'medium'}
                   onUpdate={loadProjectData}
@@ -1338,7 +1343,7 @@ export default function ProjectDetailPage() {
       </div>
 
       {/* Sidebar */}
-      {showSidebar && <ProjectSidebar project={project} activities={activities} />}
+      {showSidebar && <ProjectSidebar project={{ ...project, progress: calculatedProgress }} activities={activities} />}
 
       {/* Task Creation Modal - Glass Morphism */}
       {showTaskModal && (
