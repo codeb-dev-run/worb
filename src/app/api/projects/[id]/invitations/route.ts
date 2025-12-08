@@ -174,10 +174,21 @@ export async function POST(
         })
 
         // Send invitation email
-        const inviteUrl = `${process.env.NEXTAUTH_URL}/invite/project/${token}`
-        await sendProjectInviteEmail(email, inviteUrl, project.name, user.name)
+        const inviteUrl = `${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/invite/project/${token}`
+        let emailSent = false
 
-        return NextResponse.json(invitation)
+        try {
+            emailSent = await sendProjectInviteEmail(email, inviteUrl, project.name, user.name)
+        } catch (emailError) {
+            secureLogger.error('Failed to send invitation email', emailError as Error, { operation: 'projects.invitations.email' })
+            // Continue even if email fails
+        }
+
+        return NextResponse.json({
+            ...invitation,
+            inviteUrl,
+            emailSent,
+        })
     } catch (error) {
         // CVE-CB-005: Secure logging
         secureLogger.error('Error creating invitation', error as Error, { operation: 'projects.invitations.create' })
