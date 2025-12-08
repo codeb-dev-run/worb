@@ -28,9 +28,10 @@ import {
   ArrowLeft, Plus, Info, LayoutGrid, Calendar, FileText, Activity,
   PanelRightClose, PanelRightOpen, Loader2, FolderOpen, Users, Wallet,
   CalendarDays, Clock, CheckCircle, UserPlus, TrendingUp, Target,
-  AlertCircle, BarChart3, ListTodo, CircleDot, Zap, Trophy
+  AlertCircle, BarChart3, ListTodo, CircleDot, Zap, Trophy, Settings
 } from 'lucide-react'
 import ProjectInvitations from '@/components/projects/ProjectInvitations'
+import ProjectSettingsCard from '@/components/projects/ProjectSettingsCard'
 import { cn } from '@/lib/utils'
 
 interface ProjectDetail {
@@ -92,7 +93,7 @@ export default function ProjectDetailPage() {
   const [project, setProject] = useState<ProjectDetail | null>(null)
   const [activities, setActivities] = useState<Activity[]>([])
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState<'overview' | 'kanban' | 'gantt' | 'mindmap' | 'files' | 'activity' | 'team'>('kanban')
+  const [activeTab, setActiveTab] = useState<'overview' | 'kanban' | 'gantt' | 'mindmap' | 'files' | 'activity' | 'team' | 'settings'>('kanban')
   const [tasks, setTasks] = useState<TaskType[]>([])
   const [kanbanColumns] = useState<KanbanColumn[]>(DEFAULT_COLUMNS)
   const [showTaskModal, setShowTaskModal] = useState(false)
@@ -112,6 +113,11 @@ export default function ProjectDetailPage() {
 
   // Use ref to track if we're currently updating to prevent loops
   const isUpdatingRef = useRef(false)
+
+  // Check if current user is project admin
+  const isProjectAdmin = project?.teamMembers?.some(
+    (member: any) => member.userId === user?.uid && member.role === 'Admin'
+  ) ?? false
 
   // Status to columnId mapping
   const getColumnIdFromStatus = (status: string): string => {
@@ -434,6 +440,7 @@ export default function ProjectDetailPage() {
               { id: 'files', label: '파일', icon: FileText },
               { id: 'activity', label: '활동', icon: Activity },
               { id: 'team', label: '팀', icon: UserPlus },
+              ...(isProjectAdmin ? [{ id: 'settings', label: '설정', icon: Settings }] : []),
             ].map(tab => {
               const Icon = tab.icon
               return (
@@ -1240,6 +1247,20 @@ export default function ProjectDetailPage() {
           {activeTab === 'team' && (
             <div className="h-full overflow-y-auto p-6">
               <ProjectInvitations projectId={project.id} />
+            </div>
+          )}
+
+          {activeTab === 'settings' && isProjectAdmin && (
+            <div className="h-full overflow-y-auto p-6">
+              <div className="max-w-2xl mx-auto">
+                <ProjectSettingsCard
+                  projectId={project.id}
+                  initialProgress={project.progress}
+                  initialStatus={project.status}
+                  initialPriority={(project as any).priority || 'medium'}
+                  onUpdate={loadProjectData}
+                />
+              </div>
             </div>
           )}
         </div>
