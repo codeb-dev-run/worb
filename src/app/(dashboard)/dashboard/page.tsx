@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useEffect, useState, useMemo, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/auth-context'
 import { useWorkspace } from '@/lib/workspace-context'
 import { getDashboardStats } from '@/actions/dashboard'
@@ -10,11 +11,16 @@ import { ProjectDashboard } from '@/components/dashboard/layouts/ProjectDashboar
 import { EnterpriseDashboard } from '@/components/dashboard/layouts/EnterpriseDashboard'
 import { format } from 'date-fns'
 
+// 초대 관련 sessionStorage 키
+const PENDING_WORKSPACE_INVITE_KEY = 'pendingWorkspaceInvite'
+const PENDING_PROJECT_INVITE_KEY = 'pendingProjectInvite'
+
 // ===========================================
 // Glass Morphism Dashboard Page
 // ===========================================
 
 export default function DashboardPage() {
+  const router = useRouter()
   const { userProfile } = useAuth()
   const { currentWorkspace, loading: workspaceLoading } = useWorkspace()
   const [stats, setStats] = useState({
@@ -79,6 +85,24 @@ export default function DashboardPage() {
 
   // 명언 - 페이지 로드 시 한번만 생성
   const quote = useMemo(() => getRandomQuote(), [])
+
+  // 로그인 후 pending invite 체크 및 리다이렉트
+  useEffect(() => {
+    const pendingWorkspaceInvite = localStorage.getItem(PENDING_WORKSPACE_INVITE_KEY)
+    const pendingProjectInvite = localStorage.getItem(PENDING_PROJECT_INVITE_KEY)
+
+    if (pendingWorkspaceInvite) {
+      // 워크스페이스 초대 페이지로 리다이렉트
+      router.replace(`/invite/${pendingWorkspaceInvite}`)
+      return
+    }
+
+    if (pendingProjectInvite) {
+      // 프로젝트 초대 페이지로 리다이렉트
+      router.replace(`/invite/project/${pendingProjectInvite}`)
+      return
+    }
+  }, [router])
 
   // 공지사항 로드
   const loadAnnouncements = useCallback(async () => {

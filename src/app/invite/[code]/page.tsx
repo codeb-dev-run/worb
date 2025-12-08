@@ -1,11 +1,13 @@
 'use client'
 
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { signIn, useSession } from 'next-auth/react'
 import { Button } from '@/components/ui/button'
 import { Loader2, CheckCircle2, XCircle } from 'lucide-react'
 import toast from 'react-hot-toast'
+
+const PENDING_INVITE_KEY = 'pendingWorkspaceInvite'
 
 export default function InviteAcceptPage({ params }: { params: { code: string } }) {
   const router = useRouter()
@@ -13,10 +15,35 @@ export default function InviteAcceptPage({ params }: { params: { code: string } 
   const [loading, setLoading] = useState(true)
   const [invite, setInvite] = useState<any>(null)
   const [error, setError] = useState<string | null>(null)
+  const [accepting, setAccepting] = useState(false)
+  const hasAutoAccepted = useRef(false)
 
+  // 초대 정보 로드
   useEffect(() => {
     checkInvite()
   }, [params.code])
+
+  // 로그인 후 자동 수락 처리
+  useEffect(() => {
+    const autoAcceptInvite = async () => {
+      // 이미 자동 수락 시도했거나 조건이 안 맞으면 스킵
+      if (hasAutoAccepted.current) return
+      if (status !== 'authenticated') return
+      if (!invite) return
+      if (error) return
+      if (accepting) return
+
+      // localStorage에서 pending invite 확인 (OAuth 리다이렉트 후에도 유지됨)
+      const pendingInvite = localStorage.getItem(PENDING_INVITE_KEY)
+      if (pendingInvite === params.code) {
+        hasAutoAccepted.current = true
+        localStorage.removeItem(PENDING_INVITE_KEY)
+        await handleAcceptInternal()
+      }
+    }
+
+    autoAcceptInvite()
+  }, [status, invite, error, params.code])
 
   const checkInvite = async () => {
     try {
@@ -34,14 +61,9 @@ export default function InviteAcceptPage({ params }: { params: { code: string } 
     }
   }
 
-  const handleAccept = async () => {
-    if (status === 'unauthenticated') {
-      // 로그인 후 다시 이 페이지로 돌아오도록 설정
-      signIn('google', { callbackUrl: `/invite/${params.code}` })
-      return
-    }
-
-    setLoading(true)
+  // 내부 수락 처리 함수 (자동 수락용)
+  const handleAcceptInternal = async () => {
+    setAccepting(true)
     try {
       const response = await fetch(`/api/invite/${params.code}/accept`, {
         method: 'POST',
@@ -58,14 +80,31 @@ export default function InviteAcceptPage({ params }: { params: { code: string } 
     } catch (err: any) {
       toast.error(err.message)
       setError(err.message)
-      setLoading(false)
+      setAccepting(false)
     }
   }
 
-  if (loading) {
+  const handleAccept = async () => {
+    if (status === 'unauthenticated') {
+      // 로그인 전에 초대 코드를 localStorage에 저장 (OAuth 리다이렉트 후에도 유지됨)
+      localStorage.setItem(PENDING_INVITE_KEY, params.code)
+      // 로그인 후 다시 이 페이지로 돌아오도록 설정
+      signIn('google', { callbackUrl: `/invite/${params.code}` })
+      return
+    }
+
+    await handleAcceptInternal()
+  }
+
+  if (loading || accepting) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+          <p className="text-gray-500">
+            {accepting ? '초대 수락 처리 중...' : '초대 정보를 불러오는 중...'}
+          </p>
+        </div>
       </div>
     )
   }

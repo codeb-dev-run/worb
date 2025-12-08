@@ -1,12 +1,14 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useSession, signIn } from 'next-auth/react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Loader2, Mail, CheckCircle2, XCircle, Clock, FolderKanban } from 'lucide-react'
+
+const PENDING_PROJECT_INVITE_KEY = 'pendingProjectInvite'
 
 interface ProjectInvitation {
     id: string
@@ -33,9 +35,11 @@ export default function ProjectInvitePage() {
     const [accepting, setAccepting] = useState(false)
     const [error, setError] = useState<string | null>(null)
     const [success, setSuccess] = useState(false)
+    const hasAutoAccepted = useRef(false)
 
     const token = params?.token as string
 
+    // 초대 정보 로드
     useEffect(() => {
         const fetchInvitation = async () => {
             try {
@@ -58,12 +62,32 @@ export default function ProjectInvitePage() {
         fetchInvitation()
     }, [token])
 
-    const handleAccept = async () => {
-        if (!session?.user) {
-            signIn(undefined, { callbackUrl: window.location.href })
-            return
+    // 로그인 후 자동 수락 처리
+    useEffect(() => {
+        const autoAcceptInvite = async () => {
+            // 이미 자동 수락 시도했거나 조건이 안 맞으면 스킵
+            if (hasAutoAccepted.current) return
+            if (sessionStatus !== 'authenticated') return
+            if (!invitation) return
+            if (error) return
+            if (accepting) return
+            if (invitation.status !== 'PENDING') return
+            if (new Date() > new Date(invitation.expiresAt)) return
+
+            // localStorage에서 pending invite 확인 (OAuth 리다이렉트 후에도 유지됨)
+            const pendingInvite = localStorage.getItem(PENDING_PROJECT_INVITE_KEY)
+            if (pendingInvite === token) {
+                hasAutoAccepted.current = true
+                localStorage.removeItem(PENDING_PROJECT_INVITE_KEY)
+                await handleAcceptInternal()
+            }
         }
 
+        autoAcceptInvite()
+    }, [sessionStatus, invitation, error, token])
+
+    // 내부 수락 처리 함수 (자동 수락용)
+    const handleAcceptInternal = async () => {
         setAccepting(true)
         setError(null)
 
@@ -76,6 +100,7 @@ export default function ProjectInvitePage() {
 
             if (!response.ok) {
                 setError(data.error || 'Failed to accept invitation')
+                setAccepting(false)
                 return
             }
 
@@ -85,17 +110,29 @@ export default function ProjectInvitePage() {
             }, 2000)
         } catch (err) {
             setError('Failed to accept invitation')
-        } finally {
             setAccepting(false)
         }
     }
 
-    if (loading) {
+    const handleAccept = async () => {
+        if (!session?.user) {
+            // 로그인 전에 초대 토큰을 localStorage에 저장 (OAuth 리다이렉트 후에도 유지됨)
+            localStorage.setItem(PENDING_PROJECT_INVITE_KEY, token)
+            signIn(undefined, { callbackUrl: window.location.href })
+            return
+        }
+
+        await handleAcceptInternal()
+    }
+
+    if (loading || (accepting && !success)) {
         return (
             <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100">
                 <div className="flex flex-col items-center gap-4">
                     <Loader2 className="h-8 w-8 animate-spin text-lime-500" />
-                    <p className="text-slate-500">초대 정보를 불러오는 중...</p>
+                    <p className="text-slate-500">
+                        {accepting ? '초대 수락 처리 중...' : '초대 정보를 불러오는 중...'}
+                    </p>
                 </div>
             </div>
         )

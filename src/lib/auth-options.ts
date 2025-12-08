@@ -134,6 +134,36 @@ export const authOptions: NextAuthOptions = {
                 (session.user as any).role = token.role as string
             }
             return session
+        },
+        async redirect({ url, baseUrl }) {
+            // 디버그 로그
+            if (process.env.NODE_ENV === 'development') {
+                console.log('[Auth Redirect] url:', url, 'baseUrl:', baseUrl)
+            }
+
+            // 초대 링크 등 내부 URL로의 리다이렉트 허용
+            // url이 상대 경로인 경우
+            if (url.startsWith('/')) {
+                return `${baseUrl}${url}`
+            }
+            // 같은 도메인인 경우
+            if (url.startsWith(baseUrl)) {
+                return url
+            }
+            // callbackUrl이 인코딩된 경우 처리
+            try {
+                const decodedUrl = decodeURIComponent(url)
+                if (decodedUrl.startsWith('/')) {
+                    return `${baseUrl}${decodedUrl}`
+                }
+                if (decodedUrl.startsWith(baseUrl)) {
+                    return decodedUrl
+                }
+            } catch {
+                // 디코딩 실패 시 무시
+            }
+            // 그 외의 경우 기본 대시보드로
+            return `${baseUrl}/dashboard`
         }
     },
     pages: {
