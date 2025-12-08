@@ -313,6 +313,9 @@ export async function updateTasksOrder(projectId: string, tasks: { id: string; c
         // Invalidate Dashboard Cache
         await invalidateCache('dashboard:stats:*')
 
+        // Update project progress based on task completion
+        await updateProjectProgress(projectId)
+
         return { success: true }
     } catch (error) {
         secureLogger.error('Failed to update tasks order', error as Error, { operation: 'task.updateOrder' })
