@@ -1092,6 +1092,67 @@ export default function ProjectDetailPage() {
                     loadProjectData()
                   }
                 }}
+                onTaskCreate={async (columnId, title) => {
+                  if (!user) return null
+
+                  try {
+                    const result = await createTask(project.id, {
+                      title,
+                      description: '',
+                      status: columnId as TaskStatus,
+                      priority: TaskPriority.MEDIUM,
+                      createdBy: user.uid,
+                      columnId,
+                      order: tasks.filter(t => t.columnId === columnId || t.status === columnId).length,
+                    })
+
+                    if (result.success && result.task) {
+                      toast.success('작업이 생성되었습니다.')
+
+                      await addActivity(project.id, {
+                        type: 'task',
+                        message: `작업 "${title}" 생성`,
+                        userId: user.uid,
+                        userName: userProfile?.displayName || '알 수 없음',
+                        icon: '➕'
+                      })
+
+                      // 서버에서 받은 작업을 KanbanTask 형식으로 변환
+                      const newTask: TaskType = {
+                        id: result.task.id,
+                        projectId: result.task.projectId || project.id,
+                        title: result.task.title,
+                        description: result.task.description || '',
+                        columnId: result.task.columnId || columnId,
+                        order: result.task.order || 0,
+                        priority: result.task.priority as TaskPriority,
+                        status: result.task.status as TaskStatus,
+                        department: (result.task as any).teamId,
+                        assignee: '',
+                        labels: result.task.labels || [],
+                        checklist: [],
+                        attachments: [],
+                        attachmentCount: 0,
+                        commentCount: 0,
+                        createdAt: new Date(result.task.createdAt),
+                        updatedAt: new Date(result.task.updatedAt),
+                        createdBy: result.task.createdBy,
+                      }
+
+                      // tasks 상태 업데이트
+                      setTasks(prev => [...prev, newTask])
+
+                      return newTask
+                    } else {
+                      toast.error(result.error || '작업 생성에 실패했습니다.')
+                      return null
+                    }
+                  } catch (error) {
+                    console.error('Failed to create task:', error)
+                    toast.error('작업 생성 중 오류가 발생했습니다.')
+                    return null
+                  }
+                }}
               />
             </div>
           )}
