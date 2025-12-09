@@ -1,5 +1,101 @@
 import '@testing-library/jest-dom'
 
+// Mock server-only package (prevents import error in tests)
+jest.mock('server-only', () => ({}))
+
+// Mock ioredis (prevents Redis connection attempts in tests)
+jest.mock('ioredis', () => {
+  const mockRedis = {
+    get: jest.fn().mockResolvedValue(null),
+    set: jest.fn().mockResolvedValue('OK'),
+    setex: jest.fn().mockResolvedValue('OK'),
+    del: jest.fn().mockResolvedValue(1),
+    mget: jest.fn().mockResolvedValue([]),
+    pipeline: jest.fn().mockReturnValue({
+      setex: jest.fn().mockReturnThis(),
+      sadd: jest.fn().mockReturnThis(),
+      expire: jest.fn().mockReturnThis(),
+      exec: jest.fn().mockResolvedValue([]),
+    }),
+    scan: jest.fn().mockResolvedValue(['0', []]),
+    smembers: jest.fn().mockResolvedValue([]),
+    publish: jest.fn().mockResolvedValue(0),
+    subscribe: jest.fn().mockResolvedValue(0),
+    duplicate: jest.fn().mockReturnThis(),
+    on: jest.fn().mockReturnThis(),
+    ping: jest.fn().mockResolvedValue('PONG'),
+    info: jest.fn().mockResolvedValue('redis_version:7.0.0\r\nuptime_in_seconds:1000\r\nconnected_clients:1'),
+    connect: jest.fn().mockResolvedValue(undefined),
+    disconnect: jest.fn().mockResolvedValue(undefined),
+    quit: jest.fn().mockResolvedValue('OK'),
+  }
+
+  const Redis = jest.fn(() => mockRedis)
+  Redis.Cluster = jest.fn(() => mockRedis)
+
+  return Redis
+})
+
+// Mock @/lib/redis module
+jest.mock('@/lib/redis', () => ({
+  redis: {
+    get: jest.fn().mockResolvedValue(null),
+    set: jest.fn().mockResolvedValue('OK'),
+    setex: jest.fn().mockResolvedValue('OK'),
+    del: jest.fn().mockResolvedValue(1),
+    mget: jest.fn().mockResolvedValue([]),
+    pipeline: jest.fn().mockReturnValue({
+      setex: jest.fn().mockReturnThis(),
+      exec: jest.fn().mockResolvedValue([]),
+    }),
+    ping: jest.fn().mockResolvedValue('PONG'),
+  },
+  CacheKeys: {
+    dashboardStats: jest.fn((id) => `dashboard:${id}:stats`),
+    projectStats: jest.fn((id) => `project:${id}:stats`),
+    hrStats: jest.fn((id) => `hr:${id}:stats`),
+    employees: jest.fn((id) => `hr:${id}:employees`),
+    employee: jest.fn((wid, eid) => `hr:${wid}:employee:${eid}`),
+    attendance: jest.fn((id) => `attendance:${id}:today`),
+    attendanceHistory: jest.fn((id) => `attendance:${id}:history`),
+    attendanceStats: jest.fn((id) => `attendance:${id}:stats`),
+    payroll: jest.fn((id) => `payroll:${id}:list`),
+    payrollRecord: jest.fn((id) => `payroll:record:${id}`),
+    payrollSummary: jest.fn((wid, year) => `payroll:${wid}:summary:${year}`),
+    projectTasks: jest.fn((id) => `project:${id}:tasks`),
+    task: jest.fn((id) => `task:${id}`),
+    workspaceMembers: jest.fn((id) => `workspace:${id}:members`),
+    workspaceSettings: jest.fn((id) => `workspace:${id}:settings`),
+    userSession: jest.fn((id) => `session:${id}`),
+    userPermissions: jest.fn((uid, wid) => `permissions:${uid}:${wid}`),
+  },
+  CacheTTL: {
+    SHORT: 60,
+    ATTENDANCE: 60,
+    MEDIUM: 300,
+    DASHBOARD: 300,
+    TASKS: 300,
+    LONG: 3600,
+    HR_STATS: 3600,
+    EMPLOYEES: 3600,
+    PAYROLL: 3600,
+    EXTENDED: 86400,
+    SETTINGS: 86400,
+    PERMISSIONS: 86400,
+  },
+  getOrSet: jest.fn((key, fetcher) => fetcher()),
+  mGetOrSet: jest.fn((keys, fetcher) => fetcher(keys)),
+  invalidateCache: jest.fn().mockResolvedValue(undefined),
+  invalidateCachePattern: jest.fn().mockResolvedValue(undefined),
+  invalidateMultipleKeys: jest.fn().mockResolvedValue(undefined),
+  setWithTags: jest.fn().mockResolvedValue(undefined),
+  invalidateByTag: jest.fn().mockResolvedValue(undefined),
+  withLock: jest.fn((key, fn) => fn()),
+  publishCacheInvalidation: jest.fn().mockResolvedValue(undefined),
+  subscribeToCacheInvalidation: jest.fn(),
+  getRedisHealth: jest.fn().mockResolvedValue({ status: 'healthy', latencyMs: 1, mode: 'single' }),
+}))
+
 // Mock Next.js router
 jest.mock('next/navigation', () => ({
   useRouter() {
