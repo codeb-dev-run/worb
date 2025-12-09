@@ -131,15 +131,20 @@ jobs:
           ssh-keyscan -H ${{ env.SERVER_HOST }} >> ~/.ssh/known_hosts
 
       - name: Deploy to Staging
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          # Login to GHCR on server
+          echo "$GH_TOKEN" | ssh ${{ env.SERVER_USER }}@${{ env.SERVER_HOST }} "podman login ghcr.io -u ${{ github.actor }} --password-stdin"
+
           ssh ${{ env.SERVER_USER }}@${{ env.SERVER_HOST }} << 'EOF'
           set -e
 
           echo "🚀 Deploying to Staging..."
 
           # Pull latest image
-          podman pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:staging || \
-          podman pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          podman pull ghcr.io/codeb-devr-un/codeb_project:staging || \
+          podman pull ghcr.io/codeb-devr-un/codeb_project:${{ github.sha }}
 
           # Restart service via Quadlet
           systemctl --user daemon-reload 2>/dev/null || systemctl daemon-reload
@@ -192,15 +197,20 @@ jobs:
           ssh-keyscan -H ${{ env.SERVER_HOST }} >> ~/.ssh/known_hosts
 
       - name: Deploy to Production
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          # Login to GHCR on server
+          echo "$GH_TOKEN" | ssh ${{ env.SERVER_USER }}@${{ env.SERVER_HOST }} "podman login ghcr.io -u ${{ github.actor }} --password-stdin"
+
           ssh ${{ env.SERVER_USER }}@${{ env.SERVER_HOST }} << 'EOF'
           set -e
 
           echo "🚀 Deploying to Production..."
 
           # Pull latest image
-          podman pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest || \
-          podman pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          podman pull ghcr.io/codeb-devr-un/codeb_project:latest || \
+          podman pull ghcr.io/codeb-devr-un/codeb_project:${{ github.sha }}
 
           # Restart service via Quadlet
           systemctl --user daemon-reload 2>/dev/null || systemctl daemon-reload
