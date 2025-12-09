@@ -119,9 +119,9 @@ export default function JoinByCodePage({ params }: { params: { code: string } })
 
       toast.success(`${workspace.name} 워크스페이스에 가입되었습니다!`)
 
-      // 3초 후 대시보드로 이동
+      // 3초 후 메인 페이지로 이동
       setTimeout(() => {
-        window.location.href = '/dashboard'
+        window.location.href = '/'
       }, 3000)
     } catch (err: any) {
       toast.error(err.message)
@@ -211,12 +211,12 @@ export default function JoinByCodePage({ params }: { params: { code: string } })
             </p>
             <div className="p-4 bg-lime-50 rounded-2xl mb-6">
               <p className="text-sm text-lime-700">
-                잠시 후 대시보드로 이동합니다...
+                잠시 후 메인 페이지로 이동합니다...
               </p>
             </div>
             <Button
               variant="limePrimary"
-              onClick={() => window.location.href = '/dashboard'}
+              onClick={() => window.location.href = '/'}
               className="w-full rounded-xl h-12 text-base"
             >
               지금 바로 이동
