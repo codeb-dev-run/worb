@@ -257,7 +257,20 @@ jobs:
           podman stop ${CONTAINER_NAME} 2>/dev/null || true
           podman rm ${CONTAINER_NAME} 2>/dev/null || true
           systemctl reset-failed ${CONTAINER_NAME}.service 2>/dev/null || true
-          systemctl restart ${CONTAINER_NAME}.service
+
+          if ! systemctl restart ${CONTAINER_NAME}.service; then
+            echo "❌ Service failed to start!"
+            echo "=== systemctl status ==="
+            systemctl status ${CONTAINER_NAME}.service --no-pager || true
+            echo "=== journalctl logs ==="
+            journalctl -xeu ${CONTAINER_NAME}.service --no-pager -n 100 || true
+            echo "=== Quadlet file ==="
+            cat /etc/containers/systemd/${CONTAINER_NAME}.container || true
+            echo "=== Env file ==="
+            cat /etc/containers/systemd/${CONTAINER_NAME}.env 2>/dev/null | grep -v PASSWORD | grep -v SECRET || echo "No env file found"
+            exit 1
+          fi
+
           echo "⏳ Waiting for container to start..."
           sleep 20
 
