@@ -127,9 +127,11 @@ describe('Project Server Actions', () => {
       const newProject = { ...mockProject, id: 'new-project' }
       ;(prisma.project.create as jest.Mock).mockResolvedValue(newProject)
 
-      const result = await createProject(mockUserId, mockWorkspaceId, {
+      const result = await createProject({
         name: 'New Project',
-        description: 'New Description'
+        description: 'New Description',
+        createdBy: mockUserId,
+        workspaceId: mockWorkspaceId
       })
 
       expect(result.success).toBe(true)
@@ -141,8 +143,10 @@ describe('Project Server Actions', () => {
       const { createProject } = await import('../project')
       ;(prisma.project.create as jest.Mock).mockRejectedValue(new Error('Creation failed'))
 
-      const result = await createProject(mockUserId, mockWorkspaceId, {
-        name: 'Test'
+      const result = await createProject({
+        name: 'Test',
+        createdBy: mockUserId,
+        workspaceId: mockWorkspaceId
       })
 
       expect(result.success).toBe(false)
