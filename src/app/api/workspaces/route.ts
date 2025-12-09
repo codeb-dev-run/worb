@@ -119,13 +119,13 @@ const WORKSPACE_FEATURE_PRESETS = {
 
 type WorkspaceType = keyof typeof WORKSPACE_FEATURE_PRESETS
 
-// 워크스페이스 생성 시 기본 부서(팀) 프리셋
-const DEFAULT_DEPARTMENTS = [
-  { name: '개발팀', color: '#3B82F6', order: 0 },
-  { name: '디자인팀', color: '#EC4899', order: 1 },
-  { name: '기획팀', color: '#8B5CF6', order: 2 },
-  { name: '운영팀', color: '#10B981', order: 3 },
-]
+// 워크스페이스 생성 시 기본 부서(팀) 프리셋 - 비활성화됨
+// const DEFAULT_DEPARTMENTS = [
+//   { name: '개발팀', color: '#3B82F6', order: 0 },
+//   { name: '디자인팀', color: '#EC4899', order: 1 },
+//   { name: '기획팀', color: '#8B5CF6', order: 2 },
+//   { name: '운영팀', color: '#10B981', order: 3 },
+// ]
 
 // 사용자의 워크스페이스 목록 조회
 export async function GET(request: NextRequest) {
@@ -261,17 +261,17 @@ export async function POST(request: NextRequest) {
         },
       })
 
-      // 3. 기본 부서(팀) 생성
-      for (const dept of DEFAULT_DEPARTMENTS) {
-        await tx.team.create({
-          data: {
-            workspaceId: newWorkspace.id,
-            name: dept.name,
-            color: dept.color,
-            order: dept.order,
-          },
-        })
-      }
+      // 3. 기본 부서(팀) 생성 비활성화
+      // for (const dept of DEFAULT_DEPARTMENTS) {
+      //   await tx.team.create({
+      //     data: {
+      //       workspaceId: newWorkspace.id,
+      //       name: dept.name,
+      //       color: dept.color,
+      //       order: dept.order,
+      //     },
+      //   })
+      // }
 
       return newWorkspace
     })
@@ -284,10 +284,10 @@ export async function POST(request: NextRequest) {
       type: workspaceType,
     })
 
-    // 샘플 데이터 생성 (PROJECT 관련 타입만)
-    if (workspaceType === 'ENTERPRISE' || workspaceType === 'PROJECT_ONLY') {
-      await createSampleData(workspace.id, user.id)
-    }
+    // 샘플 데이터 생성 비활성화
+    // if (workspaceType === 'ENTERPRISE' || workspaceType === 'PROJECT_ONLY') {
+    //   await createSampleData(workspace.id, user.id)
+    // }
 
     // features 포함해서 반환
     const workspaceWithFeatures = await prisma.workspace.findUnique({

@@ -83,8 +83,8 @@ export async function POST(request: Request) {
         workspaceId: workspace.id,
       })
 
-      // Create sample data
-      await createSampleData(workspace.id, user.id)
+      // Create sample data (disabled)
+      // await createSampleData(workspace.id, user.id)
     }
 
     // CVE-CB-005: Log successful login (without sensitive data)
