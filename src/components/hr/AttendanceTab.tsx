@@ -6,11 +6,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import {
   Clock, Calendar, Coffee, CheckCircle, XCircle, AlertCircle,
-  MapPin, Loader2, Home, Wifi, Timer, Settings, Building2, Play, Square, History
+  MapPin, Loader2, Home, Wifi, Timer, Building2, Play, Square, History
 } from 'lucide-react'
 import { toast } from 'react-hot-toast'
 import { WorkSettings } from '@/types/hr'
@@ -44,7 +42,6 @@ export default function AttendanceTab({ userId, workspaceId, isAdmin }: Attendan
   const [workLocation, setWorkLocation] = useState<'OFFICE' | 'REMOTE'>('OFFICE')
   const [userIP, setUserIP] = useState('')
   const [isPresenceCheckOpen, setIsPresenceCheckOpen] = useState(false)
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false)
   const [settings, setSettings] = useState<WorkSettings>({
     type: 'FIXED',
     dailyRequiredMinutes: 480,
@@ -198,28 +195,6 @@ export default function AttendanceTab({ userId, workspaceId, isAdmin }: Attendan
     }
   }
 
-  const saveSettings = async () => {
-    try {
-      const res = await fetch('/api/attendance/settings', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-user-id': userId,
-          'x-workspace-id': workspaceId
-        },
-        body: JSON.stringify(settings)
-      })
-      if (res.ok) {
-        toast.success('설정이 저장되었습니다')
-        setIsSettingsOpen(false)
-      } else {
-        toast.error('설정 저장 실패')
-      }
-    } catch (e) {
-      toast.error('설정 저장 중 오류가 발생했습니다')
-    }
-  }
-
   const formatTime = (time: string | null) => {
     if (!time) return '--:--'
     return new Date(time).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
@@ -314,19 +289,8 @@ export default function AttendanceTab({ userId, workspaceId, isAdmin }: Attendan
           <div className="space-y-8 flex flex-col items-center">
             {/* Work Type Selector */}
             <div className="space-y-4 w-full max-w-2xl">
-              <div className="flex items-center justify-between">
-                <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider text-center w-full">근무 형태 선택</h3>
-                {isAdmin && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="text-slate-400 hover:text-slate-900 hover:bg-slate-100"
-                    onClick={() => setIsSettingsOpen(true)}
-                  >
-                    <Settings className="w-4 h-4 mr-2" />
-                    설정
-                  </Button>
-                )}
+              <div className="flex items-center justify-center">
+                <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider text-center">근무 형태 선택</h3>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <button
@@ -482,70 +446,6 @@ export default function AttendanceTab({ userId, workspaceId, isAdmin }: Attendan
         </DialogContent>
       </Dialog>
 
-      {/* Settings Modal (Storyboard Design) */}
-      <Dialog open={isSettingsOpen} onOpenChange={setIsSettingsOpen}>
-        <DialogContent className="bg-white border-slate-200 max-w-lg rounded-3xl shadow-xl">
-          <DialogHeader>
-            <DialogTitle className="text-slate-900">근무 설정</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label className="text-slate-500">근무 유형</Label>
-              <div className="flex gap-2 mt-2">
-                {(['FIXED', 'FLEXIBLE', 'CORE_TIME'] as const).map(type => (
-                  <Button
-                    key={type}
-                    variant={settings.type === type ? 'default' : 'outline'}
-                    size="sm"
-                    onClick={() => setSettings({ ...settings, type })}
-                    className={settings.type === type ? 'bg-black text-lime-400' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}
-                  >
-                    {type === 'FIXED' ? '고정' : type === 'FLEXIBLE' ? '유연' : '코어타임'}
-                  </Button>
-                ))}
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label className="text-slate-500">출근 시간</Label>
-                <Input
-                  type="time"
-                  value={settings.workStartTime}
-                  onChange={e => setSettings({ ...settings, workStartTime: e.target.value })}
-                  className="mt-1 bg-white/50 border-slate-200 text-slate-900 rounded-xl focus:ring-lime-100 focus:border-lime-400"
-                />
-              </div>
-              <div>
-                <Label className="text-slate-500">퇴근 시간</Label>
-                <Input
-                  type="time"
-                  value={settings.workEndTime}
-                  onChange={e => setSettings({ ...settings, workEndTime: e.target.value })}
-                  className="mt-1 bg-white/50 border-slate-200 text-slate-900 rounded-xl focus:ring-lime-100 focus:border-lime-400"
-                />
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                id="presenceCheck"
-                checked={settings.presenceCheckEnabled}
-                onChange={e => setSettings({ ...settings, presenceCheckEnabled: e.target.checked })}
-                className="rounded border-slate-300 bg-white text-lime-500 focus:ring-lime-400"
-              />
-              <Label htmlFor="presenceCheck" className="text-slate-600">재택근무 시 근무 확인 활성화</Label>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsSettingsOpen(false)} className="border-slate-200 text-slate-600 hover:bg-slate-50 rounded-xl">
-              취소
-            </Button>
-            <Button onClick={saveSettings} className="bg-black hover:bg-slate-900 text-lime-400 font-bold rounded-xl">
-              저장
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   )
 }
