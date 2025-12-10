@@ -19,7 +19,7 @@ export default function DashboardLayout({
   children: React.ReactNode
 }) {
   const [isAIAssistantOpen, setIsAIAssistantOpen] = useState(false)
-  const { mode } = useNavigation()
+  const { mode, toggleMode } = useNavigation()
   const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
@@ -48,7 +48,7 @@ export default function DashboardLayout({
             "flex-1 flex flex-col transition-all duration-300 min-w-0",
             mode === 'sidebar' ? "lg:ml-[280px]" : "ml-0"
           )}>
-            <Header />
+            <Header onSidebarToggle={toggleMode} />
             <main className={cn(
               "flex-1 overflow-y-auto",
               mode === 'dock' && "pb-32"

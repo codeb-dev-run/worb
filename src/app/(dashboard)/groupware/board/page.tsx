@@ -130,7 +130,7 @@ export default function BoardPage() {
 
     // URL의 postId 쿼리 파라미터 처리
     useEffect(() => {
-        const postId = searchParams.get('postId')
+        const postId = searchParams?.get('postId')
         if (postId && currentWorkspace) {
             loadPostById(postId)
         }
@@ -188,7 +188,7 @@ export default function BoardPage() {
         setContent('')
         setIsPinned(false)
         // URL에서 postId 쿼리 파라미터 제거
-        if (searchParams.get('postId')) {
+        if (searchParams?.get('postId')) {
             router.replace('/groupware/board')
         }
     }
