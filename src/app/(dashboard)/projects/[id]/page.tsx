@@ -1333,6 +1333,7 @@ export default function ProjectDetailPage() {
               <div className="max-w-2xl mx-auto">
                 <ProjectSettingsCard
                   projectId={project.id}
+                  projectName={project.name}
                   initialProgress={calculatedProgress}
                   initialStatus={project.status}
                   initialPriority={(project as any).priority || 'medium'}

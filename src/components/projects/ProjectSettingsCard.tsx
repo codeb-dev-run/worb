@@ -15,13 +15,18 @@ import {
     CheckCircle2,
     Clock,
     TrendingUp,
+    Trash2,
+    AlertTriangle,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { updateProject } from '@/actions/project'
+import { updateProject, deleteProject } from '@/actions/project'
 import toast from 'react-hot-toast'
+import { useRouter } from 'next/navigation'
+import { Input } from '@/components/ui/input'
 
 interface ProjectSettingsCardProps {
     projectId: string
+    projectName: string
     initialProgress: number
     initialStatus: string
     initialPriority: string
@@ -68,15 +73,22 @@ const getPriorityColor = (color: string) => {
 
 export default function ProjectSettingsCard({
     projectId,
+    projectName,
     initialProgress,
     initialStatus,
     initialPriority,
     onUpdate,
 }: ProjectSettingsCardProps) {
+    const router = useRouter()
     const [status, setStatus] = useState(initialStatus)
     const [priority, setPriority] = useState(initialPriority || 'medium')
     const [saving, setSaving] = useState(false)
     const [hasChanges, setHasChanges] = useState(false)
+
+    // 삭제 관련 상태
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+    const [deleteConfirmText, setDeleteConfirmText] = useState('')
+    const [deleting, setDeleting] = useState(false)
 
     useEffect(() => {
         const changed =
@@ -105,6 +117,33 @@ export default function ProjectSettingsCard({
         } finally {
             setSaving(false)
         }
+    }
+
+    const handleDelete = async () => {
+        if (deleteConfirmText !== projectName) {
+            toast.error('프로젝트명이 일치하지 않습니다.')
+            return
+        }
+
+        setDeleting(true)
+        try {
+            const result = await deleteProject(projectId)
+            if (result.success) {
+                toast.success('프로젝트가 삭제되었습니다.')
+                router.push('/projects')
+            } else {
+                toast.error('프로젝트 삭제에 실패했습니다.')
+            }
+        } catch (error) {
+            toast.error('프로젝트 삭제 중 오류가 발생했습니다.')
+        } finally {
+            setDeleting(false)
+        }
+    }
+
+    const handleCancelDelete = () => {
+        setShowDeleteConfirm(false)
+        setDeleteConfirmText('')
     }
 
     const getProgressColor = () => {
@@ -240,6 +279,83 @@ export default function ProjectSettingsCard({
                         <span className="text-sm text-amber-700">변경사항이 있습니다. 저장 버튼을 눌러주세요.</span>
                     </div>
                 )}
+
+                {/* Danger Zone - 프로젝트 삭제 */}
+                <div className="pt-6 mt-6 border-t border-red-200">
+                    <div className="space-y-4">
+                        <div className="flex items-center gap-2">
+                            <AlertTriangle className="w-5 h-5 text-red-500" />
+                            <h3 className="text-sm font-bold text-red-600">위험 영역</h3>
+                        </div>
+
+                        {!showDeleteConfirm ? (
+                            <div className="p-4 bg-red-50 border border-red-200 rounded-xl space-y-3">
+                                <div>
+                                    <p className="text-sm font-medium text-red-700">프로젝트 삭제</p>
+                                    <p className="text-xs text-red-600 mt-1">
+                                        이 작업은 되돌릴 수 없습니다. 모든 작업, 파일, 댓글이 영구 삭제됩니다.
+                                    </p>
+                                </div>
+                                <Button
+                                    variant="outline"
+                                    onClick={() => setShowDeleteConfirm(true)}
+                                    className="w-full border-red-300 text-red-600 hover:bg-red-100 hover:text-red-700 rounded-xl"
+                                >
+                                    <Trash2 className="w-4 h-4 mr-2" />
+                                    프로젝트 삭제
+                                </Button>
+                            </div>
+                        ) : (
+                            <div className="p-4 bg-red-50 border-2 border-red-300 rounded-xl space-y-4">
+                                <div className="flex items-start gap-3">
+                                    <AlertTriangle className="w-5 h-5 text-red-500 mt-0.5 flex-shrink-0" />
+                                    <div>
+                                        <p className="text-sm font-bold text-red-700">정말로 삭제하시겠습니까?</p>
+                                        <p className="text-xs text-red-600 mt-1">
+                                            확인을 위해 프로젝트명 <span className="font-bold">&quot;{projectName}&quot;</span>을 입력해주세요.
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <Input
+                                    type="text"
+                                    placeholder="프로젝트명을 입력하세요"
+                                    value={deleteConfirmText}
+                                    onChange={(e) => setDeleteConfirmText(e.target.value)}
+                                    className="bg-white border-red-200 focus:border-red-400 focus:ring-red-400 rounded-xl"
+                                />
+
+                                <div className="flex gap-2">
+                                    <Button
+                                        variant="outline"
+                                        onClick={handleCancelDelete}
+                                        disabled={deleting}
+                                        className="flex-1 rounded-xl"
+                                    >
+                                        취소
+                                    </Button>
+                                    <Button
+                                        onClick={handleDelete}
+                                        disabled={deleting || deleteConfirmText !== projectName}
+                                        className={cn(
+                                            "flex-1 rounded-xl",
+                                            deleteConfirmText === projectName
+                                                ? "bg-red-500 hover:bg-red-600 text-white"
+                                                : "bg-red-200 text-red-400 cursor-not-allowed"
+                                        )}
+                                    >
+                                        {deleting ? (
+                                            <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                                        ) : (
+                                            <Trash2 className="w-4 h-4 mr-2" />
+                                        )}
+                                        삭제
+                                    </Button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
             </CardContent>
         </Card>
     )

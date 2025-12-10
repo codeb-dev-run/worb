@@ -10,6 +10,8 @@ import { revalidatePath } from 'next/cache'
 import { nanoid } from 'nanoid'
 import { sendProjectInviteEmail } from '@/lib/email'
 import { secureLogger } from '@/lib/security'
+import { getServerSession } from 'next-auth/next'
+import { authOptions } from '@/lib/auth-options'
 
 export async function getProjects(userId: string, workspaceId?: string) {
     try {
@@ -274,6 +276,34 @@ export async function updateProject(projectId: string, data: Partial<Project>) {
 
 export async function deleteProject(projectId: string) {
     try {
+        // 1. 세션 확인
+        const session = await getServerSession(authOptions)
+        if (!session?.user?.id) {
+            return { success: false, error: 'Unauthorized' }
+        }
+
+        // 2. 프로젝트 존재 및 소유자 확인
+        const project = await prisma.project.findUnique({
+            where: { id: projectId },
+            select: { createdBy: true }
+        })
+
+        if (!project) {
+            return { success: false, error: 'Project not found' }
+        }
+
+        // 3. 소유자 권한 확인
+        if (project.createdBy !== session.user.id) {
+            secureLogger.warn('Unauthorized project deletion attempt', {
+                operation: 'project.delete',
+                projectId,
+                attemptedBy: session.user.id,
+                createdBy: project.createdBy
+            })
+            return { success: false, error: 'Permission denied' }
+        }
+
+        // 4. 프로젝트 삭제
         await prisma.project.delete({
             where: { id: projectId }
         })

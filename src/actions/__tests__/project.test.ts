@@ -43,7 +43,18 @@ jest.mock('nanoid', () => ({
   nanoid: jest.fn(() => 'mock-id-123')
 }))
 
+// Mock next-auth
+const mockGetServerSession = jest.fn()
+jest.mock('next-auth/next', () => ({
+  getServerSession: () => mockGetServerSession()
+}))
+
+jest.mock('@/lib/auth-options', () => ({
+  authOptions: {}
+}))
+
 import { prisma } from '@/lib/prisma'
+import { secureLogger } from '@/lib/security'
 
 describe('Project Server Actions', () => {
   const mockUserId = 'user-123'
@@ -181,8 +192,18 @@ describe('Project Server Actions', () => {
   })
 
   describe('deleteProject', () => {
-    it('should delete a project', async () => {
+    it('should delete a project when user is owner', async () => {
       const { deleteProject } = await import('../project')
+
+      // Mock authenticated session as project owner
+      mockGetServerSession.mockResolvedValue({
+        user: { id: mockUserId }
+      })
+
+      // Mock project lookup - user is owner
+      ;(prisma.project.findUnique as jest.Mock).mockResolvedValue({
+        createdBy: mockUserId
+      })
       ;(prisma.project.delete as jest.Mock).mockResolvedValue(mockProject)
 
       const result = await deleteProject('project-1')
@@ -193,8 +214,76 @@ describe('Project Server Actions', () => {
       })
     })
 
+    it('should return unauthorized when no session', async () => {
+      const { deleteProject } = await import('../project')
+
+      // Mock no session
+      mockGetServerSession.mockResolvedValue(null)
+
+      const result = await deleteProject('project-1')
+
+      expect(result.success).toBe(false)
+      expect(result.error).toBe('Unauthorized')
+      expect(prisma.project.delete).not.toHaveBeenCalled()
+    })
+
+    it('should return not found when project does not exist', async () => {
+      const { deleteProject } = await import('../project')
+
+      // Mock authenticated session
+      mockGetServerSession.mockResolvedValue({
+        user: { id: mockUserId }
+      })
+
+      // Mock project not found
+      ;(prisma.project.findUnique as jest.Mock).mockResolvedValue(null)
+
+      const result = await deleteProject('non-existent')
+
+      expect(result.success).toBe(false)
+      expect(result.error).toBe('Project not found')
+      expect(prisma.project.delete).not.toHaveBeenCalled()
+    })
+
+    it('should return permission denied when user is not owner', async () => {
+      const { deleteProject } = await import('../project')
+
+      // Mock authenticated session
+      mockGetServerSession.mockResolvedValue({
+        user: { id: mockUserId }
+      })
+
+      // Mock project with different owner
+      ;(prisma.project.findUnique as jest.Mock).mockResolvedValue({
+        createdBy: 'different-user-id'
+      })
+
+      const result = await deleteProject('project-1')
+
+      expect(result.success).toBe(false)
+      expect(result.error).toBe('Permission denied')
+      expect(prisma.project.delete).not.toHaveBeenCalled()
+      expect(secureLogger.warn).toHaveBeenCalledWith(
+        'Unauthorized project deletion attempt',
+        expect.objectContaining({
+          projectId: 'project-1',
+          attemptedBy: mockUserId,
+          createdBy: 'different-user-id'
+        })
+      )
+    })
+
     it('should handle deletion errors', async () => {
       const { deleteProject } = await import('../project')
+
+      // Mock authenticated session as owner
+      mockGetServerSession.mockResolvedValue({
+        user: { id: mockUserId }
+      })
+
+      ;(prisma.project.findUnique as jest.Mock).mockResolvedValue({
+        createdBy: mockUserId
+      })
       ;(prisma.project.delete as jest.Mock).mockRejectedValue(new Error('Delete failed'))
 
       const result = await deleteProject('project-1')
