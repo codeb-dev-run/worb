@@ -2,9 +2,10 @@
 
 const isDev = process.env.NODE_ENV === 'development'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '@/lib/auth-context'
 import { useWorkspace } from '@/lib/workspace-context'
+import { useSearchParams, useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import {
     Dialog,
@@ -76,6 +77,8 @@ interface Comment {
 export default function BoardPage() {
     const { userProfile } = useAuth()
     const { currentWorkspace } = useWorkspace()
+    const searchParams = useSearchParams()
+    const router = useRouter()
     const [posts, setPosts] = useState<BoardPost[]>([])
     const [loading, setLoading] = useState(true)
     const [viewMode, setViewMode] = useState<ViewMode>('list')
@@ -100,11 +103,38 @@ export default function BoardPage() {
     const [deleteCommentDialogOpen, setDeleteCommentDialogOpen] = useState(false)
     const [commentToDelete, setCommentToDelete] = useState<string | null>(null)
 
+    // URL에서 postId 쿼리 파라미터를 읽어 게시글 상세 보기로 이동
+    const loadPostById = useCallback(async (postId: string) => {
+        try {
+            const response = await fetch(`/api/board/${postId}`)
+            if (!response.ok) {
+                toast.error('게시글을 찾을 수 없습니다')
+                router.replace('/groupware/board')
+                return
+            }
+            const data = await response.json()
+            setSelectedPost(data)
+            setViewMode('view')
+        } catch (error) {
+            if (isDev) console.error('Failed to load post:', error)
+            toast.error('게시글을 불러오는데 실패했습니다')
+            router.replace('/groupware/board')
+        }
+    }, [router])
+
     useEffect(() => {
         if (currentWorkspace) {
             loadPosts()
         }
     }, [currentWorkspace])
+
+    // URL의 postId 쿼리 파라미터 처리
+    useEffect(() => {
+        const postId = searchParams.get('postId')
+        if (postId && currentWorkspace) {
+            loadPostById(postId)
+        }
+    }, [searchParams, currentWorkspace, loadPostById])
 
     const loadPosts = async () => {
         if (!currentWorkspace) return
@@ -157,6 +187,10 @@ export default function BoardPage() {
         setTitle('')
         setContent('')
         setIsPinned(false)
+        // URL에서 postId 쿼리 파라미터 제거
+        if (searchParams.get('postId')) {
+            router.replace('/groupware/board')
+        }
     }
 
     const handleSubmit = async () => {

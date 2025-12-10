@@ -3,12 +3,18 @@ import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { FileText, ChevronRight, ArrowUpRight } from 'lucide-react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 
 interface BoardWidgetProps {
     boardPosts: any[]
 }
 
 export function BoardWidget({ boardPosts }: BoardWidgetProps) {
+    const router = useRouter()
+
+    const handlePostClick = (postId: string) => {
+        router.push(`/groupware/board?postId=${postId}`)
+    }
     return (
         <Card className="rounded-3xl border-0 shadow-[0_8px_30px_rgb(0,0,0,0.04)] bg-white/70 backdrop-blur-xl border border-white/40">
             <CardHeader className="pb-3 border-b border-slate-100/50">
@@ -29,7 +35,11 @@ export function BoardWidget({ boardPosts }: BoardWidgetProps) {
             <CardContent className="p-0">
                 <div className="divide-y divide-slate-50/50">
                     {boardPosts.map((item) => (
-                        <div key={item.id} className="flex items-center justify-between px-5 py-3 hover:bg-white/60 transition-colors cursor-pointer group">
+                        <div
+                            key={item.id}
+                            onClick={() => handlePostClick(item.id)}
+                            className="flex items-center justify-between px-5 py-3 hover:bg-white/60 transition-colors cursor-pointer group"
+                        >
                             <div className="flex items-center flex-1 min-w-0 gap-3 mr-4">
                                 <span className="text-sm font-medium text-slate-800 group-hover:text-lime-600 transition-colors truncate">
                                     {item.title}
