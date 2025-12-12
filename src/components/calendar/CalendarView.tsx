@@ -117,6 +117,19 @@ export default function CalendarView() {
         location: ''
     })
 
+    // 미팅 수정 모달 상태
+    const [isMeetingEditModalOpen, setIsMeetingEditModalOpen] = useState(false)
+    const [editingMeeting, setEditingMeeting] = useState<{
+        id: string
+        title: string
+        date: string
+        startTime: string
+        endTime: string
+        description: string
+        meetingType: 'online' | 'offline'
+        location: string
+    } | null>(null)
+
     // Calendar Grid Generation
     const getDateRange = () => {
         if (viewMode === 'month') {
@@ -303,10 +316,35 @@ export default function CalendarView() {
         })
     }
 
-    // 일정 수정 모달 열기
+    // 미팅 여부 확인 헬퍼 함수
+    const isMeetingEvent = (event: CalendarEvent) => {
+        return event.description?.includes('[미팅 신청]') || false
+    }
+
+    // 일정 수정 모달 열기 (미팅이면 미팅 수정 모달로)
     const openEditModal = (event: CalendarEvent) => {
-        setEditingEvent(event)
-        setIsEditModalOpen(true)
+        if (isMeetingEvent(event)) {
+            // 미팅 정보 파싱
+            const descLines = event.description?.split('\n') || []
+            const meetingDesc = descLines[0]?.replace('[미팅 신청] ', '') || ''
+            const typeLine = descLines.find(line => line.startsWith('유형:'))
+            const meetingType = typeLine?.includes('온라인') ? 'online' : 'offline'
+
+            setEditingMeeting({
+                id: event.id,
+                title: event.title.replace('📅 ', ''),
+                date: format(new Date(event.startDate), 'yyyy-MM-dd'),
+                startTime: format(new Date(event.startDate), 'HH:mm'),
+                endTime: format(new Date(event.endDate), 'HH:mm'),
+                description: meetingDesc,
+                meetingType: meetingType as 'online' | 'offline',
+                location: event.location || ''
+            })
+            setIsMeetingEditModalOpen(true)
+        } else {
+            setEditingEvent(event)
+            setIsEditModalOpen(true)
+        }
     }
 
     // 일정 수정 핸들러
@@ -366,6 +404,59 @@ export default function CalendarView() {
         } catch (error) {
       if (isDev) console.error('Error deleting event:', error)
             toast.error('일정 삭제 실패')
+        }
+    }
+
+    // 미팅 수정 핸들러
+    const handleUpdateMeeting = async () => {
+        if (!editingMeeting) return
+
+        try {
+            const startDateTime = new Date(`${editingMeeting.date}T${editingMeeting.startTime}`)
+            const endDateTime = new Date(`${editingMeeting.date}T${editingMeeting.endTime}`)
+
+            const result = await updateCalendarEvent(editingMeeting.id, {
+                title: `📅 ${editingMeeting.title}`,
+                description: `[미팅 신청] ${editingMeeting.description}\n\n유형: ${editingMeeting.meetingType === 'online' ? '온라인' : '오프라인'}`,
+                startDate: startDateTime,
+                endDate: endDateTime,
+                location: editingMeeting.meetingType === 'online' ? '온라인 미팅' : editingMeeting.location,
+            })
+
+            if (result.success) {
+                toast.success('미팅이 수정되었습니다.')
+                setIsMeetingEditModalOpen(false)
+                setEditingMeeting(null)
+                loadData()
+            } else {
+                throw new Error('Update failed')
+            }
+        } catch (error) {
+            if (isDev) console.error('Error updating meeting:', error)
+            toast.error('미팅 수정 실패')
+        }
+    }
+
+    // 미팅 삭제 핸들러
+    const handleDeleteMeeting = async () => {
+        if (!editingMeeting) return
+
+        if (!confirm('정말 이 미팅을 삭제하시겠습니까?')) return
+
+        try {
+            const result = await deleteCalendarEvent(editingMeeting.id)
+
+            if (result.success) {
+                toast.success('미팅이 삭제되었습니다.')
+                setIsMeetingEditModalOpen(false)
+                setEditingMeeting(null)
+                loadData()
+            } else {
+                throw new Error('Delete failed')
+            }
+        } catch (error) {
+            if (isDev) console.error('Error deleting meeting:', error)
+            toast.error('미팅 삭제 실패')
         }
     }
 
@@ -520,7 +611,7 @@ export default function CalendarView() {
                                 return (
                                     <div
                                         key={day.toISOString()}
-                                        className={`min-h-[100px] p-2 border-b border-r border-white/30 relative cursor-pointer transition-all duration-200 hover:bg-lime-50/50 ${
+                                        className={`h-[120px] p-2 border-b border-r border-white/30 relative cursor-pointer transition-all duration-200 hover:bg-lime-50/50 overflow-hidden ${
                                             !isSameMonth(day, currentDate) ? 'bg-slate-50/50 text-slate-400' : 'bg-transparent'
                                         } ${isSelected ? 'ring-2 ring-lime-400 ring-inset bg-lime-50/70' : ''}`}
                                         onClick={() => {
@@ -537,11 +628,11 @@ export default function CalendarView() {
                                         </span>
 
                                         {/* Events */}
-                                        <div className="mt-1 space-y-1">
-                                            {dayEvents.slice(0, 3).map(event => (
+                                        <div className="mt-1 space-y-1 overflow-hidden">
+                                            {dayEvents.slice(0, 2).map(event => (
                                                 <div
                                                     key={event.id}
-                                                    className="text-xs px-2 py-1 rounded-lg truncate cursor-pointer hover:shadow-md transition-all duration-200 text-white font-medium"
+                                                    className="text-xs px-2 py-0.5 rounded-lg truncate cursor-pointer hover:shadow-md transition-all duration-200 text-white font-medium"
                                                     style={{ backgroundColor: event.color }}
                                                     onClick={(e) => {
                                                         e.stopPropagation()
@@ -552,9 +643,9 @@ export default function CalendarView() {
                                                     {event.title}
                                                 </div>
                                             ))}
-                                            {dayEvents.length > 3 && (
-                                                <div className="text-xs text-slate-500 px-2">
-                                                    +{dayEvents.length - 3}개 더보기
+                                            {dayEvents.length > 2 && (
+                                                <div className="text-xs text-slate-500 px-2 font-medium">
+                                                    +{dayEvents.length - 2}개 더보기
                                                 </div>
                                             )}
                                         </div>
@@ -1205,6 +1296,129 @@ export default function CalendarView() {
                         <div className="flex gap-2">
                             <Button variant="ghost" onClick={() => { setIsEditModalOpen(false); setEditingEvent(null) }} className="rounded-xl">취소</Button>
                             <Button variant="limePrimary" onClick={handleUpdateEvent} className="rounded-xl">저장</Button>
+                        </div>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Meeting Edit Modal */}
+            <Dialog open={isMeetingEditModalOpen} onOpenChange={setIsMeetingEditModalOpen}>
+                <DialogContent className="max-w-lg max-h-[90vh] bg-white/95 backdrop-blur-2xl border-white/40 rounded-3xl flex flex-col">
+                    <DialogHeader className="shrink-0">
+                        <DialogTitle className="text-xl font-bold text-slate-900 flex items-center gap-2">
+                            <Video className="w-5 h-5 text-violet-500" />
+                            미팅 수정
+                        </DialogTitle>
+                    </DialogHeader>
+                    {editingMeeting && (
+                        <div className="space-y-4 py-4 overflow-y-auto flex-1">
+                            <div className="space-y-2">
+                                <Label className="text-xs font-bold text-slate-400 uppercase tracking-wider">미팅 제목</Label>
+                                <Input
+                                    value={editingMeeting.title}
+                                    onChange={(e) => setEditingMeeting({ ...editingMeeting, title: e.target.value })}
+                                    placeholder="미팅 제목을 입력하세요"
+                                    className="rounded-xl h-11"
+                                />
+                            </div>
+
+                            {/* Meeting Type */}
+                            <div className="space-y-2">
+                                <Label className="text-xs font-bold text-slate-400 uppercase tracking-wider">미팅 유형</Label>
+                                <div className="flex gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => setEditingMeeting({ ...editingMeeting, meetingType: 'online' })}
+                                        className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border transition-all ${
+                                            editingMeeting.meetingType === 'online'
+                                                ? 'border-violet-400 bg-violet-50 text-violet-700'
+                                                : 'border-slate-200 text-slate-600 hover:border-violet-300'
+                                        }`}
+                                    >
+                                        <Video className="w-4 h-4" />
+                                        온라인
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setEditingMeeting({ ...editingMeeting, meetingType: 'offline' })}
+                                        className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border transition-all ${
+                                            editingMeeting.meetingType === 'offline'
+                                                ? 'border-violet-400 bg-violet-50 text-violet-700'
+                                                : 'border-slate-200 text-slate-600 hover:border-violet-300'
+                                        }`}
+                                    >
+                                        <MapPin className="w-4 h-4" />
+                                        오프라인
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* Location (Offline only) */}
+                            {editingMeeting.meetingType === 'offline' && (
+                                <div className="space-y-2">
+                                    <Label className="text-xs font-bold text-slate-400 uppercase tracking-wider">장소</Label>
+                                    <div className="relative">
+                                        <MapPin className="absolute left-3 top-3.5 h-4 w-4 text-slate-400" />
+                                        <Input
+                                            className="pl-9 rounded-xl h-11"
+                                            value={editingMeeting.location}
+                                            onChange={(e) => setEditingMeeting({ ...editingMeeting, location: e.target.value })}
+                                            placeholder="미팅 장소"
+                                        />
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Date/Time */}
+                            <div className="space-y-2">
+                                <Label className="text-xs font-bold text-slate-400 uppercase tracking-wider">날짜 및 시간</Label>
+                                <div className="flex gap-2 items-center">
+                                    <Input
+                                        type="date"
+                                        value={editingMeeting.date}
+                                        onChange={(e) => setEditingMeeting({ ...editingMeeting, date: e.target.value })}
+                                        className="rounded-xl h-11 flex-1 min-w-0"
+                                    />
+                                    <Input
+                                        type="time"
+                                        value={editingMeeting.startTime}
+                                        onChange={(e) => setEditingMeeting({ ...editingMeeting, startTime: e.target.value })}
+                                        className="rounded-xl h-11 w-[120px] shrink-0"
+                                    />
+                                    <span className="text-slate-400 shrink-0">~</span>
+                                    <Input
+                                        type="time"
+                                        value={editingMeeting.endTime}
+                                        onChange={(e) => setEditingMeeting({ ...editingMeeting, endTime: e.target.value })}
+                                        className="rounded-xl h-11 w-[120px] shrink-0"
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Description */}
+                            <div className="space-y-2">
+                                <Label className="text-xs font-bold text-slate-400 uppercase tracking-wider">설명</Label>
+                                <textarea
+                                    value={editingMeeting.description}
+                                    onChange={(e) => setEditingMeeting({ ...editingMeeting, description: e.target.value })}
+                                    placeholder="미팅 목적이나 안건을 입력하세요..."
+                                    className="w-full h-24 px-3 py-2 rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-violet-400 resize-none"
+                                />
+                            </div>
+                        </div>
+                    )}
+                    <DialogFooter className="flex justify-between shrink-0">
+                        <Button
+                            variant="ghost"
+                            onClick={handleDeleteMeeting}
+                            className="rounded-xl text-red-600 hover:text-red-700 hover:bg-red-50"
+                        >
+                            <Trash2 className="w-4 h-4 mr-2" />
+                            삭제
+                        </Button>
+                        <div className="flex gap-2">
+                            <Button variant="ghost" onClick={() => { setIsMeetingEditModalOpen(false); setEditingMeeting(null) }} className="rounded-xl">취소</Button>
+                            <Button onClick={handleUpdateMeeting} className="rounded-xl bg-violet-500 hover:bg-violet-600 text-white">저장</Button>
                         </div>
                     </DialogFooter>
                 </DialogContent>
