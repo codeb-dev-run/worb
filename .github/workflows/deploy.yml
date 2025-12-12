@@ -182,7 +182,12 @@ jobs:
       - name: Build image with Podman
         run: |
           echo "Building image for ${{ steps.env.outputs.environment }}..."
+
+          # Set cgroup manager to cgroupfs for rootless podman in CI
+          export PODMAN_CGROUP_MANAGER=cgroupfs
+
           podman build \
+            --cgroup-manager=cgroupfs \
             --build-arg BUILDTIME=$(date -Iseconds) \
             --build-arg VERSION=${{ github.sha }} \
             --build-arg REVISION=${{ github.sha }} \
