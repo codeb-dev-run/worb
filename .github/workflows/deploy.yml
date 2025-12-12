@@ -173,9 +173,9 @@ jobs:
       - name: Ensure network exists
         run: |
           NETWORK_NAME="workb-network"
-          if ! podman network exists ${NETWORK_NAME} 2>/dev/null; then
+          if ! sudo podman network exists ${NETWORK_NAME} 2>/dev/null; then
             echo "Creating network ${NETWORK_NAME}..."
-            podman network create ${NETWORK_NAME} || true
+            sudo podman network create ${NETWORK_NAME} || true
           fi
           echo "Network ${NETWORK_NAME} is ready"
 
@@ -183,11 +183,8 @@ jobs:
         run: |
           echo "Building image for ${{ steps.env.outputs.environment }}..."
 
-          # Set cgroup manager to cgroupfs for rootless podman in CI
-          export PODMAN_CGROUP_MANAGER=cgroupfs
-
-          podman build \
-            --cgroup-manager=cgroupfs \
+          # Build with sudo to ensure image is in root's storage (same as systemd service)
+          sudo podman build \
             --build-arg BUILDTIME=$(date -Iseconds) \
             --build-arg VERSION=${{ github.sha }} \
             --build-arg REVISION=${{ github.sha }} \
@@ -196,7 +193,7 @@ jobs:
             -t localhost/${{ env.APP_NAME }}:${{ github.sha }} \
             .
           echo "Build complete!"
-          podman images | grep ${{ env.APP_NAME }}
+          sudo podman images | grep ${{ env.APP_NAME }}
 
       - name: Create Quadlet configuration
         run: |
@@ -245,24 +242,44 @@ jobs:
           echo "Quadlet config created:"
           sudo cat /etc/containers/systemd/${CONTAINER_NAME}.container
 
-      - name: Verify env file exists
+      - name: Verify and sync env file
         run: |
           CONTAINER_NAME="${{ steps.vars.outputs.container_name }}"
-          ENV_FILE="/etc/containers/systemd/${CONTAINER_NAME}.env"
+          ENV="${{ steps.env.outputs.environment }}"
+          TARGET_ENV_FILE="/etc/containers/systemd/${CONTAINER_NAME}.env"
 
-          if [ ! -f "$ENV_FILE" ]; then
-            echo "Warning: Env file not found: $ENV_FILE"
-            echo "Creating minimal env file..."
-            printf '%s\n' \
-              "# WorkB CMS Environment" \
-              "NODE_ENV=production" \
-              "PORT=3000" \
-              | sudo tee "$ENV_FILE" > /dev/null
-            echo "Please update $ENV_FILE with proper values!"
+          # Source env file location (manually managed)
+          if [ "$ENV" = "production" ]; then
+            SOURCE_ENV_FILE="/home/linuxuser/workb-cms-production.env"
           else
-            echo "Env file exists: $ENV_FILE"
+            SOURCE_ENV_FILE="/home/linuxuser/workb-cms-staging.env"
+          fi
+
+          # Check if source env file exists and copy to target location
+          if [ -f "$SOURCE_ENV_FILE" ]; then
+            echo "Found source env file: $SOURCE_ENV_FILE"
+            sudo cp "$SOURCE_ENV_FILE" "$TARGET_ENV_FILE"
+            sudo chmod 600 "$TARGET_ENV_FILE"
+            echo "Env file synced to: $TARGET_ENV_FILE"
             echo "Env file contents (sensitive values hidden):"
-            sudo grep -v -E "(PASSWORD|SECRET|KEY|TOKEN)" "$ENV_FILE" || true
+            sudo grep -v -E "(PASSWORD|SECRET|KEY|TOKEN)" "$TARGET_ENV_FILE" || true
+          elif [ -f "$TARGET_ENV_FILE" ]; then
+            echo "Using existing env file: $TARGET_ENV_FILE"
+            # Validate that required variables exist
+            if ! sudo grep -q "NEXTAUTH_SECRET" "$TARGET_ENV_FILE" 2>/dev/null; then
+              echo "ERROR: NEXTAUTH_SECRET not found in env file!"
+              echo "Please ensure $SOURCE_ENV_FILE exists with all required variables."
+              exit 1
+            fi
+          else
+            echo "ERROR: No env file found!"
+            echo "Please create $SOURCE_ENV_FILE with the following variables:"
+            echo "  - DATABASE_URL"
+            echo "  - NEXTAUTH_SECRET"
+            echo "  - NEXTAUTH_URL"
+            echo "  - GOOGLE_CLIENT_ID"
+            echo "  - GOOGLE_CLIENT_SECRET"
+            exit 1
           fi
 
       - name: Stop existing container
