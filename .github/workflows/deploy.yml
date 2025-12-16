@@ -20,22 +20,39 @@ on:
         required: false
         default: false
         type: boolean
+      skip_lint:
+        description: 'Skip lint checks'
+        required: false
+        default: false
+        type: boolean
+      force_deploy:
+        description: 'Force deployment (skip cache)'
+        required: false
+        default: false
+        type: boolean
 
 env:
   APP_NAME: workb-cms
   NODE_VERSION: '20'
   PRODUCTION_URL: https://workb.net
   STAGING_URL: https://workb-staging.codeb.dev
+  # 이미지 보관 개수
+  MAX_IMAGE_RETENTION: 5
 
 concurrency:
   group: deploy-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
+  # ============================================================================
+  # Stage 1: 코드 품질 검사 (병렬 실행)
+  # ============================================================================
   lint:
-    name: Lint & Type Check
+    name: ESLint
     runs-on: self-hosted
-    if: github.event_name == 'pull_request' || github.event_name == 'push'
+    if: |
+      (github.event_name == 'pull_request' || github.event_name == 'push') &&
+      github.event.inputs.skip_lint != 'true'
 
     steps:
       - name: Checkout code
@@ -46,7 +63,7 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
 
-      - name: Cache node_modules
+      - name: Cache dependencies
         uses: actions/cache@v4
         id: cache-deps
         with:
@@ -67,14 +84,54 @@ jobs:
       - name: Run ESLint
         run: npm run lint
 
+  type-check:
+    name: TypeScript Check
+    runs-on: self-hosted
+    if: |
+      (github.event_name == 'pull_request' || github.event_name == 'push') &&
+      github.event.inputs.skip_lint != 'true'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Cache dependencies
+        uses: actions/cache@v4
+        id: cache-deps
+        with:
+          path: |
+            node_modules
+            ~/.npm
+          key: deps-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            deps-${{ runner.os }}-
+
+      - name: Install dependencies
+        if: steps.cache-deps.outputs.cache-hit != 'true'
+        run: npm ci
+
+      - name: Generate Prisma Client
+        run: npx prisma generate
+
       - name: Run Type Check
         run: npm run type-check
 
+  # ============================================================================
+  # Stage 2: 테스트
+  # ============================================================================
   test:
     name: Run Tests
     runs-on: self-hosted
-    needs: lint
+    needs: [lint, type-check]
     if: |
+      always() &&
+      (needs.lint.result == 'success' || needs.lint.result == 'skipped') &&
+      (needs.type-check.result == 'success' || needs.type-check.result == 'skipped') &&
       (github.event_name == 'pull_request' || github.event_name == 'push') &&
       github.event.inputs.skip_tests != 'true'
 
@@ -87,7 +144,7 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
 
-      - name: Cache node_modules
+      - name: Cache dependencies
         uses: actions/cache@v4
         id: cache-deps
         with:
@@ -118,13 +175,17 @@ jobs:
           path: coverage/
           retention-days: 7
 
+  # ============================================================================
+  # Stage 3: 빌드 및 배포
+  # ============================================================================
   build-deploy:
     name: Build & Deploy
     runs-on: self-hosted
-    needs: [lint, test]
+    needs: [lint, type-check, test]
     if: |
       always() &&
       (needs.lint.result == 'success' || needs.lint.result == 'skipped') &&
+      (needs.type-check.result == 'success' || needs.type-check.result == 'skipped') &&
       (needs.test.result == 'success' || needs.test.result == 'skipped') &&
       (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
       (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
@@ -134,6 +195,8 @@ jobs:
       container_name: ${{ steps.vars.outputs.container_name }}
       port: ${{ steps.vars.outputs.port }}
       url: ${{ steps.vars.outputs.url }}
+      image_tag: ${{ steps.vars.outputs.image_tag }}
+      previous_image: ${{ steps.backup.outputs.previous_image }}
 
     steps:
       - name: Checkout code
@@ -170,12 +233,31 @@ jobs:
             echo "cpus=1" >> $GITHUB_OUTPUT
           fi
 
+      - name: Backup current image for rollback
+        id: backup
+        run: |
+          CONTAINER_NAME="${{ steps.vars.outputs.container_name }}"
+          IMAGE_TAG="${{ steps.vars.outputs.image_tag }}"
+          BACKUP_TAG="${IMAGE_TAG}-backup-$(date +%Y%m%d%H%M%S)"
+
+          # 현재 실행 중인 이미지 ID 저장
+          CURRENT_IMAGE=$(sudo podman inspect ${CONTAINER_NAME} --format '{{.Image}}' 2>/dev/null || echo "")
+
+          if [ -n "$CURRENT_IMAGE" ]; then
+            echo "Backing up current image: $CURRENT_IMAGE"
+            sudo podman tag localhost/${{ env.APP_NAME }}:${IMAGE_TAG} localhost/${{ env.APP_NAME }}:${BACKUP_TAG} 2>/dev/null || true
+            echo "previous_image=${BACKUP_TAG}" >> $GITHUB_OUTPUT
+          else
+            echo "No previous image to backup"
+            echo "previous_image=" >> $GITHUB_OUTPUT
+          fi
+
       - name: Ensure network exists
         run: |
           NETWORK_NAME="workb-network"
           if ! sudo podman network exists ${NETWORK_NAME} 2>/dev/null; then
             echo "Creating network ${NETWORK_NAME}..."
-            sudo podman network create ${NETWORK_NAME} || true
+            sudo podman network create ${NETWORK_NAME} --subnet 10.89.1.0/24 || true
           fi
           echo "Network ${NETWORK_NAME} is ready"
 
@@ -183,15 +265,23 @@ jobs:
         run: |
           echo "Building image for ${{ steps.env.outputs.environment }}..."
 
-          # Build with sudo to ensure image is in root's storage (same as systemd service)
+          BUILD_ARGS="--build-arg BUILDTIME=$(date -Iseconds)"
+          BUILD_ARGS="$BUILD_ARGS --build-arg VERSION=${{ github.sha }}"
+          BUILD_ARGS="$BUILD_ARGS --build-arg REVISION=${{ github.sha }}"
+
+          # 캐시 사용 여부
+          if [ "${{ github.event.inputs.force_deploy }}" = "true" ]; then
+            BUILD_ARGS="$BUILD_ARGS --no-cache"
+          else
+            BUILD_ARGS="$BUILD_ARGS --layers"
+          fi
+
           sudo podman build \
-            --build-arg BUILDTIME=$(date -Iseconds) \
-            --build-arg VERSION=${{ github.sha }} \
-            --build-arg REVISION=${{ github.sha }} \
-            --layers \
+            $BUILD_ARGS \
             -t localhost/${{ env.APP_NAME }}:${{ steps.vars.outputs.image_tag }} \
             -t localhost/${{ env.APP_NAME }}:${{ github.sha }} \
             .
+
           echo "Build complete!"
           sudo podman images | grep ${{ env.APP_NAME }}
 
@@ -207,12 +297,14 @@ jobs:
 
           sudo mkdir -p /etc/containers/systemd
 
-          # Create Quadlet file using printf to avoid heredoc issues
+          # Create Quadlet file
           printf '%s\n' \
             "[Unit]" \
             "Description=WorkB CMS Container (${ENV})" \
             "After=network-online.target" \
             "Wants=network-online.target" \
+            "After=workb-cms-postgres.service" \
+            "After=workb-cms-redis.service" \
             "" \
             "[Container]" \
             "ContainerName=${CONTAINER_NAME}" \
@@ -223,17 +315,25 @@ jobs:
             "Environment=PORT=3000" \
             "Environment=HOSTNAME=0.0.0.0" \
             "EnvironmentFile=/etc/containers/systemd/${CONTAINER_NAME}.env" \
+            "AddHost=workb-cms-postgres:10.89.1.10" \
+            "AddHost=workb-cms-redis:10.89.1.11" \
             "HealthCmd=curl -sf http://localhost:3000/api/health || exit 1" \
             "HealthInterval=30s" \
             "HealthTimeout=10s" \
             "HealthRetries=3" \
             "HealthStartPeriod=60s" \
             "PodmanArgs=--memory=${MEMORY} --cpus=${CPUS}" \
+            "Label=app=${APP_NAME}" \
+            "Label=environment=${ENV}" \
+            "Label=version=${{ github.sha }}" \
+            "LogDriver=journald" \
+            "NoNewPrivileges=true" \
             "" \
             "[Service]" \
             "Restart=always" \
             "RestartSec=10" \
             "TimeoutStartSec=300" \
+            "TimeoutStopSec=30" \
             "" \
             "[Install]" \
             "WantedBy=multi-user.target default.target" \
@@ -248,14 +348,14 @@ jobs:
           ENV="${{ steps.env.outputs.environment }}"
           TARGET_ENV_FILE="/etc/containers/systemd/${CONTAINER_NAME}.env"
 
-          # Source env file location (manually managed)
+          # Source env file location
           if [ "$ENV" = "production" ]; then
             SOURCE_ENV_FILE="/home/linuxuser/workb-cms-production.env"
           else
             SOURCE_ENV_FILE="/home/linuxuser/workb-cms-staging.env"
           fi
 
-          # Check if source env file exists and copy to target location
+          # Check and copy env file
           if [ -f "$SOURCE_ENV_FILE" ]; then
             echo "Found source env file: $SOURCE_ENV_FILE"
             sudo cp "$SOURCE_ENV_FILE" "$TARGET_ENV_FILE"
@@ -265,20 +365,13 @@ jobs:
             sudo grep -v -E "(PASSWORD|SECRET|KEY|TOKEN)" "$TARGET_ENV_FILE" || true
           elif [ -f "$TARGET_ENV_FILE" ]; then
             echo "Using existing env file: $TARGET_ENV_FILE"
-            # Validate that required variables exist
             if ! sudo grep -q "NEXTAUTH_SECRET" "$TARGET_ENV_FILE" 2>/dev/null; then
               echo "ERROR: NEXTAUTH_SECRET not found in env file!"
-              echo "Please ensure $SOURCE_ENV_FILE exists with all required variables."
               exit 1
             fi
           else
             echo "ERROR: No env file found!"
-            echo "Please create $SOURCE_ENV_FILE with the following variables:"
-            echo "  - DATABASE_URL"
-            echo "  - NEXTAUTH_SECRET"
-            echo "  - NEXTAUTH_URL"
-            echo "  - GOOGLE_CLIENT_ID"
-            echo "  - GOOGLE_CLIENT_SECRET"
+            echo "Please create $SOURCE_ENV_FILE with required variables."
             exit 1
           fi
 
@@ -300,9 +393,6 @@ jobs:
 
           sudo systemctl daemon-reload
 
-          echo "Available service files:"
-          sudo ls -la /run/systemd/generator/${CONTAINER_NAME}.service 2>/dev/null || echo "No generated service yet"
-
           if ! sudo systemctl start ${CONTAINER_NAME}.service; then
             echo "Service failed to start!"
             echo ""
@@ -311,15 +401,6 @@ jobs:
             echo ""
             echo "=== journalctl logs ==="
             sudo journalctl -xeu ${CONTAINER_NAME}.service --no-pager -n 100 || true
-            echo ""
-            echo "=== Quadlet file ==="
-            sudo cat /etc/containers/systemd/${CONTAINER_NAME}.container || true
-            echo ""
-            echo "=== Env file (sanitized) ==="
-            sudo grep -v -E "(PASSWORD|SECRET|KEY|TOKEN)" /etc/containers/systemd/${CONTAINER_NAME}.env 2>/dev/null || echo "No env file"
-            echo ""
-            echo "=== Podman images ==="
-            sudo podman images | grep ${{ env.APP_NAME }} || true
             exit 1
           fi
 
@@ -327,10 +408,11 @@ jobs:
           sleep 15
 
       - name: Verify deployment
+        id: verify
         run: |
           CONTAINER_NAME="${{ steps.vars.outputs.container_name }}"
           PORT="${{ steps.vars.outputs.port }}"
-          MAX_RETRIES=10
+          MAX_RETRIES=15
           RETRY_COUNT=0
 
           echo "Container status:"
@@ -338,17 +420,13 @@ jobs:
 
           if ! sudo podman ps --format "{{.Names}}" | grep -q "^${CONTAINER_NAME}$"; then
             echo "Container is not running!"
-            echo ""
             echo "=== Container logs ==="
             sudo podman logs ${CONTAINER_NAME} 2>&1 | tail -100 || true
-            echo ""
-            echo "=== Podman inspect ==="
-            sudo podman inspect ${CONTAINER_NAME} 2>&1 | tail -50 || true
+            echo "deploy_success=false" >> $GITHUB_OUTPUT
             exit 1
           fi
 
           echo "Container ${CONTAINER_NAME} is running!"
-          echo ""
           echo "Waiting for health check..."
 
           while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
@@ -356,6 +434,7 @@ jobs:
             response=$(curl -sf -o /dev/null -w "%{http_code}" http://localhost:${PORT}/api/health 2>/dev/null || echo "000")
             if [ "$response" = "200" ]; then
               echo "Health check passed! (attempt $((RETRY_COUNT + 1)))"
+              echo "deploy_success=true" >> $GITHUB_OUTPUT
               break
             fi
             RETRY_COUNT=$((RETRY_COUNT + 1))
@@ -364,10 +443,8 @@ jobs:
 
           if [ "$response" != "200" ]; then
             echo "Health check failed after $MAX_RETRIES attempts"
-            echo "Last response: $response"
-            echo ""
-            echo "=== Container logs ==="
-            sudo podman logs ${CONTAINER_NAME} 2>&1 | tail -100
+            echo "deploy_success=false" >> $GITHUB_OUTPUT
+            exit 1
           fi
 
       - name: Enable service on boot
@@ -386,7 +463,7 @@ jobs:
 
           echo ""
           echo "=========================================="
-          echo "Deployment Summary"
+          echo "📦 Deployment Summary"
           echo "=========================================="
           echo "Environment: ${ENV}"
           echo "Container: ${CONTAINER_NAME}"
@@ -395,7 +472,7 @@ jobs:
           echo "Commit: ${{ github.sha }}"
           echo "Branch: ${{ github.ref_name }}"
           echo ""
-          echo "URL: ${URL}"
+          echo "🌐 URL: ${URL}"
           echo ""
           echo "=== Service Status ==="
           sudo systemctl is-active ${CONTAINER_NAME}.service || true
@@ -407,28 +484,74 @@ jobs:
         if: success()
         run: |
           echo "Cleaning up old images..."
+          # 최신 N개 제외하고 삭제
           sudo podman images localhost/${{ env.APP_NAME }} --format "{{.ID}} {{.CreatedAt}}" | \
-            sort -k2 -r | tail -n +6 | awk '{print $1}' | \
+            sort -k2 -r | tail -n +${{ env.MAX_IMAGE_RETENTION }} | awk '{print $1}' | \
             xargs -r sudo podman rmi 2>/dev/null || true
           sudo podman image prune -f 2>/dev/null || true
           echo "Cleanup complete!"
 
+  # ============================================================================
+  # Stage 4: 롤백 (배포 실패 시)
+  # ============================================================================
+  rollback:
+    name: Rollback on Failure
+    runs-on: self-hosted
+    needs: build-deploy
+    if: failure() && needs.build-deploy.outputs.previous_image != ''
+
+    steps:
+      - name: Rollback to previous version
+        run: |
+          CONTAINER_NAME="${{ needs.build-deploy.outputs.container_name }}"
+          PREVIOUS_IMAGE="${{ needs.build-deploy.outputs.previous_image }}"
+          IMAGE_TAG="${{ needs.build-deploy.outputs.image_tag }}"
+
+          echo "⚠️ Rolling back to previous version: $PREVIOUS_IMAGE"
+
+          # 이전 이미지로 태그 복원
+          sudo podman tag localhost/${{ env.APP_NAME }}:${PREVIOUS_IMAGE} localhost/${{ env.APP_NAME }}:${IMAGE_TAG}
+
+          # 서비스 재시작
+          sudo systemctl restart ${CONTAINER_NAME}.service
+
+          sleep 10
+
+          # 확인
+          if sudo podman ps --format "{{.Names}}" | grep -q "^${CONTAINER_NAME}$"; then
+            echo "✅ Rollback successful!"
+          else
+            echo "❌ Rollback failed!"
+            exit 1
+          fi
+
+  # ============================================================================
+  # Stage 5: 알림
+  # ============================================================================
   notify:
     name: Send Notification
     runs-on: self-hosted
-    needs: build-deploy
+    needs: [build-deploy, rollback]
     if: always() && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
 
     steps:
       - name: Deployment Success Notification
         if: needs.build-deploy.result == 'success'
         run: |
-          echo "Deployment successful!"
+          echo "✅ Deployment successful!"
           echo "Environment: ${{ needs.build-deploy.outputs.environment }}"
           echo "URL: ${{ needs.build-deploy.outputs.url }}"
+          echo "Commit: ${{ github.sha }}"
+
+      - name: Rollback Notification
+        if: needs.rollback.result == 'success'
+        run: |
+          echo "⚠️ Deployment failed and rolled back!"
+          echo "Previous version restored: ${{ needs.build-deploy.outputs.previous_image }}"
+          echo "Check logs at: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
 
       - name: Deployment Failure Notification
-        if: needs.build-deploy.result == 'failure'
+        if: needs.build-deploy.result == 'failure' && needs.rollback.result != 'success'
         run: |
-          echo "Deployment failed!"
+          echo "❌ Deployment failed!"
           echo "Check logs at: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"

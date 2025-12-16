@@ -14,7 +14,7 @@ PublishPort=6380:6379
 # Volume for data persistence
 Volume=workb-cms-redis-data:/data:Z
 
-# Health check (improved)
+# Health check
 HealthCmd=redis-cli ping | grep -q PONG
 HealthInterval=30s
 HealthTimeout=10s
@@ -30,6 +30,12 @@ Exec=redis-server --appendonly yes --maxmemory 384mb --maxmemory-policy allkeys-
 # Network with static IP
 Network=workb-network:ip=10.89.1.11
 
+# Labels for management
+Label=app=workb-cms
+Label=component=cache
+Label=managed-by=quadlet
+Label=io.containers.autoupdate=registry
+
 # Logging
 LogDriver=journald
 
@@ -44,6 +50,9 @@ TimeoutStopSec=30
 
 # Graceful shutdown
 ExecStop=/usr/bin/podman stop -t 30 %n
+
+# Watchdog for cache health
+WatchdogSec=90
 
 [Install]
 WantedBy=multi-user.target default.target

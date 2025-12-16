@@ -22,7 +22,7 @@ Environment=HOSTNAME=0.0.0.0
 # Environment file with secrets
 EnvironmentFile=/etc/containers/systemd/workb-cms.env
 
-# Health check (improved)
+# Health check
 HealthCmd=curl -sf http://localhost:3000/api/health || exit 1
 HealthInterval=30s
 HealthTimeout=10s
@@ -39,12 +39,21 @@ Network=workb-network
 AddHost=workb-cms-postgres:10.89.1.10
 AddHost=workb-cms-redis:10.89.1.11
 
-# Logging
+# Labels for management
+Label=app=workb-cms
+Label=environment=production
+Label=managed-by=quadlet
+Label=io.containers.autoupdate=registry
+
+# Logging with rotation
 LogDriver=journald
 
 # Security
 NoNewPrivileges=true
 ReadOnlyRootfs=false
+
+# Auto-update settings
+AutoUpdate=registry
 
 [Service]
 Restart=always
@@ -54,6 +63,9 @@ TimeoutStopSec=30
 
 # Graceful shutdown
 ExecStop=/usr/bin/podman stop -t 30 %n
+
+# Watchdog for container health
+WatchdogSec=180
 
 [Install]
 WantedBy=multi-user.target default.target
