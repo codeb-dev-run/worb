@@ -252,14 +252,37 @@ jobs:
             echo "previous_image=" >> $GITHUB_OUTPUT
           fi
 
-      - name: Ensure network exists
+      - name: Fix network and dnsmasq issues
         run: |
           NETWORK_NAME="workb-network"
-          if ! sudo podman network exists ${NETWORK_NAME} 2>/dev/null; then
-            echo "Creating network ${NETWORK_NAME}..."
-            sudo podman network create ${NETWORK_NAME} --subnet 10.89.1.0/24 || true
+
+          echo "Killing any stale dnsmasq processes..."
+          sudo pkill -9 dnsmasq 2>/dev/null || true
+          sleep 2
+
+          echo "Cleaning up CNI network files..."
+          sudo rm -rf /var/lib/cni/networks/${NETWORK_NAME} 2>/dev/null || true
+          sudo rm -rf /run/cni/* 2>/dev/null || true
+
+          echo "Checking if network exists..."
+          if sudo podman network exists ${NETWORK_NAME} 2>/dev/null; then
+            echo "Network exists, removing stale containers..."
+            # 해당 네트워크에 연결된 모든 컨테이너 중지 및 삭제
+            for container in $(sudo podman ps -aq --filter network=${NETWORK_NAME} 2>/dev/null); do
+              echo "Stopping container: $container"
+              sudo podman stop -t 5 $container 2>/dev/null || true
+              sudo podman rm -f $container 2>/dev/null || true
+            done
+
+            echo "Recreating network..."
+            sudo podman network rm ${NETWORK_NAME} 2>/dev/null || true
           fi
+
+          echo "Creating fresh network ${NETWORK_NAME}..."
+          sudo podman network create ${NETWORK_NAME} --subnet 10.89.1.0/24 2>/dev/null || true
+
           echo "Network ${NETWORK_NAME} is ready"
+          sudo podman network ls
 
       - name: Build image with Podman
         run: |
@@ -378,11 +401,19 @@ jobs:
       - name: Stop existing container
         run: |
           CONTAINER_NAME="${{ steps.vars.outputs.container_name }}"
-          echo "Stopping existing container..."
+          echo "Stopping existing container and related services..."
+
+          # 메인 앱 컨테이너 중지
           sudo systemctl stop ${CONTAINER_NAME}.service 2>/dev/null || true
           sudo systemctl reset-failed ${CONTAINER_NAME}.service 2>/dev/null || true
           sudo podman stop ${CONTAINER_NAME} 2>/dev/null || true
           sudo podman rm -f ${CONTAINER_NAME} 2>/dev/null || true
+
+          # dnsmasq 프로세스 정리 (네트워크 문제 방지)
+          echo "Cleaning up dnsmasq processes..."
+          sudo pkill -9 dnsmasq 2>/dev/null || true
+          sleep 2
+
           echo "Existing container stopped"
 
       - name: Reload systemd and start service
