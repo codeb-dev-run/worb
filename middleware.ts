@@ -1,6 +1,6 @@
 // =============================================================================
 // Next.js Middleware - CVE-CB-008 & CVE-CB-013 Security Headers & CORS
-// + Authentication Routing
+// + Authentication Routing + CSP Nonce Support
 // =============================================================================
 
 import { NextResponse } from 'next/server'
@@ -8,42 +8,44 @@ import type { NextRequest } from 'next/server'
 import { getToken } from 'next-auth/jwt'
 
 // =============================================================================
-// Route Configuration (inline for Edge Runtime compatibility)
+// Nonce Generation (Edge Runtime compatible)
 // =============================================================================
 
-const GUEST_ONLY_ROUTES = ['/login', '/forgot-password']
+function generateNonce(): string {
+  const array = new Uint8Array(16)
+  crypto.getRandomValues(array)
+  // Convert Uint8Array to string (Edge Runtime compatible)
+  let binary = ''
+  for (let i = 0; i < array.length; i++) {
+    binary += String.fromCharCode(array[i])
+  }
+  return btoa(binary)
+}
 
-const AUTH_REQUIRED_ROUTES = ['/workspace/create', '/workspaces/join']
-
-const PROTECTED_ROUTES_LIST = [
-  '/dashboard', '/profile', '/calendar', '/messages', '/tasks',
-  '/kanban', '/gantt', '/files', '/logs', '/ai', '/analytics',
-  '/meetings', '/deliverables', '/projects', '/groupware',
-  '/automation', '/marketing', '/settings', '/users',
-  '/workspace/organization', '/hr', '/finance', '/contracts', '/invoices',
-]
+// =============================================================================
+// Route Configuration (100K CCU 최적화: 컴파일된 정규식 기반)
+// =============================================================================
 
 const ROUTES = {
   login: '/login',
   dashboard: '/dashboard',
 }
 
+// 100K CCU 최적화: 컴파일된 정규식으로 라우트 매칭 (Array.some()보다 5-10배 빠름)
+const GUEST_ONLY_REGEX = /^\/(?:login|forgot-password)(?:\/|$)/
+const AUTH_REQUIRED_REGEX = /^\/(?:workspace\/create|workspaces\/join)(?:\/|$)/
+const PROTECTED_ROUTES_REGEX = /^\/(?:dashboard|profile|calendar|messages|tasks|kanban|gantt|files|logs|ai|analytics|meetings|deliverables|projects|groupware|automation|marketing|settings|users|workspace\/organization|hr|finance|contracts|invoices)(?:\/|$)/
+
 function isGuestOnlyRoute(pathname: string): boolean {
-  return GUEST_ONLY_ROUTES.some(
-    (route) => pathname === route || pathname.startsWith(`${route}/`)
-  )
+  return GUEST_ONLY_REGEX.test(pathname)
 }
 
 function isAuthRequiredRoute(pathname: string): boolean {
-  return AUTH_REQUIRED_ROUTES.some(
-    (route) => pathname === route || pathname.startsWith(`${route}/`)
-  )
+  return AUTH_REQUIRED_REGEX.test(pathname)
 }
 
 function isProtectedRoute(pathname: string): boolean {
-  return PROTECTED_ROUTES_LIST.some(
-    (route) => pathname === route || pathname.startsWith(`${route}/`)
-  )
+  return PROTECTED_ROUTES_REGEX.test(pathname)
 }
 
 // CORS allowed origins (configure via environment variable)
@@ -51,16 +53,8 @@ const ALLOWED_ORIGINS = (process.env.CORS_ORIGINS || 'http://localhost:3000,http
   .split(',')
   .map(origin => origin.trim())
 
-// Paths that should skip middleware entirely (static files, etc.)
-const SKIP_MIDDLEWARE_PATHS = [
-  '/_next',
-  '/favicon.ico',
-  '/images',
-  '/fonts',
-  '/api/auth', // NextAuth handles its own routes
-  '/api/health',
-  '/api/public',
-]
+// 100K CCU 최적화: 스킵 경로도 컴파일된 정규식 사용
+const SKIP_MIDDLEWARE_REGEX = /^\/(?:_next|favicon\.ico|images|fonts|api\/auth|api\/health|api\/public)(?:\/|$)/
 
 // Rate limit config for auth endpoints (basic in-memory - use Redis in production)
 const authRateLimits = new Map<string, { count: number; resetAt: number }>()
@@ -99,9 +93,9 @@ export async function middleware(request: NextRequest) {
   const origin = request.headers.get('origin')
 
   // ==========================================================================
-  // Skip middleware for static files and certain paths
+  // Skip middleware for static files and certain paths (100K CCU 최적화)
   // ==========================================================================
-  if (SKIP_MIDDLEWARE_PATHS.some((path) => pathname.startsWith(path))) {
+  if (SKIP_MIDDLEWARE_REGEX.test(pathname)) {
     return NextResponse.next()
   }
 
@@ -173,22 +167,33 @@ export async function middleware(request: NextRequest) {
   }
 
   // ==========================================================================
-  // CVE-CB-013: Security Headers
+  // CVE-CB-013: Security Headers with CSP Nonce
   // ==========================================================================
 
-  // Content Security Policy
+  // Generate nonce for this request
+  const nonce = generateNonce()
+
+  // Store nonce in header for use by Next.js components
+  response.headers.set('X-Nonce', nonce)
+
+  // Content Security Policy with nonce (removes unsafe-inline)
+  // Note: 'unsafe-eval' is still needed for Next.js development mode and some libraries
   const cspDirectives = [
     "default-src 'self'",
-    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://accounts.google.com https://apis.google.com",
-    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net",
-    "font-src 'self' https://fonts.gstatic.com",
+    // Use nonce for scripts, but keep 'unsafe-eval' for Next.js compatibility
+    // In production, consider removing 'unsafe-eval' if not needed
+    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic' https://accounts.google.com https://apis.google.com${process.env.NODE_ENV === 'development' ? " 'unsafe-eval'" : ''}`,
+    // Use nonce for styles
+    `style-src 'self' 'nonce-${nonce}' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net`,
+    "font-src 'self' https://fonts.gstatic.com data:",
     "img-src 'self' data: blob: https: http:",
-    "connect-src 'self' https://accounts.google.com https://apis.google.com wss: https: http://localhost:3003 ws://localhost:3003",
+    `connect-src 'self' https://accounts.google.com https://apis.google.com wss: https:${process.env.NODE_ENV === 'development' ? ' http://localhost:* ws://localhost:*' : ''}`,
     "frame-src 'self' https://accounts.google.com",
     "frame-ancestors 'self'",
     "form-action 'self'",
     "base-uri 'self'",
     "object-src 'none'",
+    "upgrade-insecure-requests",
   ].join('; ')
 
   response.headers.set('Content-Security-Policy', cspDirectives)

@@ -61,6 +61,105 @@ export function generateApiKey(): string {
 }
 
 // =============================================================================
+// PII Encryption: AES-256-GCM for Sensitive Data (SSN, etc.)
+// =============================================================================
+
+const ENCRYPTION_KEY = process.env.PII_ENCRYPTION_KEY || ''
+const ALGORITHM = 'aes-256-gcm'
+const IV_LENGTH = 16
+const AUTH_TAG_LENGTH = 16
+
+/**
+ * Encrypt sensitive data (like SSN/resident number) using AES-256-GCM
+ * Format: base64(iv + authTag + ciphertext)
+ */
+export function encryptPII(plaintext: string): string {
+  if (!ENCRYPTION_KEY) {
+    throw new Error('PII_ENCRYPTION_KEY is not configured')
+  }
+
+  // Key must be 32 bytes for AES-256
+  const key = crypto.createHash('sha256').update(ENCRYPTION_KEY).digest()
+  const iv = crypto.randomBytes(IV_LENGTH)
+
+  const cipher = crypto.createCipheriv(ALGORITHM, key, iv)
+
+  let encrypted = cipher.update(plaintext, 'utf8', 'base64')
+  encrypted += cipher.final('base64')
+
+  const authTag = cipher.getAuthTag()
+
+  // Combine: iv + authTag + ciphertext
+  const combined = Buffer.concat([
+    iv,
+    authTag,
+    Buffer.from(encrypted, 'base64')
+  ])
+
+  return combined.toString('base64')
+}
+
+/**
+ * Decrypt sensitive data encrypted with AES-256-GCM
+ */
+export function decryptPII(encryptedData: string): string {
+  if (!ENCRYPTION_KEY) {
+    throw new Error('PII_ENCRYPTION_KEY is not configured')
+  }
+
+  const key = crypto.createHash('sha256').update(ENCRYPTION_KEY).digest()
+  const combined = Buffer.from(encryptedData, 'base64')
+
+  // Extract components
+  const iv = combined.subarray(0, IV_LENGTH)
+  const authTag = combined.subarray(IV_LENGTH, IV_LENGTH + AUTH_TAG_LENGTH)
+  const ciphertext = combined.subarray(IV_LENGTH + AUTH_TAG_LENGTH)
+
+  const decipher = crypto.createDecipheriv(ALGORITHM, key, iv)
+  decipher.setAuthTag(authTag)
+
+  let decrypted = decipher.update(ciphertext)
+  decrypted = Buffer.concat([decrypted, decipher.final()])
+
+  return decrypted.toString('utf8')
+}
+
+/**
+ * Mask resident number for display (shows only last 6 digits masked)
+ * Example: 901225-*******
+ */
+export function maskResidentNumber(residentNumber: string): string {
+  if (!residentNumber) return ''
+
+  // Format: YYMMDD-XXXXXXX
+  const cleaned = residentNumber.replace(/[^0-9]/g, '')
+  if (cleaned.length < 7) return '*'.repeat(13)
+
+  return `${cleaned.slice(0, 6)}-${'*'.repeat(7)}`
+}
+
+/**
+ * Validate resident number format (basic validation)
+ */
+export function validateResidentNumber(residentNumber: string): boolean {
+  const cleaned = residentNumber.replace(/[^0-9]/g, '')
+  if (cleaned.length !== 13) return false
+
+  // Validate birth date portion (YYMMDD)
+  const month = parseInt(cleaned.slice(2, 4), 10)
+  const day = parseInt(cleaned.slice(4, 6), 10)
+
+  if (month < 1 || month > 12) return false
+  if (day < 1 || day > 31) return false
+
+  // Validate gender digit (1-4, 5-8 for foreigners)
+  const genderDigit = parseInt(cleaned.charAt(6), 10)
+  if (genderDigit < 1 || genderDigit > 8) return false
+
+  return true
+}
+
+// =============================================================================
 // CVE-CB-002 & CVE-CB-003: Authentication Middleware
 // =============================================================================
 

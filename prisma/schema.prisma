@@ -222,6 +222,9 @@ model WorkspaceMember {
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([workspaceId, userId])
+  // 100K CCU 인덱스: 워크스페이스별 멤버 조회 최적화
+  @@index([workspaceId, role])
+  @@index([userId])
 }
 
 model User {
@@ -274,6 +277,11 @@ model User {
 
   // HRIS: Employee relations
   employeeProfiles Employee[]
+
+  // 100K CCU 인덱스: 자주 쿼리되는 필드
+  @@index([isActive])
+  @@index([createdAt])
+  @@index([lastLogin])
 }
 
 model Project {
@@ -312,6 +320,11 @@ model Project {
 
   @@index([status])
   @@index([workspaceId])
+  // 100K CCU 인덱스: 프로젝트 목록 쿼리 최적화
+  @@index([workspaceId, status])
+  @@index([workspaceId, createdAt])
+  @@index([createdBy])
+  @@index([priority])
 }
 
 model ProjectMember {
@@ -478,6 +491,10 @@ model Attendance {
   workspace Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   @@index([userId, date])
+  // 100K CCU 인덱스: 근태 조회 최적화
+  @@index([workspaceId, date])
+  @@index([workspaceId, status])
+  @@index([date, status])
 }
 
 model ApprovalDocument {
@@ -494,6 +511,11 @@ model ApprovalDocument {
   workspace Workspace?     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   requester User           @relation("ApprovalRequester", fields: [requesterId], references: [id])
   approvals ApprovalStep[]
+
+  // 100K CCU 인덱스: 결재 문서 조회 최적화
+  @@index([workspaceId, status])
+  @@index([requesterId, status])
+  @@index([workspaceId, createdAt])
 }
 
 model ApprovalStep {
@@ -1230,4 +1252,7 @@ model PayrollRecord {
   @@unique([workspaceId, employeeId, periodStart, periodEnd])
   @@index([workspaceId, periodStart])
   @@index([employeeId, periodStart])
+  // 100K CCU 인덱스: 급여 명세서 조회 최적화
+  @@index([workspaceId, status])
+  @@index([workspaceId, periodEnd])
 }

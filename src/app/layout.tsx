@@ -6,6 +6,7 @@ import './globals.css'
 import { WorkspaceProvider } from '@/lib/workspace-context'
 import { NotificationProvider } from '@/lib/notification-context'
 import NotificationToast from '@/components/notification/NotificationToast'
+import { getNonce } from '@/lib/csp-nonce'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -14,11 +15,13 @@ export const metadata: Metadata = {
   description: '웹 에이전시를 위한 통합 프로젝트 관리 플랫폼',
 }
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
+  const nonce = await getNonce()
+
   return (
     <html lang="ko">
       <head>
@@ -27,7 +30,10 @@ export default function RootLayout({
           as="style"
           crossOrigin="anonymous"
           href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css"
+          nonce={nonce}
         />
+        {/* CSP Nonce meta tag for client-side scripts */}
+        {nonce && <meta name="csp-nonce" content={nonce} />}
       </head>
       <body className={inter.className} suppressHydrationWarning>
         <AuthProvider>

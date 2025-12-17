@@ -261,38 +261,55 @@ jobs:
           # 1. 모든 dnsmasq 프로세스 종료
           echo "Killing all dnsmasq processes..."
           sudo pkill -9 dnsmasq 2>/dev/null || true
-          sleep 3
+          sleep 2
 
-          # 2. CNI 관련 모든 파일 정리
-          echo "Cleaning up all CNI network files..."
+          # 2. 기존 네트워크 완전 삭제
+          echo "Removing existing podman networks..."
+          sudo podman network rm -f ${NETWORK_NAME} 2>/dev/null || true
+          sudo podman network rm -f podman 2>/dev/null || true
+          sleep 1
+
+          # 3. CNI 설정 파일 삭제 (핵심! - 이 파일에 dnsname 플러그인 설정이 있음)
+          echo "Removing CNI configuration files..."
+          sudo rm -f /etc/cni/net.d/${NETWORK_NAME}.conflist 2>/dev/null || true
+          sudo rm -f /etc/cni/net.d/*${NETWORK_NAME}* 2>/dev/null || true
+
+          # 4. CNI 런타임 파일 정리
+          echo "Cleaning up CNI runtime files..."
+          sudo rm -rf /var/lib/cni/networks/${NETWORK_NAME} 2>/dev/null || true
           sudo rm -rf /var/lib/cni/networks/* 2>/dev/null || true
           sudo rm -rf /run/cni/* 2>/dev/null || true
           sudo rm -rf /var/run/cni/* 2>/dev/null || true
 
-          # 3. 10.89.0.1 포트를 사용 중인 프로세스 확인 및 종료
-          echo "Checking for processes using 10.89.0.1..."
-          PIDS=$(sudo lsof -ti:53 2>/dev/null | head -5) || true
+          # 5. dnsmasq 관련 파일 정리
+          echo "Cleaning up dnsmasq files..."
+          sudo rm -rf /run/containers/cni/dnsname/${NETWORK_NAME} 2>/dev/null || true
+          sudo rm -rf /var/run/containers/cni/dnsname/* 2>/dev/null || true
+
+          # 6. 포트 53 사용 프로세스 종료
+          echo "Checking for processes using port 53..."
+          PIDS=$(sudo lsof -ti:53 2>/dev/null | head -10) || true
           if [ -n "$PIDS" ]; then
-            echo "Killing processes: $PIDS"
+            echo "Killing processes using port 53: $PIDS"
             echo "$PIDS" | xargs -r sudo kill -9 2>/dev/null || true
           fi
           sleep 2
 
-          # 4. 기존 네트워크 완전 삭제
-          echo "Removing existing network..."
-          sudo podman network rm -f ${NETWORK_NAME} 2>/dev/null || true
-          sudo podman network rm -f podman 2>/dev/null || true
-
-          # 5. 새 네트워크 생성 (dnsname 플러그인 비활성화)
-          echo "Creating network without dnsname plugin..."
+          # 7. 새 네트워크 생성 (dnsname 플러그인 비활성화)
+          echo "Creating network without DNS plugin..."
           sudo podman network create ${NETWORK_NAME} \
             --subnet 10.89.1.0/24 \
             --gateway 10.89.1.1 \
             --disable-dns \
             2>/dev/null || true
 
+          # 8. 생성된 CNI 설정 파일에서 dnsname 플러그인 제거 확인
+          echo "Verifying CNI configuration (should NOT contain dnsname):"
+          sudo cat /etc/cni/net.d/${NETWORK_NAME}.conflist 2>/dev/null || echo "No conflist file"
+
+          echo ""
           echo "Network configuration:"
-          sudo podman network inspect ${NETWORK_NAME} 2>/dev/null | head -30 || true
+          sudo podman network inspect ${NETWORK_NAME} 2>/dev/null | head -40 || true
 
           echo "=== Network cleanup complete ==="
           sudo podman network ls

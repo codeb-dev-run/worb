@@ -15,9 +15,12 @@ interface PrismaConfig {
 }
 
 const getPrismaConfig = (): PrismaConfig => ({
-    connectionLimit: parseInt(process.env.DATABASE_POOL_SIZE || '20'),
-    poolTimeout: parseInt(process.env.DATABASE_POOL_TIMEOUT || '10'),
-    queryTimeout: parseInt(process.env.DATABASE_QUERY_TIMEOUT || '30000'),
+    // 100,000 CCU 기준: 연결 풀 크기 증가 (20 → 200, PgBouncer 사용 시 500)
+    connectionLimit: parseInt(process.env.DATABASE_POOL_SIZE || '200'),
+    // 연결 풀 대기 시간 단축 (10초 → 5초)
+    poolTimeout: parseInt(process.env.DATABASE_POOL_TIMEOUT || '5'),
+    // 쿼리 타임아웃 단축 (30초 → 10초) - SLA 준수
+    queryTimeout: parseInt(process.env.DATABASE_QUERY_TIMEOUT || '10000'),
     enableLogging: process.env.DATABASE_LOGGING === 'true',
     useReadReplica: !!process.env.DATABASE_REPLICA_URL
 })

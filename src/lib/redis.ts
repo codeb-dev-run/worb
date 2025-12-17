@@ -30,9 +30,12 @@ const getRedisConfig = (): RedisConfig => {
             ? JSON.parse(process.env.REDIS_SENTINELS)
             : undefined,
         sentinelMasterName: process.env.REDIS_SENTINEL_MASTER || 'mymaster',
-        maxRetries: parseInt(process.env.REDIS_MAX_RETRIES || '3'),
-        retryDelayMs: parseInt(process.env.REDIS_RETRY_DELAY || '100'),
-        connectionPoolSize: parseInt(process.env.REDIS_POOL_SIZE || '10'),
+        // 100,000 CCU 기준: 재시도 횟수 증가 (3 → 5)
+        maxRetries: parseInt(process.env.REDIS_MAX_RETRIES || '5'),
+        // 100,000 CCU 기준: 재시도 딜레이 단축 (100ms → 50ms)
+        retryDelayMs: parseInt(process.env.REDIS_RETRY_DELAY || '50'),
+        // 100,000 CCU 기준: 연결 풀 크기 증가 (10 → 100)
+        connectionPoolSize: parseInt(process.env.REDIS_POOL_SIZE || '100'),
         enableOfflineQueue: process.env.REDIS_OFFLINE_QUEUE !== 'false'
     }
 }
@@ -43,6 +46,7 @@ const createRedisClient = (): Redis | Cluster => {
     const config = getRedisConfig()
 
     // CVE-CB-005: Development-only logging for Redis
+    // 100,000 CCU 최적화: 타임아웃 단축, 재시도 전략 강화
     const commonOptions = {
         maxRetriesPerRequest: config.maxRetries,
         retryStrategy: (times: number) => {
@@ -52,12 +56,29 @@ const createRedisClient = (): Redis | Cluster => {
                 }
                 return null
             }
-            return Math.min(times * config.retryDelayMs, 3000)
+            // Exponential backoff with jitter for better load distribution
+            const baseDelay = Math.min(times * config.retryDelayMs, 2000)
+            const jitter = Math.random() * 100
+            return baseDelay + jitter
         },
         enableOfflineQueue: config.enableOfflineQueue,
         lazyConnect: true,
-        connectTimeout: 10000,
-        commandTimeout: 5000
+        // 100,000 CCU 기준: 연결 타임아웃 단축 (10s → 5s)
+        connectTimeout: 5000,
+        // 100,000 CCU 기준: 명령 타임아웃 단축 (5s → 3s)
+        commandTimeout: 3000,
+        // Keep-alive for connection reuse
+        keepAlive: 30000,
+        // TCP no delay for faster response
+        noDelay: true,
+        // Auto-reconnect settings
+        reconnectOnError: (err: Error) => {
+            const targetError = 'READONLY'
+            if (err.message.includes(targetError)) {
+                return true
+            }
+            return false
+        }
     }
 
     // Cluster Mode (Production - 100K+ users)
