@@ -329,11 +329,10 @@ jobs:
             BUILD_ARGS="$BUILD_ARGS --layers"
           fi
 
-          # DNS 서버 명시 (컨테이너 내부 DNS 해석 문제 해결)
+          # 호스트 네트워크 사용 (컨테이너 내부 DNS 해석 문제 해결)
           sudo podman build \
             $BUILD_ARGS \
-            --dns 8.8.8.8 \
-            --dns 8.8.4.4 \
+            --network=host \
             -t localhost/${{ env.APP_NAME }}:${{ steps.vars.outputs.image_tag }} \
             -t localhost/${{ env.APP_NAME }}:${{ github.sha }} \
             .
