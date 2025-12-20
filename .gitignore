@@ -45,3 +45,7 @@ storybook-static
 ._*
 deploy.tar.gz
 deploy-staging.sh
+
+# backup
+.backup/
+*.backup.*
