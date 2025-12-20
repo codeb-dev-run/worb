@@ -1,26 +1,31 @@
 import { NextApiRequest, NextApiResponse } from 'next'
 
 export const config = {
-    api: {
-        bodyParser: false,
-    },
+  api: {
+    bodyParser: false,
+  },
 }
 
 /**
  * Socket.io status endpoint
  *
- * Socket.io server runs as a separate Podman container on port 3011.
- * This endpoint just provides status information.
+ * @deprecated Socket.IO는 더 이상 사용되지 않습니다.
+ * Centrifugo로 마이그레이션되었습니다.
+ *
+ * 새로운 엔드포인트:
+ * - /api/centrifugo/token - 연결 토큰 발급
+ * - /api/centrifugo/publish - 메시지 발행
  */
 const SocketHandler = (_req: NextApiRequest, res: NextApiResponse) => {
-    const socketServerUrl = process.env.SOCKET_SERVER_URL || 'http://localhost:3011'
-
-    res.status(200).json({
-        status: 'ok',
-        message: 'Socket.io server is running as a separate service',
-        socketServer: socketServerUrl,
-        path: '/socket.io'
-    })
+  res.status(200).json({
+    status: 'deprecated',
+    message: 'Socket.IO has been replaced by Centrifugo',
+    migration: {
+      centrifugoUrl: process.env.NEXT_PUBLIC_CENTRIFUGO_URL || 'wss://ws.codeb.kr/connection/websocket',
+      tokenEndpoint: '/api/centrifugo/token',
+      publishEndpoint: '/api/centrifugo/publish'
+    }
+  })
 }
 
 export default SocketHandler

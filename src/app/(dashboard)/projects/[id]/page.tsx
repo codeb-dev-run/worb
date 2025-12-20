@@ -10,7 +10,7 @@ import Link from 'next/link'
 import { useAuth } from '@/lib/auth-context'
 import { useWorkspace, LEGACY_DEPARTMENT_MAP } from '@/lib/workspace-context'
 import { motion } from 'framer-motion'
-import { useSocket } from '@/components/providers/socket-provider'
+import { useCentrifugo } from '@/components/providers/centrifugo-provider'
 import ProjectSidebar from '@/components/projects/ProjectSidebar'
 import KanbanBoardDnD from '@/components/kanban/KanbanBoardDnD'
 import GanttChartPro, { ExtendedTask } from '@/components/gantt/GanttChartPro'
@@ -92,7 +92,7 @@ export default function ProjectDetailPage() {
   const router = useRouter()
   const { user, userProfile } = useAuth()
   const { departments } = useWorkspace()
-  const { socket, isConnected } = useSocket()
+  const { subscribe, publish, isConnected } = useCentrifugo()
   const [project, setProject] = useState<ProjectDetail | null>(null)
   const [activities, setActivities] = useState<Activity[]>([])
   const [loading, setLoading] = useState(true)
@@ -176,26 +176,24 @@ export default function ProjectDetailPage() {
     loadProjectData()
   }, [params?.id])
 
-  // Socket.io real-time collaboration
+  // Centrifugo 실시간 협업
   useEffect(() => {
-    if (!socket || !params?.id) return
+    if (!params?.id) return
 
-    // Join project room
-    socket.emit('join-project', params.id)
+    // 프로젝트 채널 구독
+    const unsubscribe = subscribe(`project:${params.id}`, (data: any) => {
+      if (isDev) console.log('Received Centrifugo event:', data)
 
-    // Listen for task movements from other users
-    const handleTaskMoved = (data: any) => {
-      if (isDev) console.log('Received task-moved event:', data)
-      // Reload tasks to sync with other users
-      loadProjectData()
-    }
-
-    socket.on('task-moved', handleTaskMoved)
+      // 다른 사용자의 작업 이동 이벤트 처리
+      if (data.event === 'task-moved' && data.userId !== user?.uid) {
+        loadProjectData()
+      }
+    })
 
     return () => {
-      socket.off('task-moved', handleTaskMoved)
+      unsubscribe()
     }
-  }, [socket, params?.id])
+  }, [params?.id, subscribe, user?.uid])
 
   const handleColumnsChange = useCallback(async (newColumns: KanbanColumnWithTasks[]) => {
     if (isDev) console.log('handleColumnsChange called', { isUpdating: isUpdatingRef.current, newColumns })
@@ -251,9 +249,10 @@ export default function ProjectDetailPage() {
 
         toast.success('작업이 이동되었습니다.')
 
-        // Emit socket event to notify other users
-        if (socket && project) {
-          socket.emit('task-moved', {
+        // Centrifugo로 다른 사용자에게 알림
+        if (project) {
+          publish(`project:${project.id}`, {
+            event: 'task-moved',
             projectId: project.id,
             updates: taskUpdates,
             userId: user.uid
@@ -268,7 +267,7 @@ export default function ProjectDetailPage() {
     } finally {
       isUpdatingRef.current = false
     }
-  }, [tasks, user, userProfile, project])
+  }, [tasks, user, userProfile, project, publish])
 
   const handleCreateTask = async () => {
     if (!project || !user) return
