@@ -270,6 +270,12 @@ jobs:
       IMAGE_TAG: ${{ needs.build.outputs.image_tag }}
 
     steps:
+      - name: Setup Podman environment
+        run: |
+          # XDG_RUNTIME_DIR 디렉토리 생성 (podman rootless 모드 필요)
+          mkdir -p /run/user/0
+          export XDG_RUNTIME_DIR=/run/user/0
+
       - name: Set deployment variables
         id: vars
         run: |
@@ -285,10 +291,14 @@ jobs:
 
       - name: Login to Container Registry
         run: |
+          # Ensure XDG_RUNTIME_DIR exists for podman
+          mkdir -p /run/user/0
+          export XDG_RUNTIME_DIR=/run/user/0
           echo "${{ secrets.GITHUB_TOKEN }}" | podman login ${{ env.REGISTRY }} -u ${{ github.actor }} --password-stdin
 
       - name: Pull image from registry
         run: |
+          export XDG_RUNTIME_DIR=/run/user/0
           echo "Pulling image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}"
           podman pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
 
