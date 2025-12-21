@@ -194,7 +194,7 @@ jobs:
     name: Validate Port Allocation
     runs-on: self-hosted
     needs: build
-    if: needs.build.result == 'success'
+    if: always() && needs.build.result == 'success'
 
     outputs:
       port_valid: ${{ steps.validate.outputs.valid }}
@@ -259,7 +259,9 @@ jobs:
     runs-on: self-hosted
     needs: [build, port-validate]
     if: |
+      always() &&
       needs.build.result == 'success' &&
+      needs.port-validate.result == 'success' &&
       needs.port-validate.outputs.port_valid == 'true' &&
       (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop' || github.event_name == 'workflow_dispatch')
 
