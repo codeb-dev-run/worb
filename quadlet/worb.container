@@ -20,7 +20,7 @@ After=network-online.target
 Wants=network-online.target
 
 [Container]
-Image=ghcr.io/codeblabdev-max/workb:latest
+Image=ghcr.io/codeb-dev-run/worb:latest
 ContainerName=worb
 AutoUpdate=registry
 
