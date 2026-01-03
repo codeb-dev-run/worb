@@ -350,6 +350,33 @@ export const boardQuerySchema = z.object({
 export const attendanceCheckInSchema = z.object({
   workLocation: z.enum(['OFFICE', 'REMOTE', 'FIELD']).default('OFFICE'),
   note: z.string().max(500).optional(),
+  // WiFi 검증 정보
+  wifiSSID: z.string().max(100).optional(),
+  wifiBSSID: z.string().max(50).optional(),
+  workspaceId: z.string().uuid().optional(),
+})
+
+// WiFi 네트워크 등록 스키마
+export const wifiNetworkSchema = z.object({
+  name: z.string().min(1).max(100),
+  ssid: z.string().min(1).max(100),
+  bssid: z.string().max(50).optional(),
+  isActive: z.boolean().default(true),
+})
+
+// 근무 세션 시작 스키마
+export const workSessionStartSchema = z.object({
+  workspaceId: z.string().uuid(),
+  sessionType: z.enum(['OFFICE_WORK', 'REMOTE_WORK']).default('OFFICE_WORK'),
+  wifiSSID: z.string().max(100).optional(),
+  wifiBSSID: z.string().max(50).optional(),
+  note: z.string().max(500).optional(),
+})
+
+// 근무 세션 종료 스키마
+export const workSessionEndSchema = z.object({
+  sessionId: z.string().uuid(),
+  note: z.string().max(500).optional(),
 })
 
 export const attendanceQuerySchema = z.object({

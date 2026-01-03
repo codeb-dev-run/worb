@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import {
   Clock, Users, FileText, DollarSign, CalendarDays,
-  BarChart3, Loader2, Plane, Settings, Download
+  BarChart3, Loader2, Plane, Settings, Download, Home
 } from 'lucide-react'
 
 // Storyboard Design Colors
@@ -26,12 +26,14 @@ import LeaveTab from '@/components/hr/LeaveTab'
 import StatsTab from '@/components/hr/StatsTab'
 import SettingsTab from '@/components/hr/SettingsTab'
 import ExportTab from '@/components/hr/ExportTab'
+import { FlexibleWorkDashboard } from '@/components/hr/FlexibleWorkDashboard'
 
 import { HRTab, UserRole } from '@/types/hr'
 
 // 기본 탭 (모든 사용자에게 표시)
 const baseTabs = [
   { id: 'attendance' as HRTab, label: '출근 관리', icon: Clock },
+  { id: 'flexible' as HRTab, label: '유연근무', icon: Home },
   { id: 'leave' as HRTab, label: '휴가 관리', icon: Plane },
   { id: 'profile' as HRTab, label: '인사기록', icon: FileText },
   { id: 'payroll' as HRTab, label: '급여', icon: DollarSign },
@@ -184,6 +186,12 @@ export default function HRPage() {
             userId={userId}
             workspaceId={workspaceId}
             isAdmin={isAdmin}
+          />
+        )}
+        {activeTab === 'flexible' && (
+          <FlexibleWorkDashboard
+            userId={userId}
+            workspaceId={workspaceId}
           />
         )}
         {activeTab === 'profile' && (

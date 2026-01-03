@@ -1,17 +1,20 @@
 import React, { useState, useEffect } from 'react'
-import { Clock, Plus, Trash2, Wifi, Globe, Info } from 'lucide-react'
+import { Clock, Plus, Trash2, Wifi, Globe, Info, Home, Building } from 'lucide-react'
 import { AdvancedWorkSettings, WorkType } from '@/types/hr'
 import { InputField, ToggleSwitch } from './SharedComponents'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
+import { WifiNetworkManager } from './WifiNetworkManager'
 
 export function WorkSettingsSection({
     settings,
-    onChange
+    onChange,
+    workspaceId
 }: {
     settings: AdvancedWorkSettings
     onChange: (path: string, value: any) => void
+    workspaceId?: string
 }) {
     const [currentIP, setCurrentIP] = useState<string>('')
     const [newIP, setNewIP] = useState('')
@@ -305,6 +308,53 @@ export function WorkSettingsSection({
                     )}
                 </div>
             </div>
+
+            {/* 유연근무 설정 */}
+            <div className="border-t pt-6 mt-6">
+                <h4 className="font-medium mb-4 flex items-center gap-2">
+                    <Home className="w-4 h-4 text-lime-600" />
+                    유연근무 설정
+                </h4>
+                <div className="space-y-3">
+                    <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl">
+                        <div>
+                            <span className="font-medium">유연근무제 허용</span>
+                            <p className="text-sm text-slate-500">사무실과 재택을 병행하여 주 40시간 채우기</p>
+                        </div>
+                        <ToggleSwitch
+                            checked={settings.verification.allowFlexibleWork ?? true}
+                            onChange={(v) => onChange('workSettings.verification.allowFlexibleWork', v)}
+                        />
+                    </div>
+                    <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl">
+                        <div>
+                            <span className="font-medium">재택근무 허용</span>
+                            <p className="text-sm text-slate-500">사무실 외 장소에서 출퇴근 가능</p>
+                        </div>
+                        <ToggleSwitch
+                            checked={settings.verification.allowRemoteWork ?? true}
+                            onChange={(v) => onChange('workSettings.verification.allowRemoteWork', v)}
+                        />
+                    </div>
+                </div>
+            </div>
+
+            {/* WiFi 기반 출퇴근 설정 */}
+            {workspaceId && (
+                <div className="border-t pt-6 mt-6">
+                    <h4 className="font-medium mb-4 flex items-center gap-2">
+                        <Building className="w-4 h-4 text-lime-600" />
+                        사무실 WiFi 관리
+                    </h4>
+                    <WifiNetworkManager
+                        workspaceId={workspaceId}
+                        enabled={settings.verification.wifiEnabled || false}
+                        required={settings.verification.wifiRequired || false}
+                        onEnabledChange={(v) => onChange('workSettings.verification.wifiEnabled', v)}
+                        onRequiredChange={(v) => onChange('workSettings.verification.wifiRequired', v)}
+                    />
+                </div>
+            )}
 
             {/* 지각 정책 */}
             <div className="border-t pt-6 mt-6">

@@ -173,7 +173,7 @@ export interface LeaveBalance {
   sickRemaining: number
 }
 
-export type HRTab = 'attendance' | 'profile' | 'payroll' | 'leave' | 'stats' | 'export' | 'settings'
+export type HRTab = 'attendance' | 'flexible' | 'profile' | 'payroll' | 'leave' | 'stats' | 'export' | 'settings'
 export type UserRole = 'admin' | 'hr' | 'manager' | 'employee'
 
 // ============================================
@@ -221,8 +221,11 @@ export interface AdvancedWorkSettings {
     gpsEnabled: boolean
     gpsRadius: number  // meters
     wifiEnabled: boolean
+    wifiRequired?: boolean  // WiFi 검증 필수 여부
     officeIpWhitelist: string[]
     officeWifiSSIDs: string[]
+    allowFlexibleWork?: boolean  // 유연근무 허용
+    allowRemoteWork?: boolean    // 재택근무 허용
   }
 
   // 지각/조퇴 규정

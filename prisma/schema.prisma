@@ -63,6 +63,16 @@ enum AttendanceStatus {
   REMOTE
 }
 
+enum WorkLocationType {
+  OFFICE
+  REMOTE
+}
+
+enum WorkSessionType {
+  OFFICE_WORK
+  REMOTE_WORK
+}
+
 enum ApprovalStatus {
   PENDING
   APPROVED
@@ -208,6 +218,11 @@ model Workspace {
   payrollRecords     PayrollRecord[]
   leaveRequests      LeaveRequest[]
   leaveBalances      LeaveBalance[]
+
+  // Flexible work relations
+  workSessions       WorkSession[]
+  officeWifiNetworks OfficeWifiNetwork[]
+  weeklyWorkSummaries WeeklyWorkSummary[]
 }
 
 model WorkspaceMember {
@@ -277,6 +292,11 @@ model User {
 
   // HRIS: Employee relations
   employeeProfiles Employee[]
+
+  // Flexible work relations
+  workSessions       WorkSession[]
+  createdWifiNetworks OfficeWifiNetwork[]
+  weeklyWorkSummaries WeeklyWorkSummary[]
 
   // 100K CCU 인덱스: 자주 쿼리되는 필드
   @@index([isActive])
@@ -487,14 +507,103 @@ model Attendance {
   createdAt   DateTime         @default(now())
   updatedAt   DateTime         @updatedAt
 
-  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  workspace Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  // 유연근무 확장 필드
+  totalWorkedMinutes    Int      @default(0)  // 당일 총 근무시간 (분)
+  officeWorkedMinutes   Int      @default(0)  // 사무실 근무시간 (분)
+  remoteWorkedMinutes   Int      @default(0)  // 재택 근무시간 (분)
+  weeklyTargetMinutes   Int      @default(2400) // 주간 목표 (기본 40시간)
+  isFlexibleDay         Boolean  @default(false) // 유연근무 적용일
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace    Workspace?    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workSessions WorkSession[]
 
   @@index([userId, date])
   // 100K CCU 인덱스: 근태 조회 최적화
   @@index([workspaceId, date])
   @@index([workspaceId, status])
   @@index([date, status])
+}
+
+// 근무 세션: 사무실/재택 근무 시간을 개별 추적
+model WorkSession {
+  id           String          @id @default(uuid())
+  attendanceId String
+  userId       String
+  workspaceId  String?
+
+  sessionType  WorkSessionType @default(OFFICE_WORK)
+  startTime    DateTime
+  endTime      DateTime?
+
+  // 위치 검증 정보
+  wifiSSID     String?         // 연결된 WiFi SSID
+  wifiBSSID    String?         // WiFi MAC 주소 (더 정확한 검증)
+  ipAddress    String?
+  isVerified   Boolean         @default(false) // WiFi 검증 통과 여부
+
+  durationMinutes Int?         // 세션 지속시간 (분)
+  note         String?
+
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  attendance   Attendance      @relation(fields: [attendanceId], references: [id], onDelete: Cascade)
+  user         User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace    Workspace?      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([attendanceId])
+  @@index([userId, startTime])
+  @@index([workspaceId, startTime])
+}
+
+// 관리자가 등록한 사무실 WiFi 네트워크
+model OfficeWifiNetwork {
+  id          String   @id @default(uuid())
+  workspaceId String
+
+  name        String           // 표시 이름 (예: "본사 1층", "회의실")
+  ssid        String           // WiFi 이름
+  bssid       String?          // MAC 주소 (선택, 더 정확한 검증)
+  isActive    Boolean  @default(true)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  createdBy   String   // 등록한 관리자
+
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  creator     User      @relation(fields: [createdBy], references: [id])
+
+  @@unique([workspaceId, ssid])
+  @@index([workspaceId, isActive])
+}
+
+// 주간 근무시간 요약
+model WeeklyWorkSummary {
+  id          String   @id @default(uuid())
+  userId      String
+  workspaceId String?
+
+  weekStart   DateTime         // 주 시작일 (월요일)
+  weekEnd     DateTime         // 주 종료일 (일요일)
+
+  targetMinutes       Int      @default(2400) // 목표 시간 (40시간)
+  totalWorkedMinutes  Int      @default(0)    // 총 근무시간
+  officeMinutes       Int      @default(0)    // 사무실 근무
+  remoteMinutes       Int      @default(0)    // 재택 근무
+  remainingMinutes    Int      @default(2400) // 남은 시간
+
+  isCompleted Boolean  @default(false) // 주간 목표 달성 여부
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, workspaceId, weekStart])
+  @@index([userId, weekStart])
+  @@index([workspaceId, weekStart])
 }
 
 model ApprovalDocument {
@@ -645,7 +754,7 @@ model WorkPolicy {
   type        WorkType @default(FIXED)
 
   dailyRequiredMinutes  Int  @default(480)
-  weeklyRequiredMinutes Int?
+  weeklyRequiredMinutes Int  @default(2400) // 주 40시간
 
   workStartTime String? @default("09:00")
   workEndTime   String? @default("18:00")
@@ -666,6 +775,11 @@ model WorkPolicy {
   presenceCheckOnlyRemote       Boolean @default(true)
 
   officeIpWhitelist String[] @default([])
+
+  // WiFi 기반 출퇴근 검증
+  wifiVerificationEnabled Boolean @default(false) // WiFi 검증 활성화
+  wifiVerificationRequired Boolean @default(false) // 사무실 출근시 필수 여부
+  allowFlexibleWork Boolean @default(true) // 유연근무 허용
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

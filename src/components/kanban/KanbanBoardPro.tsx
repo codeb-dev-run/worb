@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import {
   DndContext,
   DragEndEvent,
@@ -76,7 +77,7 @@ function SortableTaskItem({ task, onEdit, onDelete }: {
   } = useSortable({ id: task.id })
 
   const style = {
-    transform: CSS.Transform.toString(transform),
+    transform: CSS.Translate.toString(transform),
     transition,
     opacity: isDragging ? 0.5 : 1,
   }
@@ -712,16 +713,30 @@ export default function KanbanBoardPro({
             })}
           </div>
 
-          <DragOverlay>
-            {activeTask && (
-              <Card className="p-3 shadow-lg opacity-90">
-                <h4 className="text-sm font-medium">{activeTask.title}</h4>
-                {activeTask.description && (
-                  <p className="text-xs text-muted-foreground mt-1">{activeTask.description}</p>
-                )}
-              </Card>
-            )}
-          </DragOverlay>
+          {typeof document !== 'undefined' && createPortal(
+            <DragOverlay
+              dropAnimation={{
+                duration: 200,
+                easing: 'ease',
+              }}
+            >
+              {activeTask && (
+                <Card className="p-3 shadow-lg cursor-grabbing w-72" style={{ opacity: 0.95 }}>
+                  <h4 className="text-sm font-medium">{activeTask.title}</h4>
+                  {activeTask.description && (
+                    <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{activeTask.description}</p>
+                  )}
+                  <div className="mt-2">
+                    <Badge variant={priorityConfig[activeTask.priority].variant} className="text-xs">
+                      {React.createElement(priorityConfig[activeTask.priority].icon, { className: "h-3 w-3 mr-1" })}
+                      {priorityConfig[activeTask.priority].label}
+                    </Badge>
+                  </div>
+                </Card>
+              )}
+            </DragOverlay>,
+            document.body
+          )}
         </DndContext>
       </div>
     </div>
