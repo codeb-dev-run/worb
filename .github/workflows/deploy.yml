@@ -232,7 +232,18 @@ jobs:
 
             # Reload systemd and restart service
             systemctl daemon-reload
-            systemctl restart worb.service || systemctl start worb.service
+
+            # Try to restart and capture logs on failure
+            if ! systemctl restart worb.service; then
+              echo "❌ Service restart failed. Checking logs..."
+              journalctl -u worb.service --no-pager -n 50
+              systemctl status worb.service --no-pager || true
+
+              # Try to run container directly for debugging
+              echo "🔍 Attempting to run container directly..."
+              podman run --rm -it ghcr.io/codeb-dev-run/worb:latest ls -la / || true
+              exit 1
+            fi
 
             # Wait for health check
             echo "⏳ Waiting for health check..."
@@ -244,6 +255,8 @@ jobs:
               sleep 5
             done
 
-            echo "❌ Health check failed"
+            echo "❌ Health check failed. Checking logs..."
+            journalctl -u worb.service --no-pager -n 50
+            systemctl status worb.service --no-pager || true
             exit 1
           DEPLOY_SCRIPT
