@@ -361,8 +361,8 @@ export function WifiNetworkManager({
             <p className="font-medium mb-1">WiFi 검증 작동 방식</p>
             <ul className="list-disc list-inside space-y-1 text-blue-600">
               <li>직원이 출근 시 연결된 WiFi 정보를 서버로 전송합니다</li>
-              <li>등록된 WiFi SSID와 일치하면 "사무실 출근"으로 인정됩니다</li>
-              <li>일치하지 않으면 "재택 근무"로 분류됩니다</li>
+              <li>등록된 WiFi SSID와 일치하면 &ldquo;사무실 출근&rdquo;으로 인정됩니다</li>
+              <li>일치하지 않으면 &ldquo;재택 근무&rdquo;로 분류됩니다</li>
               <li>필수 설정 시, 미인증 WiFi에서는 사무실 출근이 불가합니다</li>
             </ul>
           </div>
