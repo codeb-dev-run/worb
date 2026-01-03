@@ -230,19 +230,27 @@ jobs:
             # Pull latest production image
             podman pull ghcr.io/codeb-dev-run/worb:latest
 
-            # Stop existing service and clean up
-            systemctl stop worb.service || true
+            # Completely stop and disable the service to prevent auto-restart
+            echo "🛑 Stopping service completely..."
+            systemctl disable --now worb.service 2>/dev/null || true
+            sleep 2
+
+            # Kill any remaining containers
             podman stop worb 2>/dev/null || true
             podman rm -f worb 2>/dev/null || true
 
-            # Check what's using port 4000
+            # Check and kill any process using port 4000
             echo "🔍 Checking port 4000..."
             ss -tlnp | grep 4000 || echo "Port 4000 is free"
+            fuser -k 4000/tcp 2>/dev/null || true
+            sleep 2
 
-            # Reload systemd and restart service
+            # Re-enable and reload systemd
+            systemctl enable worb.service
             systemctl daemon-reload
 
-            # Try to restart and capture logs on failure
+            # Try to start the service and capture logs on failure
+            echo "🚀 Starting service..."
             if ! systemctl start worb.service; then
               echo "❌ Service restart failed. Checking logs..."
               journalctl -u worb.service --no-pager -n 50
