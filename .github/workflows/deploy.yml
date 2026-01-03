@@ -230,23 +230,34 @@ jobs:
             # Pull latest production image
             podman pull ghcr.io/codeb-dev-run/worb:latest
 
-            # Completely stop and disable the service to prevent auto-restart
+            # Completely stop the service to prevent auto-restart
             echo "🛑 Stopping service completely..."
-            systemctl disable --now worb.service 2>/dev/null || true
-            sleep 2
+            systemctl stop worb.service 2>/dev/null || true
 
-            # Kill any remaining containers
+            # Kill any remaining containers by name
             podman stop worb 2>/dev/null || true
             podman rm -f worb 2>/dev/null || true
 
-            # Check and kill any process using port 4000
+            # Kill any conmon process holding the port
             echo "🔍 Checking port 4000..."
             ss -tlnp | grep 4000 || echo "Port 4000 is free"
-            fuser -k 4000/tcp 2>/dev/null || true
-            sleep 2
 
-            # Re-enable and reload systemd
-            systemctl enable worb.service
+            # Kill the conmon process if it's holding the port
+            CONMON_PID=$(ss -tlnp | grep 4000 | grep -o 'pid=[0-9]*' | cut -d= -f2 | head -1)
+            if [ -n "$CONMON_PID" ]; then
+              echo "Killing conmon process $CONMON_PID..."
+              kill -9 $CONMON_PID 2>/dev/null || true
+            fi
+
+            # Also use fuser as backup
+            fuser -k 4000/tcp 2>/dev/null || true
+            sleep 3
+
+            # Verify port is free
+            echo "🔍 Verifying port 4000 is free..."
+            ss -tlnp | grep 4000 && echo "WARNING: Port still in use!" || echo "✅ Port 4000 is free"
+
+            # Reload systemd
             systemctl daemon-reload
 
             # Try to start the service and capture logs on failure
