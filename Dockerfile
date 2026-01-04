@@ -119,10 +119,9 @@ RUN chmod +x /app/docker-entrypoint.sh && \
 USER nextjs
 
 # Expose port (configurable via PORT env)
-EXPOSE 3000
+EXPOSE 3000 4000 4500
 
-# Runtime configuration
-ENV PORT=3000
+# Runtime configuration - PORT is set by Quadlet, not hardcoded here
 ENV HOSTNAME="0.0.0.0"
 
 # Health check
