@@ -1,5 +1,6 @@
 // =============================================================================
 // Attendance Check-in API - CVE-CB-003 Fixed: Session-based Authentication
+// 지원 기능: 출근, 퇴근 후 이어서 근무 (isResume)
 // =============================================================================
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -22,7 +23,7 @@ export async function POST(request: NextRequest) {
       return validationErrorResponse(validation.errors!)
     }
 
-    const { workLocation, note } = validation.data!
+    const { workLocation, note, isResume, ipAddress } = validation.data!
 
     const now = new Date()
     const today = new Date()
@@ -38,7 +39,38 @@ export async function POST(request: NextRequest) {
       },
     })
 
+    // 이미 출근한 경우
     if (existing) {
+      // isResume 플래그: 퇴근 후 이어서 근무하기
+      if (isResume && existing.checkOut) {
+        // 퇴근 기록 삭제하고 다시 근무 시작 (checkOut을 null로)
+        const attendance = await prisma.attendance.update({
+          where: { id: existing.id },
+          data: {
+            checkOut: null,
+            note: `${existing.note || ''} | ${workLocation === 'REMOTE' ? '재택' : '사무실'}에서 근무 재개 (${now.toLocaleTimeString('ko-KR')})`,
+          },
+        })
+
+        // Invalidate attendance cache
+        await redis.del(`attendance:api:${user.id}`)
+        await redis.del(`attendance:mobile:${user.id}`)
+
+        secureLogger.info('Attendance resumed', {
+          operation: 'attendance.resume',
+          userId: user.id,
+          workLocation,
+          ipAddress,
+        })
+
+        return NextResponse.json({
+          ...attendance,
+          resumed: true,
+          message: '근무를 재개했습니다',
+        })
+      }
+
+      // 일반 출근 시도 - 이미 출근함
       return createErrorResponse('Already checked in today', 400, 'ALREADY_CHECKED_IN')
     }
 
@@ -90,7 +122,7 @@ export async function POST(request: NextRequest) {
         date: today,
         checkIn: now,
         status: status as any,
-        note: note || `${workLocation} check-in`,
+        note: note || `${workLocation === 'REMOTE' ? '재택' : '사무실'} 출근 (IP: ${ipAddress || 'unknown'})`,
       },
     })
 
@@ -104,6 +136,7 @@ export async function POST(request: NextRequest) {
       userId: user.id,
       status,
       workLocation,
+      ipAddress,
     })
 
     return NextResponse.json(attendance)

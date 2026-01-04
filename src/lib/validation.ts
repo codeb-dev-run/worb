@@ -354,6 +354,10 @@ export const attendanceCheckInSchema = z.object({
   wifiSSID: z.string().max(100).optional(),
   wifiBSSID: z.string().max(50).optional(),
   workspaceId: z.string().uuid().optional(),
+  // 이어서 근무하기 (퇴근 후 다른 장소에서 근무 재개)
+  isResume: z.boolean().optional(),
+  // IP 주소 (자동 감지)
+  ipAddress: z.string().max(50).optional(),
 })
 
 // WiFi 네트워크 등록 스키마

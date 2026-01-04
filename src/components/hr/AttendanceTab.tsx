@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import {
   Clock, Calendar, Coffee, CheckCircle, XCircle, AlertCircle,
-  MapPin, Loader2, Home, Wifi, Timer, Building2, Play, Square, History
+  MapPin, Loader2, Home, Wifi, Timer, Building2, Play, Square, History, RotateCcw
 } from 'lucide-react'
 import { toast } from 'react-hot-toast'
 import { WorkSettings } from '@/types/hr'
@@ -41,6 +41,7 @@ export default function AttendanceTab({ userId, workspaceId, isAdmin }: Attendan
   const [attendanceHistory, setAttendanceHistory] = useState<AttendanceRecord[]>([])
   const [workLocation, setWorkLocation] = useState<'OFFICE' | 'REMOTE'>('OFFICE')
   const [userIP, setUserIP] = useState('')
+  const [isOfficeIP, setIsOfficeIP] = useState(false)
   const [isPresenceCheckOpen, setIsPresenceCheckOpen] = useState(false)
   const [settings, setSettings] = useState<WorkSettings>({
     type: 'FIXED',
@@ -82,10 +83,22 @@ export default function AttendanceTab({ userId, workspaceId, isAdmin }: Attendan
       const res = await fetch('https://api.ipify.org?format=json')
       const data = await res.json()
       setUserIP(data.ip)
+      return data.ip
     } catch (e) {
       if (isDev) console.error('Failed to fetch IP:', e)
+      return ''
     }
   }
+
+  // IP 기반 자동 근무 위치 감지
+  useEffect(() => {
+    if (userIP && settings.officeIpWhitelist.length > 0) {
+      const isOffice = settings.officeIpWhitelist.includes(userIP)
+      setIsOfficeIP(isOffice)
+      // 사무실 IP면 자동으로 사무실 선택, 아니면 재택
+      setWorkLocation(isOffice ? 'OFFICE' : 'REMOTE')
+    }
+  }, [userIP, settings.officeIpWhitelist])
 
   const loadSettings = async () => {
     try {
@@ -127,9 +140,14 @@ export default function AttendanceTab({ userId, workspaceId, isAdmin }: Attendan
   }
 
   const handleCheckIn = async () => {
-    const isOfficeIP = settings.officeIpWhitelist.includes(userIP)
+    // 사무실 IP인데 사무실 선택 안 한 경우 (재택 선택 시도) - 차단
+    if (isOfficeIP && workLocation === 'REMOTE') {
+      toast.error('사무실 IP에서는 재택근무를 선택할 수 없습니다.')
+      return
+    }
+    // 사무실 선택했는데 사무실 IP가 아닌 경우 - 차단
     if (workLocation === 'OFFICE' && !isOfficeIP && settings.officeIpWhitelist.length > 0) {
-      toast.error('회사 IP가 아닙니다. 재택근무로 전환하거나 관리자에게 문의하세요.')
+      toast.error('회사 IP가 아닙니다. 재택근무로 전환해주세요.')
       return
     }
     try {
@@ -151,6 +169,44 @@ export default function AttendanceTab({ userId, workspaceId, isAdmin }: Attendan
       }
     } catch (e) {
       toast.error('출근 기록 중 오류가 발생했습니다')
+    }
+  }
+
+  // 이어서 근무 시작 (퇴근 후 다른 장소에서 다시 출근)
+  const handleResumeWork = async () => {
+    // 사무실 IP인데 재택 선택 시도 - 차단
+    if (isOfficeIP && workLocation === 'REMOTE') {
+      toast.error('사무실 IP에서는 재택근무를 선택할 수 없습니다.')
+      return
+    }
+    // 사무실 선택했는데 사무실 IP가 아닌 경우 - 차단
+    if (workLocation === 'OFFICE' && !isOfficeIP && settings.officeIpWhitelist.length > 0) {
+      toast.error('회사 IP가 아닙니다. 재택근무로 전환해주세요.')
+      return
+    }
+    try {
+      const res = await fetch('/api/attendance/checkin', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-id': userId,
+          'x-workspace-id': workspaceId
+        },
+        body: JSON.stringify({
+          workLocation,
+          ipAddress: userIP,
+          isResume: true  // 이어서 근무 플래그
+        })
+      })
+      if (res.ok) {
+        toast.success(`${workLocation === 'OFFICE' ? '사무실' : '재택'}에서 근무를 다시 시작합니다`)
+        loadAttendance()
+      } else {
+        const err = await res.json()
+        toast.error(err.error || '근무 재시작 실패')
+      }
+    } catch (e) {
+      toast.error('근무 재시작 중 오류가 발생했습니다')
     }
   }
 
@@ -295,12 +351,12 @@ export default function AttendanceTab({ userId, workspaceId, isAdmin }: Attendan
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <button
                   onClick={() => setWorkLocation('OFFICE')}
-                  disabled={!!todayAttendance?.checkIn}
+                  disabled={isWorking || (isOfficeIP === false && settings.officeIpWhitelist.length > 0)}
                   className={`relative group flex items-center p-4 rounded-2xl border-2 transition-all duration-300 ${
                     workLocation === 'OFFICE'
                       ? 'bg-black border-black text-lime-400 shadow-xl shadow-lime-400/10 scale-[1.02]'
                       : 'bg-white border-slate-100 text-slate-500 hover:border-slate-200 hover:bg-slate-50'
-                  } ${todayAttendance?.checkIn ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  } ${isWorking || (isOfficeIP === false && settings.officeIpWhitelist.length > 0) ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
                   <div className={`w-12 h-12 rounded-xl flex items-center justify-center mr-4 transition-colors ${
                     workLocation === 'OFFICE' ? 'bg-lime-400 text-black' : 'bg-slate-100 text-slate-400'
@@ -309,7 +365,9 @@ export default function AttendanceTab({ userId, workspaceId, isAdmin }: Attendan
                   </div>
                   <div className="text-left">
                     <div className={`font-bold text-lg ${workLocation === 'OFFICE' ? 'text-white' : 'text-slate-900'}`}>사무실 출근</div>
-                    <div className={`text-xs ${workLocation === 'OFFICE' ? 'text-lime-400/60' : 'text-slate-400'}`}>오피스 근무</div>
+                    <div className={`text-xs ${workLocation === 'OFFICE' ? 'text-lime-400/60' : 'text-slate-400'}`}>
+                      {isOfficeIP ? '✓ 사무실 IP 감지됨' : '오피스 근무'}
+                    </div>
                   </div>
                   {workLocation === 'OFFICE' && (
                     <div className="absolute top-4 right-4 w-3 h-3 bg-lime-400 rounded-full shadow-[0_0_10px_rgba(163,230,53,0.8)] animate-pulse" />
@@ -318,12 +376,12 @@ export default function AttendanceTab({ userId, workspaceId, isAdmin }: Attendan
 
                 <button
                   onClick={() => setWorkLocation('REMOTE')}
-                  disabled={!!todayAttendance?.checkIn}
+                  disabled={isWorking || isOfficeIP}
                   className={`relative group flex items-center p-4 rounded-2xl border-2 transition-all duration-300 ${
                     workLocation === 'REMOTE'
                       ? 'bg-black border-black text-lime-400 shadow-xl shadow-lime-400/10 scale-[1.02]'
                       : 'bg-white border-slate-100 text-slate-500 hover:border-slate-200 hover:bg-slate-50'
-                  } ${todayAttendance?.checkIn ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  } ${isWorking || isOfficeIP ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
                   <div className={`w-12 h-12 rounded-xl flex items-center justify-center mr-4 transition-colors ${
                     workLocation === 'REMOTE' ? 'bg-lime-400 text-black' : 'bg-slate-100 text-slate-400'
@@ -332,7 +390,9 @@ export default function AttendanceTab({ userId, workspaceId, isAdmin }: Attendan
                   </div>
                   <div className="text-left">
                     <div className={`font-bold text-lg ${workLocation === 'REMOTE' ? 'text-white' : 'text-slate-900'}`}>재택 근무</div>
-                    <div className={`text-xs ${workLocation === 'REMOTE' ? 'text-lime-400/60' : 'text-slate-400'}`}>원격 근무</div>
+                    <div className={`text-xs ${workLocation === 'REMOTE' ? 'text-lime-400/60' : 'text-slate-400'}`}>
+                      {isOfficeIP ? '사무실 IP에서 선택 불가' : '원격 근무'}
+                    </div>
                   </div>
                   {workLocation === 'REMOTE' && (
                     <div className="absolute top-4 right-4 w-3 h-3 bg-lime-400 rounded-full shadow-[0_0_10px_rgba(163,230,53,0.8)] animate-pulse" />
@@ -370,11 +430,22 @@ export default function AttendanceTab({ userId, workspaceId, isAdmin }: Attendan
               </button>
             </div>
 
-            {/* Work Status */}
+            {/* 이어서 근무 버튼 (퇴근 후 다른 장소에서 근무 재개) */}
             {isWorkCompleted && (
-              <div className="flex items-center gap-2 text-lime-600 bg-lime-100 px-6 py-3 rounded-full border border-lime-200">
-                <CheckCircle className="w-5 h-5" />
-                <span className="font-medium">오늘 근무 완료</span>
+              <div className="flex flex-col items-center gap-4">
+                <div className="flex items-center gap-2 text-lime-600 bg-lime-100 px-6 py-3 rounded-full border border-lime-200">
+                  <CheckCircle className="w-5 h-5" />
+                  <span className="font-medium">근무 중단됨</span>
+                </div>
+                <button
+                  onClick={handleResumeWork}
+                  className="group relative flex items-center gap-3 px-8 py-4 rounded-2xl bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg shadow-blue-500/30 hover:shadow-xl hover:shadow-blue-500/40 hover:scale-105 transition-all duration-300"
+                >
+                  <RotateCcw className="w-5 h-5" />
+                  <span className="font-bold">이어서 근무하기</span>
+                  <span className="text-xs text-blue-200">({workLocation === 'OFFICE' ? '사무실' : '재택'})</span>
+                </button>
+                <p className="text-xs text-slate-400">다른 장소에서 근무를 이어서 할 수 있습니다</p>
               </div>
             )}
           </div>
