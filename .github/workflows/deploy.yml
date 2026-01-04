@@ -110,12 +110,10 @@ jobs:
             -H "X-API-Key: ${{ secrets.CODEB_API_KEY }}" \
             -H "Content-Type: application/json" \
             -d "{
-              \"tool\": \"deploy\",
+              \"tool\": \"deploy_project\",
               \"params\": {
-                \"project\": \"worb\",
-                \"image\": \"ghcr.io/${{ env.IMAGE_NAME }}:$IMAGE_TAG\",
-                \"environment\": \"$ENVIRONMENT\",
-                \"strategy\": \"blue-green\"
+                \"projectName\": \"worb\",
+                \"environment\": \"$ENVIRONMENT\"
               }
             }")
 
@@ -153,9 +151,9 @@ jobs:
             -H "X-API-Key: ${{ secrets.CODEB_API_KEY }}" \
             -H "Content-Type: application/json" \
             -d "{
-              \"tool\": \"promote\",
+              \"tool\": \"slot_promote\",
               \"params\": {
-                \"project\": \"worb\",
+                \"projectName\": \"worb\",
                 \"environment\": \"production\"
               }
             }")
