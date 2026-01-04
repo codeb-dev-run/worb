@@ -25,6 +25,14 @@ interface AttendanceTabProps {
   isAdmin: boolean
 }
 
+// API request options with workspace header
+const getApiOptions = (workspaceId: string, userId: string) => ({
+  headers: {
+    'x-user-id': userId,
+    'x-workspace-id': workspaceId,
+  },
+})
+
 interface AttendanceRecord {
   id: string
   date: string
@@ -126,7 +134,8 @@ export default function AttendanceTab({ userId, workspaceId, isAdmin }: Attendan
 
   const loadAttendance = async () => {
     try {
-      const res = await fetch('/api/attendance', {
+      // Include workspaceId in query params for proper filtering
+      const res = await fetch(`/api/attendance?workspaceId=${workspaceId}`, {
         headers: { 'x-user-id': userId, 'x-workspace-id': workspaceId }
       })
       if (res.ok) {
@@ -158,7 +167,7 @@ export default function AttendanceTab({ userId, workspaceId, isAdmin }: Attendan
           'x-user-id': userId,
           'x-workspace-id': workspaceId
         },
-        body: JSON.stringify({ workLocation, ipAddress: userIP })
+        body: JSON.stringify({ workLocation, ipAddress: userIP, workspaceId })
       })
       if (res.ok) {
         toast.success('출근이 기록되었습니다')
@@ -195,6 +204,7 @@ export default function AttendanceTab({ userId, workspaceId, isAdmin }: Attendan
         body: JSON.stringify({
           workLocation,
           ipAddress: userIP,
+          workspaceId,
           isResume: true  // 이어서 근무 플래그
         })
       })
@@ -219,7 +229,7 @@ export default function AttendanceTab({ userId, workspaceId, isAdmin }: Attendan
           'x-user-id': userId,
           'x-workspace-id': workspaceId
         },
-        body: JSON.stringify({})
+        body: JSON.stringify({ workspaceId })
       })
       if (res.ok) {
         toast.success('퇴근이 기록되었습니다')

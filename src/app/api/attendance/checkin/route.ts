@@ -23,16 +23,17 @@ export async function POST(request: NextRequest) {
       return validationErrorResponse(validation.errors!)
     }
 
-    const { workLocation, note, isResume, ipAddress } = validation.data!
+    const { workLocation, note, isResume, ipAddress, workspaceId } = validation.data!
 
     const now = new Date()
     const today = new Date()
     today.setHours(0, 0, 0, 0)
 
-    // Check if already checked in today
+    // Check if already checked in today for this workspace
     const existing = await prisma.attendance.findFirst({
       where: {
         userId: user.id,
+        ...(workspaceId ? { workspaceId } : {}),
         date: {
           gte: today,
         },
@@ -52,9 +53,12 @@ export async function POST(request: NextRequest) {
           },
         })
 
-        // Invalidate attendance cache
+        // Invalidate attendance cache (including workspace-specific cache)
         await redis.del(`attendance:api:${user.id}`)
         await redis.del(`attendance:mobile:${user.id}`)
+        if (workspaceId) {
+          await redis.del(`attendance:api:${user.id}:${workspaceId}`)
+        }
 
         secureLogger.info('Attendance resumed', {
           operation: 'attendance.resume',
@@ -74,11 +78,9 @@ export async function POST(request: NextRequest) {
       return createErrorResponse('Already checked in today', 400, 'ALREADY_CHECKED_IN')
     }
 
-    // Fetch Work Policy
-    const workspaceId = null
-
+    // Fetch Work Policy for this workspace
     const policy = await prisma.workPolicy.findFirst({
-      where: { workspaceId }
+      where: { workspaceId: workspaceId || null }
     })
 
     // Determine status based on policy
@@ -119,6 +121,7 @@ export async function POST(request: NextRequest) {
     const attendance = await prisma.attendance.create({
       data: {
         userId: user.id,
+        workspaceId: workspaceId || null,
         date: today,
         checkIn: now,
         status: status as any,
@@ -126,9 +129,12 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    // Invalidate attendance cache
+    // Invalidate attendance cache (including workspace-specific cache)
     await redis.del(`attendance:api:${user.id}`)
     await redis.del(`attendance:mobile:${user.id}`)
+    if (workspaceId) {
+      await redis.del(`attendance:api:${user.id}:${workspaceId}`)
+    }
 
     // CVE-CB-005 Fix: Use secure logging
     secureLogger.info('Attendance check-in successful', {

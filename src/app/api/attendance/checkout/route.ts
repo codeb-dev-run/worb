@@ -15,14 +15,24 @@ export async function POST(request: NextRequest) {
       return createErrorResponse('Unauthorized', 401, 'AUTH_REQUIRED')
     }
 
+    // Get workspaceId from request body
+    let workspaceId: string | undefined
+    try {
+      const body = await request.json()
+      workspaceId = body.workspaceId
+    } catch {
+      // Body parsing failed, proceed without workspaceId
+    }
+
     const now = new Date()
     const today = new Date()
     today.setHours(0, 0, 0, 0)
 
-    // Find today's attendance
+    // Find today's attendance for this workspace
     const attendance = await prisma.attendance.findFirst({
       where: {
         userId: user.id,
+        ...(workspaceId ? { workspaceId } : {}),
         date: {
           gte: today,
         },
@@ -44,9 +54,12 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    // Invalidate attendance cache
+    // Invalidate attendance cache (including workspace-specific cache)
     await redis.del(`attendance:api:${user.id}`)
     await redis.del(`attendance:mobile:${user.id}`)
+    if (workspaceId) {
+      await redis.del(`attendance:api:${user.id}:${workspaceId}`)
+    }
 
     // CVE-CB-005 Fix: Use secure logging
     secureLogger.info('Attendance check-out successful', {

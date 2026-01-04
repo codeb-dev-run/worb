@@ -24,17 +24,23 @@ export async function GET(request: NextRequest) {
       return validationErrorResponse(validation.errors!)
     }
 
-    const cacheKey = `attendance:api:${user.id}`
+    // Get workspaceId from query params - required for proper workspace separation
+    const workspaceId = searchParams.get('workspaceId')
+
+    const cacheKey = workspaceId
+      ? `attendance:api:${user.id}:${workspaceId}`
+      : `attendance:api:${user.id}`
 
     // Cache for 1 hour (or until invalidated by check-in/out)
     const data = await getOrSet(cacheKey, async () => {
       const today = new Date()
       today.setHours(0, 0, 0, 0)
 
-      // Get today's attendance
+      // Get today's attendance - filter by workspace if provided
       const todayAttendance = await prisma.attendance.findFirst({
         where: {
           userId: user.id,
+          ...(workspaceId ? { workspaceId } : {}),
           date: {
             gte: today,
           },
@@ -48,6 +54,7 @@ export async function GET(request: NextRequest) {
       const history = await prisma.attendance.findMany({
         where: {
           userId: user.id,
+          ...(workspaceId ? { workspaceId } : {}),
           date: {
             gte: thirtyDaysAgo,
           },
