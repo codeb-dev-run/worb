@@ -183,8 +183,8 @@ export async function middleware(request: NextRequest) {
     // Use nonce for scripts, but keep 'unsafe-eval' for Next.js compatibility
     // In production, consider removing 'unsafe-eval' if not needed
     `script-src 'self' 'nonce-${nonce}' 'strict-dynamic' https://accounts.google.com https://apis.google.com${process.env.NODE_ENV === 'development' ? " 'unsafe-eval'" : ''}`,
-    // Use nonce for styles
-    `style-src 'self' 'nonce-${nonce}' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net`,
+    // Allow unsafe-inline for styles (needed for react-hot-toast and other UI libraries)
+    `style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net`,
     "font-src 'self' https://fonts.gstatic.com data:",
     "img-src 'self' data: blob: https: http:",
     `connect-src 'self' https://accounts.google.com https://apis.google.com wss: https:${process.env.NODE_ENV === 'development' ? ' http://localhost:* ws://localhost:*' : ''}`,

@@ -30,9 +30,12 @@ const getPrismaConfig = (): PrismaConfig => ({
 // =============================================================================
 
 const createPrismaClient = () => {
-    // Skip Prisma initialization during build time if DATABASE_URL is not set
+    // Skip Prisma initialization during build time or on client-side
     if (!process.env.DATABASE_URL) {
-        console.warn('DATABASE_URL is not set. Prisma client will not be initialized.')
+        // Only log in development on server-side (NODE_ENV check happens at build time)
+        if (typeof window === 'undefined' && process.env.NODE_ENV === 'development') {
+            console.warn('DATABASE_URL is not set. Prisma client will not be initialized.')
+        }
         return null as unknown as PrismaClient
     }
 
