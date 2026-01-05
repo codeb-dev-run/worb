@@ -46,7 +46,40 @@ export async function POST(
             return createErrorResponse('User not found', 404, 'USER_NOT_FOUND')
         }
 
-        // 3. 트랜잭션으로 멤버 추가 및 초대 상태 업데이트
+        // 3. 이미 워크스페이스 멤버인지 확인
+        const existingMember = await prisma.workspaceMember.findUnique({
+            where: {
+                workspaceId_userId: {
+                    workspaceId: invite.workspaceId,
+                    userId: user.id,
+                },
+            },
+        })
+
+        if (existingMember) {
+            // 이미 멤버인 경우 초대 상태만 업데이트하고 성공 반환
+            await prisma.invitation.update({
+                where: { id: invite.id },
+                data: {
+                    status: 'ACCEPTED',
+                    acceptedAt: new Date(),
+                },
+            })
+
+            secureLogger.info('Invite accepted (already member)', {
+                operation: 'invite.accept',
+                userId: user.id,
+                workspaceId: invite.workspaceId,
+            })
+
+            return NextResponse.json({
+                success: true,
+                alreadyMember: true,
+                workspaceId: invite.workspaceId
+            })
+        }
+
+        // 4. 트랜잭션으로 멤버 추가 및 초대 상태 업데이트
         await prisma.$transaction(async (tx) => {
             // 멤버 추가
             await tx.workspaceMember.create({
