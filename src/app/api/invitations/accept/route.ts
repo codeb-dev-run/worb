@@ -23,11 +23,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 세션에서 userId 가져오기 (클라이언트에서 userId 안 보낸 경우)
+    // 세션에서 사용자 정보 가져오기 (클라이언트에서 userId 안 보낸 경우)
     if (!userId) {
       const session = await getServerSession(authOptions);
-      if (session?.user?.id) {
-        userId = session.user.id;
+      if (session?.user?.email) {
+        // 이메일로 사용자 조회 (더 안정적)
+        const sessionUser = await prisma.user.findUnique({
+          where: { email: session.user.email },
+        });
+        if (sessionUser) {
+          userId = sessionUser.id;
+        }
       }
     }
 

@@ -103,8 +103,9 @@ export default function JoinByCodePage({ params }: { params: { code: string } })
         body: JSON.stringify({ workspaceId: workspace.id })
       })
 
+      const data = await response.json()
+
       if (!response.ok) {
-        const data = await response.json()
         throw new Error(data.error || '워크스페이스 가입에 실패했습니다')
       }
 
@@ -117,11 +118,18 @@ export default function JoinByCodePage({ params }: { params: { code: string } })
         origin: { y: 0.6 }
       })
 
-      toast.success(`${workspace.name} 워크스페이스에 가입되었습니다!`)
+      if (data.alreadyMember) {
+        toast.success(`이미 ${workspace.name} 워크스페이스의 멤버입니다!`)
+      } else {
+        toast.success(`${workspace.name} 워크스페이스에 가입되었습니다!`)
+      }
 
-      // 3초 후 메인 페이지로 이동
+      // 해당 워크스페이스로 이동
+      localStorage.setItem('currentWorkspaceId', workspace.id)
+
+      // 3초 후 대시보드로 이동
       setTimeout(() => {
-        window.location.href = '/'
+        window.location.href = `/dashboard?workspace=${workspace.id}`
       }, 3000)
     } catch (err: any) {
       toast.error(err.message)

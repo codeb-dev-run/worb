@@ -7,8 +7,17 @@ import { prisma } from '@/lib/prisma'
 export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
-    if (!session?.user?.id) {
+    if (!session?.user?.email) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    // 이메일로 사용자 조회 (더 안정적)
+    const user = await prisma.user.findUnique({
+      where: { email: session.user.email },
+    })
+
+    if (!user) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }
 
     const { workspaceId } = await request.json()
@@ -35,12 +44,17 @@ export async function POST(request: NextRequest) {
     const existingMember = await prisma.workspaceMember.findFirst({
       where: {
         workspaceId,
-        userId: session.user.id
+        userId: user.id
       }
     })
 
     if (existingMember) {
-      return NextResponse.json({ error: '이미 이 워크스페이스의 멤버입니다' }, { status: 400 })
+      return NextResponse.json({
+        message: '이미 이 워크스페이스의 멤버입니다',
+        alreadyMember: true,
+        workspaceId: workspace.id,
+        workspaceName: workspace.name
+      })
     }
 
     // 승인이 필요한 경우 가입 요청 생성
@@ -57,7 +71,7 @@ export async function POST(request: NextRequest) {
     await prisma.workspaceMember.create({
       data: {
         workspaceId,
-        userId: session.user.id,
+        userId: user.id,
         role: 'member'
       }
     })
