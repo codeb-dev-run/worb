@@ -34,7 +34,7 @@ Environment=PORT=3000
 Environment=HOSTNAME=0.0.0.0
 
 # Database (Storage Server: db.codeb.kr)
-Environment=DATABASE_URL=postgresql://worb_user:worb_secure_pass@db.codeb.kr:5432/worb?schema=public
+Environment=DATABASE_URL=postgresql://worb_user:worb_secure_pass@db.codeb.kr:5432/workb?schema=public
 
 # Redis (Storage Server: db.codeb.kr)
 Environment=REDIS_URL=redis://db.codeb.kr:6379/0
