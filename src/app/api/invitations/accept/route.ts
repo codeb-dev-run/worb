@@ -16,7 +16,10 @@ export async function POST(request: NextRequest) {
     const token = body.token || body.code;
     let userId = body.userId;
 
+    console.log('[invitations/accept] Request:', { token, userId: userId || 'not provided' });
+
     if (!token) {
+      console.log('[invitations/accept] Error: Token or code is required');
       return NextResponse.json(
         { error: 'Token or code is required' },
         { status: 400 }
@@ -26,10 +29,21 @@ export async function POST(request: NextRequest) {
     // 세션에서 사용자 정보 가져오기 (클라이언트에서 userId 안 보낸 경우)
     if (!userId) {
       const session = await getServerSession(authOptions);
+      console.log('[invitations/accept] Session:', {
+        hasSession: !!session,
+        email: session?.user?.email || 'none',
+        sessionId: (session?.user as any)?.id || 'none'
+      });
+
       if (session?.user?.email) {
         // 이메일로 사용자 조회 (더 안정적)
         const sessionUser = await prisma.user.findUnique({
           where: { email: session.user.email },
+        });
+        console.log('[invitations/accept] User lookup by email:', {
+          email: session.user.email,
+          found: !!sessionUser,
+          userId: sessionUser?.id || 'not found'
         });
         if (sessionUser) {
           userId = sessionUser.id;
@@ -37,12 +51,20 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    console.log('[invitations/accept] Final userId:', userId || 'none');
+
     // 1. 먼저 Invitation 토큰으로 찾기 (개인 초대)
     let invitation = await prisma.invitation.findUnique({
       where: { token },
       include: {
         workspace: true,
       },
+    });
+
+    console.log('[invitations/accept] Invitation lookup:', {
+      token,
+      found: !!invitation,
+      status: invitation?.status || 'N/A'
     });
 
     // 2. Invitation에 없으면 Workspace.inviteCode로 찾기 (공개 초대 코드)
@@ -54,9 +76,17 @@ export async function POST(request: NextRequest) {
         where: { inviteCode: token.toUpperCase() },
       });
 
+      console.log('[invitations/accept] Workspace lookup by inviteCode:', {
+        code: token.toUpperCase(),
+        found: !!workspace,
+        workspaceId: workspace?.id || 'not found',
+        workspaceName: workspace?.name || 'N/A'
+      });
+
       if (workspace) {
         isPublicInviteCode = true;
       } else {
+        console.log('[invitations/accept] Error: Invalid invitation code');
         return NextResponse.json(
           { error: 'Invalid invitation code' },
           { status: 404 }
@@ -176,8 +206,11 @@ export async function POST(request: NextRequest) {
 
     // === 공개 초대 코드(Workspace.inviteCode) 처리 ===
     if (isPublicInviteCode && workspace) {
+      console.log('[invitations/accept] Processing public invite code for workspace:', workspace.name);
+
       // userId가 없으면 로그인 필요
       if (!userId) {
+        console.log('[invitations/accept] No userId - requiresSignup');
         return NextResponse.json({
           requiresSignup: true,
           workspace: {
@@ -192,7 +225,14 @@ export async function POST(request: NextRequest) {
         where: { id: userId },
       });
 
+      console.log('[invitations/accept] User verification:', {
+        userId,
+        userExists: !!user,
+        userEmail: user?.email || 'N/A'
+      });
+
       if (!user) {
+        console.log('[invitations/accept] Error: User not found by id:', userId);
         return NextResponse.json(
           { error: 'User not found' },
           { status: 404 }
@@ -209,7 +249,14 @@ export async function POST(request: NextRequest) {
         },
       });
 
+      console.log('[invitations/accept] Existing member check:', {
+        workspaceId: workspace.id,
+        userId,
+        isAlreadyMember: !!existingMember
+      });
+
       if (existingMember) {
+        console.log('[invitations/accept] User is already a member');
         return NextResponse.json({
           success: true,
           alreadyMember: true,
@@ -218,6 +265,8 @@ export async function POST(request: NextRequest) {
         });
       }
 
+      console.log('[invitations/accept] Creating new workspace member');
+
       // Add user to workspace with 'member' role
       const workspaceMember = await prisma.workspaceMember.create({
         data: {
@@ -225,6 +274,12 @@ export async function POST(request: NextRequest) {
           userId: userId,
           role: 'member',
         },
+      });
+
+      console.log('[invitations/accept] Successfully added member:', {
+        workspaceId: workspace.id,
+        userId,
+        memberId: workspaceMember.id
       });
 
       secureLogger.info('User joined via public invite code', {
@@ -240,12 +295,18 @@ export async function POST(request: NextRequest) {
     }
 
     // 도달하면 안 됨
+    console.log('[invitations/accept] Error: Reached unreachable code');
     return NextResponse.json(
       { error: 'Invalid invitation' },
       { status: 400 }
     );
-  } catch (error) {
+  } catch (error: any) {
     // CVE-CB-005: Secure logging
+    console.error('[invitations/accept] Exception:', {
+      message: error?.message || 'Unknown error',
+      code: error?.code || 'N/A',
+      stack: error?.stack?.split('\n').slice(0, 3).join('\n') || 'N/A'
+    });
     secureLogger.error('Error accepting invitation', error as Error, { operation: 'invitations.accept' });
     return createErrorResponse('Failed to accept invitation', 500, 'ACCEPT_FAILED');
   }
