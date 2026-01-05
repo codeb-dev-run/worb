@@ -11,10 +11,17 @@ import { Label } from '@/components/ui/label'
 import {
   User, FileText, GraduationCap, Medal, Phone, Mail,
   Globe, Cake, Edit, ChevronRight, Loader2, Building2,
-  Calendar, Heart, Users
+  Calendar, Heart, Users, Star, TrendingUp, Award
 } from 'lucide-react'
 import { toast } from 'react-hot-toast'
-import { EmployeeProfile, EmployeeEducation, EmployeeExperience, EmployeeCertificate } from '@/types/hr'
+import { EmployeeProfile, EmployeeEducation, EmployeeExperience, EmployeeCertificate, MonthlyEvaluationSummary, YearlyEvaluationSummary, FlexWorkTier } from '@/types/hr'
+
+const FLEX_TIER_LABELS: Record<FlexWorkTier, { label: string; color: string }> = {
+  FULL_FLEX: { label: '완전자율', color: 'bg-emerald-500' },
+  HIGH_FLEX: { label: '고유연', color: 'bg-blue-500' },
+  MID_FLEX: { label: '중유연', color: 'bg-amber-500' },
+  STANDARD: { label: '표준', color: 'bg-slate-500' },
+}
 
 interface ProfileTabProps {
   userId: string
@@ -31,10 +38,24 @@ export default function ProfileTab({ userId, workspaceId, isAdmin }: ProfileTabP
   const [selectedEmployee, setSelectedEmployee] = useState<string | null>(null)
   const [isEmployeeListOpen, setIsEmployeeListOpen] = useState(false)
 
+  // 성과 점수
+  const [monthlyScore, setMonthlyScore] = useState<MonthlyEvaluationSummary | null>(null)
+  const [yearlyScore, setYearlyScore] = useState<YearlyEvaluationSummary | null>(null)
+  const [recentWeeklyScore, setRecentWeeklyScore] = useState<number | null>(null)
+
   useEffect(() => {
     loadProfile()
+    loadEvaluationScores()
     if (isAdmin) loadAllEmployees()
   }, [userId, workspaceId, isAdmin])
+
+  useEffect(() => {
+    if (selectedEmployee) {
+      loadEvaluationScores(selectedEmployee)
+    } else {
+      loadEvaluationScores()
+    }
+  }, [selectedEmployee])
 
   const loadProfile = async (employeeId?: string) => {
     setLoading(true)
@@ -68,6 +89,52 @@ export default function ProfileTab({ userId, workspaceId, isAdmin }: ProfileTabP
       }
     } catch (e) {
       if (isDev) console.error('Failed to load employees:', e)
+    }
+  }
+
+  const loadEvaluationScores = async (employeeId?: string) => {
+    try {
+      const year = new Date().getFullYear()
+      const month = new Date().getMonth() + 1
+      const empParam = employeeId ? `&employeeId=${employeeId}` : ''
+
+      // 주간 점수 (최근)
+      const weeklyRes = await fetch(`/api/evaluation?workspaceId=${workspaceId}&type=weekly&year=${year}${empParam}`)
+      if (weeklyRes.ok) {
+        const data = await weeklyRes.json()
+        const evaluations = data.evaluations || []
+        if (evaluations.length > 0) {
+          setRecentWeeklyScore(evaluations[0].totalScore)
+        } else {
+          setRecentWeeklyScore(null)
+        }
+      }
+
+      // 월간 점수
+      const monthlyRes = await fetch(`/api/evaluation?workspaceId=${workspaceId}&type=monthly&year=${year}&month=${month}${empParam}`)
+      if (monthlyRes.ok) {
+        const data = await monthlyRes.json()
+        const evaluations = data.evaluations || []
+        if (evaluations.length > 0) {
+          setMonthlyScore(evaluations[0])
+        } else {
+          setMonthlyScore(null)
+        }
+      }
+
+      // 연간 점수
+      const yearlyRes = await fetch(`/api/evaluation?workspaceId=${workspaceId}&type=yearly&year=${year}${empParam}`)
+      if (yearlyRes.ok) {
+        const data = await yearlyRes.json()
+        const evaluations = data.evaluations || []
+        if (evaluations.length > 0) {
+          setYearlyScore(evaluations[0])
+        } else {
+          setYearlyScore(null)
+        }
+      }
+    } catch (e) {
+      if (isDev) console.error('Failed to load evaluation scores:', e)
     }
   }
 
@@ -152,6 +219,103 @@ export default function ProfileTab({ userId, workspaceId, isAdmin }: ProfileTabP
           </CardContent>
         </Card>
       )}
+
+      {/* 성과 점수 카드 */}
+      <Card className="bg-gradient-to-br from-lime-50 via-emerald-50 to-teal-50 backdrop-blur-xl border-lime-200/60 shadow-sm rounded-3xl">
+        <CardHeader>
+          <CardTitle className="text-slate-900 flex items-center gap-2">
+            <Star className="w-5 h-5 text-lime-600" />
+            성과 평가 점수
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* 주간 점수 */}
+            <div className="bg-white/70 rounded-2xl p-4 text-center">
+              <div className="flex items-center justify-center gap-2 text-slate-500 text-sm mb-2">
+                <Calendar className="w-4 h-4" />
+                최근 주간
+              </div>
+              <div className="text-3xl font-bold text-slate-900">
+                {recentWeeklyScore !== null ? recentWeeklyScore : '-'}
+                <span className="text-lg text-slate-400 font-normal">/100</span>
+              </div>
+            </div>
+
+            {/* 월간 점수 */}
+            <div className="bg-white/70 rounded-2xl p-4 text-center">
+              <div className="flex items-center justify-center gap-2 text-slate-500 text-sm mb-2">
+                <TrendingUp className="w-4 h-4" />
+                이번 달 평균
+              </div>
+              <div className="text-3xl font-bold text-slate-900">
+                {monthlyScore ? monthlyScore.averageScore.toFixed(1) : '-'}
+                <span className="text-lg text-slate-400 font-normal">/100</span>
+              </div>
+              {monthlyScore && (
+                <Badge className={`mt-2 ${FLEX_TIER_LABELS[monthlyScore.flexWorkTier]?.color} text-white`}>
+                  {FLEX_TIER_LABELS[monthlyScore.flexWorkTier]?.label}
+                </Badge>
+              )}
+            </div>
+
+            {/* 연간 점수 */}
+            <div className="bg-white/70 rounded-2xl p-4 text-center">
+              <div className="flex items-center justify-center gap-2 text-slate-500 text-sm mb-2">
+                <Award className="w-4 h-4" />
+                올해 평균
+              </div>
+              <div className="text-3xl font-bold text-lime-600">
+                {yearlyScore ? yearlyScore.averageScore.toFixed(1) : '-'}
+                <span className="text-lg text-slate-400 font-normal">/100</span>
+              </div>
+              {yearlyScore && (
+                <>
+                  <Badge className={`mt-2 ${FLEX_TIER_LABELS[yearlyScore.flexWorkTier]?.color} text-white`}>
+                    {FLEX_TIER_LABELS[yearlyScore.flexWorkTier]?.label}
+                  </Badge>
+                  {yearlyScore.suggestedRaisePercent && yearlyScore.suggestedRaisePercent > 0 && (
+                    <div className="mt-2 text-xs text-emerald-600 font-medium">
+                      권장 인상률: +{yearlyScore.suggestedRaisePercent}%
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* 분기별 점수 (연간 데이터가 있을 때만) */}
+          {yearlyScore && (yearlyScore.q1Average || yearlyScore.q2Average || yearlyScore.q3Average || yearlyScore.q4Average) && (
+            <div className="mt-4 pt-4 border-t border-lime-200/50">
+              <p className="text-sm text-slate-500 mb-2">분기별 평균</p>
+              <div className="grid grid-cols-4 gap-2 text-center text-sm">
+                <div className="bg-white/50 rounded-xl p-2">
+                  <div className="text-slate-500">Q1</div>
+                  <div className="font-bold text-slate-900">{yearlyScore.q1Average?.toFixed(1) || '-'}</div>
+                </div>
+                <div className="bg-white/50 rounded-xl p-2">
+                  <div className="text-slate-500">Q2</div>
+                  <div className="font-bold text-slate-900">{yearlyScore.q2Average?.toFixed(1) || '-'}</div>
+                </div>
+                <div className="bg-white/50 rounded-xl p-2">
+                  <div className="text-slate-500">Q3</div>
+                  <div className="font-bold text-slate-900">{yearlyScore.q3Average?.toFixed(1) || '-'}</div>
+                </div>
+                <div className="bg-white/50 rounded-xl p-2">
+                  <div className="text-slate-500">Q4</div>
+                  <div className="font-bold text-slate-900">{yearlyScore.q4Average?.toFixed(1) || '-'}</div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {!recentWeeklyScore && !monthlyScore && !yearlyScore && (
+            <div className="text-center py-4 text-slate-500">
+              아직 평가 기록이 없습니다
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* 기본 정보 */}
       <Card className="bg-white/60 backdrop-blur-xl border-white/40 shadow-sm rounded-3xl">

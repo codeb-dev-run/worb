@@ -173,7 +173,98 @@ export interface LeaveBalance {
   sickRemaining: number
 }
 
-export type HRTab = 'attendance' | 'flexible' | 'profile' | 'payroll' | 'leave' | 'stats' | 'export' | 'settings'
+export type HRTab = 'attendance' | 'flexible' | 'profile' | 'payroll' | 'leave' | 'stats' | 'evaluation' | 'export' | 'settings'
+
+// ============================================
+// 성과 평가 관련 타입 정의
+// ============================================
+
+export type FlexWorkTier = 'FULL_FLEX' | 'HIGH_FLEX' | 'MID_FLEX' | 'STANDARD'
+
+export interface Evaluator {
+  id: string
+  userId: string
+  workspaceId: string
+  isActive: boolean
+  assignedAt: string
+  assignedBy: string
+  user: {
+    id: string
+    name: string
+    email: string
+    avatar?: string
+  }
+}
+
+export interface WeeklyEvaluation {
+  id: string
+  workspaceId: string
+  employeeId: string
+  evaluatorId: string
+  year: number
+  weekNumber: number
+  weekStartDate: string
+  weekEndDate: string
+  projectQuality: number      // 0-20
+  deadlineAdherence: number   // 0-20
+  presentation: number        // 0-20
+  collaboration: number       // 0-20
+  selfInitiative: number      // 0-20
+  totalScore: number          // 0-100
+  feedback?: string
+  createdAt: string
+  updatedAt: string
+  employee?: {
+    id: string
+    nameKor: string
+    position?: string
+    department?: string
+    user?: { avatar?: string }
+  }
+  evaluator?: Evaluator
+}
+
+export interface MonthlyEvaluationSummary {
+  id: string
+  workspaceId: string
+  employeeId: string
+  year: number
+  month: number
+  weekCount: number
+  totalScore: number
+  averageScore: number
+  flexWorkTier: FlexWorkTier
+  employee?: {
+    id: string
+    nameKor: string
+    position?: string
+    department?: string
+    user?: { avatar?: string }
+  }
+}
+
+export interface YearlyEvaluationSummary {
+  id: string
+  workspaceId: string
+  employeeId: string
+  year: number
+  monthCount: number
+  totalScore: number
+  averageScore: number
+  q1Average?: number
+  q2Average?: number
+  q3Average?: number
+  q4Average?: number
+  suggestedRaisePercent?: number
+  flexWorkTier: FlexWorkTier
+  employee?: {
+    id: string
+    nameKor: string
+    position?: string
+    department?: string
+    user?: { avatar?: string }
+  }
+}
 export type UserRole = 'admin' | 'hr' | 'manager' | 'employee'
 
 // ============================================
