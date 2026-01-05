@@ -12,7 +12,8 @@ import { getTasks, createTask, updateTask, deleteTask, updateTasksOrder } from '
 import { getProject } from '@/actions/project'
 import { addActivity } from '@/actions/activity'
 import { toast } from 'react-hot-toast'
-import { Loader2 } from 'lucide-react'
+import { Loader2, Wifi, WifiOff } from 'lucide-react'
+import { useCentrifugo } from '@/components/providers/centrifugo-provider'
 
 const isDev = process.env.NODE_ENV === 'development'
 
@@ -52,6 +53,7 @@ export default function KanbanPage() {
   const params = useParams()
   const projectId = params?.id as string
   const { user, userProfile } = useAuth()
+  const { subscribe, isConnected } = useCentrifugo()
 
   const [tasks, setTasks] = useState<KanbanTask[]>([])
   const [columns, setColumns] = useState<KanbanColumnWithTasks[]>([])
@@ -62,6 +64,8 @@ export default function KanbanPage() {
 
   // 업데이트 중복 방지용 ref
   const isUpdatingRef = useRef(false)
+  // 마지막 업데이트 타임스탬프 (중복 이벤트 방지)
+  const lastUpdateRef = useRef<string>('')
 
   // 데이터 로드 함수
   const loadData = useCallback(async () => {
@@ -110,6 +114,137 @@ export default function KanbanPage() {
   useEffect(() => {
     loadData()
   }, [loadData])
+
+  // ========================================
+  // 실시간 업데이트 구독 (Centrifugo)
+  // ========================================
+  useEffect(() => {
+    if (!projectId) return
+
+    const channel = `project:${projectId}`
+
+    const unsubscribe = subscribe(channel, (data: any) => {
+      // 중복 이벤트 방지
+      if (data.timestamp && data.timestamp === lastUpdateRef.current) {
+        return
+      }
+      lastUpdateRef.current = data.timestamp || ''
+
+      const { event } = data
+      if (isDev) console.log('[Kanban Realtime] Received:', event, data)
+
+      switch (event) {
+        case 'task-created': {
+          // 새 태스크가 생성됨
+          const newTask = data as any
+          if (!newTask.id) return
+
+          const taskWithColumnId: KanbanTask = {
+            ...newTask,
+            columnId: newTask.columnId || getColumnIdFromStatus(newTask.status),
+            priority: newTask.priority as TaskPriority,
+            status: newTask.status as TaskStatus,
+            department: newTask.department || newTask.teamId,
+            createdAt: new Date(newTask.createdAt),
+            updatedAt: new Date(newTask.updatedAt),
+          }
+
+          setTasks(prev => {
+            // 이미 있는 태스크면 무시
+            if (prev.some(t => t.id === newTask.id)) return prev
+            return [...prev, taskWithColumnId]
+          })
+
+          setColumns(prev => prev.map(col => {
+            if (col.id === taskWithColumnId.columnId) {
+              // 이미 있는지 확인
+              if (col.tasks.some(t => t.id === newTask.id)) return col
+              return {
+                ...col,
+                tasks: [...col.tasks, taskWithColumnId].sort((a, b) => (a.order || 0) - (b.order || 0))
+              }
+            }
+            return col
+          }))
+
+          toast(`새 태스크가 추가됨: ${newTask.title}`, { icon: '📋' })
+          break
+        }
+
+        case 'task-updated': {
+          // 태스크가 수정됨
+          const updatedTask = data as any
+          if (!updatedTask.id) return
+
+          setTasks(prev => prev.map(t => {
+            if (t.id === updatedTask.id) {
+              return {
+                ...t,
+                ...updatedTask,
+                columnId: updatedTask.columnId || getColumnIdFromStatus(updatedTask.status),
+                priority: updatedTask.priority as TaskPriority,
+                status: updatedTask.status as TaskStatus,
+                department: updatedTask.department || updatedTask.teamId,
+                updatedAt: new Date(updatedTask.updatedAt || Date.now()),
+              }
+            }
+            return t
+          }))
+
+          setColumns(prev => prev.map(col => ({
+            ...col,
+            tasks: col.tasks.map(t => {
+              if (t.id === updatedTask.id) {
+                return {
+                  ...t,
+                  ...updatedTask,
+                  columnId: updatedTask.columnId || getColumnIdFromStatus(updatedTask.status),
+                  priority: updatedTask.priority as TaskPriority,
+                  status: updatedTask.status as TaskStatus,
+                  department: updatedTask.department || updatedTask.teamId,
+                  updatedAt: new Date(updatedTask.updatedAt || Date.now()),
+                }
+              }
+              return t
+            })
+          })))
+          break
+        }
+
+        case 'task-deleted': {
+          // 태스크가 삭제됨
+          const { id: deletedId } = data
+          if (!deletedId) return
+
+          setTasks(prev => prev.filter(t => t.id !== deletedId))
+          setColumns(prev => prev.map(col => ({
+            ...col,
+            tasks: col.tasks.filter(t => t.id !== deletedId)
+          })))
+
+          toast('태스크가 삭제됨', { icon: '🗑️' })
+          break
+        }
+
+        case 'tasks-reordered': {
+          // 태스크 순서/컬럼 변경됨
+          // 현재 업데이트 중이면 무시 (자신의 변경)
+          if (isUpdatingRef.current) return
+
+          // 전체 데이터 새로고침 (순서 동기화)
+          loadData()
+          break
+        }
+
+        default:
+          if (isDev) console.log('[Kanban Realtime] Unknown event:', event)
+      }
+    })
+
+    return () => {
+      unsubscribe()
+    }
+  }, [projectId, subscribe, loadData])
 
   // 컬럼 변경 핸들러 (드래그 앤 드롭)
   const handleColumnsChange = useCallback(async (newColumns: KanbanColumnWithTasks[]) => {
@@ -377,6 +512,25 @@ export default function KanbanPage() {
               </Link>
             </div>
           </div>
+        </div>
+
+        {/* 실시간 연결 상태 표시 */}
+        <div className="flex items-center gap-2">
+          {isConnected ? (
+            <div className="flex items-center gap-1.5 px-3 py-1.5 bg-green-50 text-green-700 rounded-full text-sm">
+              <Wifi className="h-4 w-4" />
+              <span className="hidden sm:inline">실시간 동기화 중</span>
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+              </span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 text-gray-500 rounded-full text-sm">
+              <WifiOff className="h-4 w-4" />
+              <span className="hidden sm:inline">오프라인</span>
+            </div>
+          )}
         </div>
       </div>
 
