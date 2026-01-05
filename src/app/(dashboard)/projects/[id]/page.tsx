@@ -122,6 +122,11 @@ export default function ProjectDetailPage() {
     ? 0
     : Math.round((tasks.filter(t => t.columnId === 'done' || t.status === 'done').length / tasks.length) * 100)
 
+  // Check if current user is project member (any role)
+  const isProjectMember = project?.teamMembers?.some(
+    (member: any) => member.userId === user?.uid
+  ) ?? false
+
   // Check if current user is project admin
   const isProjectAdmin = project?.teamMembers?.some(
     (member: any) => member.userId === user?.uid && member.role === 'Admin'
@@ -1323,7 +1328,7 @@ export default function ProjectDetailPage() {
 
           {activeTab === 'team' && (
             <div className="h-full overflow-y-auto p-6">
-              <ProjectInvitations projectId={project.id} isAdmin={isProjectAdmin} />
+              <ProjectInvitations projectId={project.id} isAdmin={isProjectMember} />
             </div>
           )}
 

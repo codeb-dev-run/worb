@@ -3,6 +3,7 @@ const isDev = process.env.NODE_ENV === 'development'
 
 import React, { useState, useEffect } from 'react'
 import { useSession } from 'next-auth/react'
+import { useWorkspace } from '@/lib/workspace-context'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
@@ -24,19 +25,30 @@ import {
     CheckCircle2,
     XCircle,
     Loader2,
-    Copy,
     Trash2,
     RefreshCw,
-    Send,
     Link as LinkIcon,
     UserMinus,
     Shield,
     AlertTriangle,
     PartyPopper,
     UserCheck,
+    Users,
+    Search,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import toast from 'react-hot-toast'
+
+// 워크스페이스 멤버 타입
+interface WorkspaceMemberItem {
+    id: string
+    email: string
+    name: string | null
+    avatar: string | null
+    role: string
+    department: string | null
+    departmentName: string | null
+}
 
 interface ProjectInvitation {
     id: string
@@ -109,23 +121,27 @@ interface ProjectInvitationsProps {
 
 export default function ProjectInvitations({ projectId, isAdmin = false }: ProjectInvitationsProps) {
     const { data: session } = useSession()
+    const { currentWorkspace } = useWorkspace()
     const [invitations, setInvitations] = useState<ProjectInvitation[]>([])
     const [members, setMembers] = useState<ProjectMember[]>([])
     const [loading, setLoading] = useState(true)
-    const [sending, setSending] = useState(false)
     const [dialogOpen, setDialogOpen] = useState(false)
     const [removeDialogOpen, setRemoveDialogOpen] = useState(false)
     const [memberToRemove, setMemberToRemove] = useState<ProjectMember | null>(null)
     const [removingMemberId, setRemovingMemberId] = useState<string | null>(null)
-    const [email, setEmail] = useState('')
-    const [role, setRole] = useState('Viewer')
     const [error, setError] = useState<string | null>(null)
-    const [success, setSuccess] = useState<string | null>(null)
-    const [newInviteUrl, setNewInviteUrl] = useState<string | null>(null)
 
     // 내 초대 상태
     const [myInvitation, setMyInvitation] = useState<MyInvitation | null>(null)
     const [acceptingInvite, setAcceptingInvite] = useState(false)
+
+    // 워크스페이스 멤버 관련 상태
+    const [workspaceMembers, setWorkspaceMembers] = useState<WorkspaceMemberItem[]>([])
+    const [wsLoading, setWsLoading] = useState(false)
+    const [selectedUserId, setSelectedUserId] = useState<string | null>(null)
+    const [wsRole, setWsRole] = useState('Viewer')
+    const [searchQuery, setSearchQuery] = useState('')
+    const [addingMember, setAddingMember] = useState(false)
 
     // Admin 수 계산
     const adminCount = members.filter(m => m.role === 'Admin').length
@@ -213,47 +229,86 @@ export default function ProjectInvitations({ projectId, isAdmin = false }: Proje
         }
     }, [projectId, isAdmin])
 
-    const handleSendInvite = async () => {
-        if (!email) {
-            setError('이메일을 입력해주세요.')
+    // 워크스페이스 멤버 조회
+    const fetchWorkspaceMembers = async () => {
+        if (!currentWorkspace?.id) return
+
+        setWsLoading(true)
+        try {
+            const response = await fetch(`/api/workspace/current/members?workspaceId=${currentWorkspace.id}`)
+            if (response.ok) {
+                const data = await response.json()
+                setWorkspaceMembers(data)
+            }
+        } catch (err) {
+            if (isDev) console.error('Failed to fetch workspace members:', err)
+        } finally {
+            setWsLoading(false)
+        }
+    }
+
+    // 다이얼로그 열릴 때 워크스페이스 멤버 조회
+    useEffect(() => {
+        if (dialogOpen && isAdmin && currentWorkspace?.id) {
+            fetchWorkspaceMembers()
+        }
+    }, [dialogOpen, isAdmin, currentWorkspace?.id])
+
+    // 워크스페이스 멤버를 프로젝트에 직접 추가
+    const handleAddWorkspaceMember = async () => {
+        if (!selectedUserId) {
+            setError('멤버를 선택해주세요.')
             return
         }
 
-        setSending(true)
+        setAddingMember(true)
         setError(null)
-        setNewInviteUrl(null)
 
         try {
-            const response = await fetch(`/api/projects/${projectId}/invitations`, {
+            const response = await fetch(`/api/projects/${projectId}/members`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email, role }),
+                body: JSON.stringify({ userId: selectedUserId, role: wsRole }),
             })
 
             const data = await response.json()
 
             if (!response.ok) {
-                setError(data.error || '초대 전송에 실패했습니다.')
+                setError(data.error || '멤버 추가에 실패했습니다.')
                 return
             }
 
-            // API에서 inviteUrl 반환
-            const inviteUrl = data.inviteUrl || `${window.location.origin}/invite/project/${data.token}`
-            setNewInviteUrl(inviteUrl)
-            setSuccess(data.emailSent
-                ? '초대 이메일이 전송되었습니다.'
-                : '초대가 생성되었습니다. 아래 링크를 직접 공유해주세요.')
-
-            setEmail('')
-            setRole('Viewer')
+            toast.success(`${data.name || data.email}님이 프로젝트에 추가되었습니다.`)
+            setSelectedUserId(null)
+            setWsRole('Viewer')
+            setSearchQuery('')
             fetchData()
+            setDialogOpen(false)
 
         } catch (err) {
-            setError('초대 전송 중 오류가 발생했습니다.')
+            setError('멤버 추가 중 오류가 발생했습니다.')
         } finally {
-            setSending(false)
+            setAddingMember(false)
         }
     }
+
+    // 프로젝트에 이미 참여중인 멤버 ID 목록
+    const existingMemberIds = members.map(m => m.userId)
+
+    // 검색 필터 및 이미 참여중인 멤버 제외
+    const filteredWorkspaceMembers = workspaceMembers.filter(wm => {
+        // 이미 프로젝트 멤버인 경우 제외
+        if (existingMemberIds.includes(wm.id)) return false
+        // 검색어 필터
+        if (searchQuery) {
+            const query = searchQuery.toLowerCase()
+            return (
+                wm.email.toLowerCase().includes(query) ||
+                (wm.name?.toLowerCase().includes(query) ?? false)
+            )
+        }
+        return true
+    })
 
     const handleRevoke = async (invitationId: string) => {
         try {
@@ -323,11 +378,10 @@ export default function ProjectInvitations({ projectId, isAdmin = false }: Proje
 
     const closeDialog = () => {
         setDialogOpen(false)
-        setEmail('')
-        setRole('Viewer')
         setError(null)
-        setSuccess(null)
-        setNewInviteUrl(null)
+        setSelectedUserId(null)
+        setWsRole('Viewer')
+        setSearchQuery('')
     }
 
     const getInitials = (name: string | null, email: string) => {
@@ -441,28 +495,79 @@ export default function ProjectInvitations({ projectId, isAdmin = false }: Proje
                                 멤버 초대
                             </Button>
                         </DialogTrigger>
-                        <DialogContent className="rounded-3xl bg-white/95 backdrop-blur-xl border-white/60 shadow-2xl">
+                        <DialogContent className="rounded-3xl bg-white/95 backdrop-blur-xl border-white/60 shadow-2xl max-w-lg">
                             <DialogHeader>
-                                <DialogTitle className="text-xl font-bold text-slate-900">팀원 초대</DialogTitle>
+                                <DialogTitle className="text-xl font-bold text-slate-900">팀원 추가</DialogTitle>
                                 <DialogDescription className="text-slate-500">
-                                    이메일로 프로젝트에 팀원을 초대합니다.
+                                    워크스페이스 멤버를 프로젝트에 추가합니다.
                                 </DialogDescription>
                             </DialogHeader>
-                            <div className="space-y-4 pt-4">
-                                {!newInviteUrl ? (
-                                    <>
-                                        <div className="space-y-2">
-                                            <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-                                                이메일 주소
-                                            </label>
-                                            <Input
-                                                type="email"
-                                                placeholder="team@example.com"
-                                                value={email}
-                                                onChange={(e) => setEmail(e.target.value)}
-                                                className="rounded-xl border-slate-200 focus:border-lime-500 focus:ring-lime-500"
-                                            />
-                                        </div>
+
+                            {/* 워크스페이스 멤버 선택 */}
+                            <div className="space-y-4 pt-2">
+                                    {/* 검색 */}
+                                    <div className="relative">
+                                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                                        <Input
+                                            placeholder="이름 또는 이메일로 검색..."
+                                            value={searchQuery}
+                                            onChange={(e) => setSearchQuery(e.target.value)}
+                                            className="pl-9 rounded-xl border-slate-200 focus:border-lime-500 focus:ring-lime-500"
+                                        />
+                                    </div>
+
+                                    {/* 멤버 목록 */}
+                                    <div className="max-h-[240px] overflow-y-auto space-y-1 border border-slate-100 rounded-xl p-2">
+                                        {wsLoading ? (
+                                            <div className="flex items-center justify-center py-8">
+                                                <Loader2 className="h-5 w-5 animate-spin text-lime-500" />
+                                            </div>
+                                        ) : filteredWorkspaceMembers.length === 0 ? (
+                                            <div className="text-center py-8 text-slate-500 text-sm">
+                                                {searchQuery
+                                                    ? '검색 결과가 없습니다.'
+                                                    : '추가할 수 있는 멤버가 없습니다.'}
+                                            </div>
+                                        ) : (
+                                            filteredWorkspaceMembers.map((wm) => (
+                                                <button
+                                                    key={wm.id}
+                                                    type="button"
+                                                    onClick={() => setSelectedUserId(selectedUserId === wm.id ? null : wm.id)}
+                                                    className={cn(
+                                                        'w-full flex items-center gap-3 p-2 rounded-xl transition-all text-left',
+                                                        selectedUserId === wm.id
+                                                            ? 'bg-lime-100 ring-2 ring-lime-400'
+                                                            : 'hover:bg-slate-50'
+                                                    )}
+                                                >
+                                                    <Avatar className="h-9 w-9">
+                                                        <AvatarImage src={wm.avatar || undefined} />
+                                                        <AvatarFallback className="bg-slate-200 text-slate-600 text-sm">
+                                                            {getInitials(wm.name, wm.email)}
+                                                        </AvatarFallback>
+                                                    </Avatar>
+                                                    <div className="flex-1 min-w-0">
+                                                        <p className="font-medium text-slate-900 text-sm truncate">
+                                                            {wm.name || wm.email.split('@')[0]}
+                                                        </p>
+                                                        <p className="text-xs text-slate-500 truncate">{wm.email}</p>
+                                                    </div>
+                                                    {wm.departmentName && (
+                                                        <Badge variant="outline" className="text-xs shrink-0">
+                                                            {wm.departmentName}
+                                                        </Badge>
+                                                    )}
+                                                    {selectedUserId === wm.id && (
+                                                        <CheckCircle2 className="h-5 w-5 text-lime-600 shrink-0" />
+                                                    )}
+                                                </button>
+                                            ))
+                                        )}
+                                    </div>
+
+                                    {/* 역할 선택 */}
+                                    {selectedUserId && (
                                         <div className="space-y-2">
                                             <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">
                                                 역할
@@ -472,12 +577,13 @@ export default function ProjectInvitations({ projectId, isAdmin = false }: Proje
                                                     <button
                                                         key={option.value}
                                                         type="button"
-                                                        onClick={() => setRole(option.value)}
-                                                        className={`flex flex-col items-start px-3 py-2 rounded-xl text-sm transition-all ${
-                                                            role === option.value
+                                                        onClick={() => setWsRole(option.value)}
+                                                        className={cn(
+                                                            'flex flex-col items-start px-3 py-2 rounded-xl text-sm transition-all',
+                                                            wsRole === option.value
                                                                 ? 'bg-lime-100 text-lime-700 ring-2 ring-lime-400'
                                                                 : 'bg-white/60 border border-slate-200 text-slate-600 hover:bg-slate-50'
-                                                        }`}
+                                                        )}
                                                     >
                                                         <span className="font-medium">{option.label}</span>
                                                         <span className="text-xs opacity-70">{option.description}</span>
@@ -485,88 +591,32 @@ export default function ProjectInvitations({ projectId, isAdmin = false }: Proje
                                                 ))}
                                             </div>
                                         </div>
+                                    )}
 
-                                        {error && (
-                                            <Alert className="rounded-xl border-red-200 bg-red-50">
-                                                <XCircle className="h-4 w-4 text-red-600" />
-                                                <AlertDescription className="text-red-800">{error}</AlertDescription>
-                                            </Alert>
+                                    {error && (
+                                        <Alert className="rounded-xl border-red-200 bg-red-50">
+                                            <XCircle className="h-4 w-4 text-red-600" />
+                                            <AlertDescription className="text-red-800">{error}</AlertDescription>
+                                        </Alert>
+                                    )}
+
+                                    <Button
+                                        onClick={handleAddWorkspaceMember}
+                                        disabled={!selectedUserId || addingMember}
+                                        className="w-full rounded-xl bg-lime-500 hover:bg-lime-600 text-black font-bold h-12 disabled:opacity-50"
+                                    >
+                                        {addingMember ? (
+                                            <>
+                                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                                추가 중...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <UserPlus className="mr-2 h-4 w-4" />
+                                                멤버 추가
+                                            </>
                                         )}
-
-                                        <Button
-                                            onClick={handleSendInvite}
-                                            disabled={sending}
-                                            className="w-full rounded-xl bg-lime-500 hover:bg-lime-600 text-black font-bold h-12"
-                                        >
-                                            {sending ? (
-                                                <>
-                                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                                    전송 중...
-                                                </>
-                                            ) : (
-                                                <>
-                                                    <Send className="mr-2 h-4 w-4" />
-                                                    초대 전송
-                                                </>
-                                            )}
-                                        </Button>
-                                    </>
-                                ) : (
-                                    <>
-                                        {success && (
-                                            <Alert className="rounded-xl bg-lime-50 border-lime-200">
-                                                <CheckCircle2 className="h-4 w-4 text-lime-600" />
-                                                <AlertDescription className="text-lime-700">{success}</AlertDescription>
-                                            </Alert>
-                                        )}
-
-                                        <div className="space-y-2">
-                                            <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-                                                초대 링크
-                                            </label>
-                                            <div className="flex gap-2">
-                                                <Input
-                                                    value={newInviteUrl}
-                                                    readOnly
-                                                    className="rounded-xl bg-slate-50 text-sm"
-                                                />
-                                                <Button
-                                                    variant="outline"
-                                                    size="icon"
-                                                    onClick={() => {
-                                                        navigator.clipboard.writeText(newInviteUrl)
-                                                        toast.success('초대 링크가 복사되었습니다.')
-                                                    }}
-                                                    className="rounded-xl shrink-0"
-                                                >
-                                                    <Copy className="h-4 w-4" />
-                                                </Button>
-                                            </div>
-                                            <p className="text-xs text-slate-500">
-                                                이 링크를 초대할 사람에게 직접 전달해주세요. (7일간 유효)
-                                            </p>
-                                        </div>
-
-                                        <div className="flex gap-2">
-                                            <Button
-                                                variant="outline"
-                                                onClick={() => {
-                                                    setNewInviteUrl(null)
-                                                    setSuccess(null)
-                                                }}
-                                                className="flex-1 rounded-xl"
-                                            >
-                                                다른 멤버 초대
-                                            </Button>
-                                            <Button
-                                                onClick={closeDialog}
-                                                className="flex-1 rounded-xl bg-lime-500 hover:bg-lime-600 text-black font-bold"
-                                            >
-                                                완료
-                                            </Button>
-                                        </div>
-                                    </>
-                                )}
+                                    </Button>
                             </div>
                         </DialogContent>
                     </Dialog>

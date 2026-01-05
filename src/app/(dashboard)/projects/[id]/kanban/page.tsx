@@ -14,6 +14,7 @@ import { addActivity } from '@/actions/activity'
 import { toast } from 'react-hot-toast'
 import { Loader2, Wifi, WifiOff } from 'lucide-react'
 import { useCentrifugo } from '@/components/providers/centrifugo-provider'
+import OnlineUsers, { OnlineUser } from '@/components/realtime/OnlineUsers'
 
 const isDev = process.env.NODE_ENV === 'development'
 
@@ -53,7 +54,7 @@ export default function KanbanPage() {
   const params = useParams()
   const projectId = params?.id as string
   const { user, userProfile } = useAuth()
-  const { subscribe, isConnected } = useCentrifugo()
+  const { subscribe, subscribeWithPresence, isConnected, publish } = useCentrifugo()
 
   const [tasks, setTasks] = useState<KanbanTask[]>([])
   const [columns, setColumns] = useState<KanbanColumnWithTasks[]>([])
@@ -61,6 +62,7 @@ export default function KanbanPage() {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [loading, setLoading] = useState(true)
   const [projectName, setProjectName] = useState<string>('')
+  const [onlineUsers, setOnlineUsers] = useState<OnlineUser[]>([])
 
   // 업데이트 중복 방지용 ref
   const isUpdatingRef = useRef(false)
@@ -116,14 +118,15 @@ export default function KanbanPage() {
   }, [loadData])
 
   // ========================================
-  // 실시간 업데이트 구독 (Centrifugo)
+  // 실시간 업데이트 구독 (Centrifugo with Presence)
   // ========================================
   useEffect(() => {
     if (!projectId) return
 
     const channel = `project:${projectId}`
 
-    const unsubscribe = subscribe(channel, (data: any) => {
+    // 메시지 핸들러
+    const handleMessage = (data: any) => {
       // 중복 이벤트 방지
       if (data.timestamp && data.timestamp === lastUpdateRef.current) {
         return
@@ -239,12 +242,21 @@ export default function KanbanPage() {
         default:
           if (isDev) console.log('[Kanban Realtime] Unknown event:', event)
       }
-    })
+    }
+
+    // Presence 핸들러 (온라인 사용자 목록 업데이트)
+    const handlePresence = (users: OnlineUser[]) => {
+      if (isDev) console.log('[Kanban Presence] Online users:', users)
+      setOnlineUsers(users)
+    }
+
+    // Presence 포함 구독
+    const unsubscribe = subscribeWithPresence(channel, handleMessage, handlePresence)
 
     return () => {
       unsubscribe()
     }
-  }, [projectId, subscribe, loadData])
+  }, [projectId, subscribeWithPresence, loadData])
 
   // 컬럼 변경 핸들러 (드래그 앤 드롭)
   const handleColumnsChange = useCallback(async (newColumns: KanbanColumnWithTasks[]) => {
@@ -514,8 +526,19 @@ export default function KanbanPage() {
           </div>
         </div>
 
-        {/* 실시간 연결 상태 표시 */}
-        <div className="flex items-center gap-2">
+        {/* 온라인 사용자 및 연결 상태 */}
+        <div className="flex items-center gap-4">
+          {/* 온라인 사용자 표시 */}
+          {isConnected && onlineUsers.length > 0 && (
+            <OnlineUsers
+              users={onlineUsers}
+              maxDisplay={5}
+              size="md"
+              showTooltip={true}
+            />
+          )}
+
+          {/* 실시간 연결 상태 표시 */}
           {isConnected ? (
             <div className="flex items-center gap-1.5 px-3 py-1.5 bg-green-50 text-green-700 rounded-full text-sm">
               <Wifi className="h-4 w-4" />

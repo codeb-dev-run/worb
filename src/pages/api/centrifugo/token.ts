@@ -24,17 +24,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(200).json({ token: null, anonymous: true })
     }
 
+    // 사용자 정보
+    const userId = (session?.user as any)?.id || (session?.user as any)?.uid || 'anonymous'
+    const userInfo = session?.user ? {
+      name: session.user.name || '',
+      email: session.user.email || '',
+      avatar: session.user.image || '',
+    } : undefined
+
     // JWT 수동 생성 (jsonwebtoken 의존성 없이)
     // Centrifugo는 간단한 HMAC-SHA256 JWT를 사용
     const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url')
 
     const payload = Buffer.from(JSON.stringify({
-      sub: session?.user?.id || 'anonymous',
+      sub: userId,
       exp: Math.floor(Date.now() / 1000) + 3600, // 1시간
-      info: session?.user ? {
-        name: session.user.name,
-        email: session.user.email
-      } : undefined
+      info: userInfo
     })).toString('base64url')
 
     // Node.js crypto를 사용한 HMAC-SHA256 서명
@@ -46,7 +51,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const token = `${header}.${payload}.${signature}`
 
-    return res.status(200).json({ token })
+    return res.status(200).json({
+      token,
+      user: userInfo ? {
+        id: userId,
+        ...userInfo
+      } : null
+    })
   } catch (error) {
     console.error('Centrifugo token generation error:', error)
     return res.status(500).json({ error: 'Token generation failed' })
