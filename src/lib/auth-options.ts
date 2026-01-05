@@ -122,18 +122,63 @@ export const authOptions: NextAuthOptions = {
             }
             return true
         },
-        async jwt({ token, user, account }) {
+        async jwt({ token, user, account, trigger }) {
+            // 새 로그인 시 또는 토큰 업데이트 시
             if (user) {
                 token.uid = user.id
+                token.email = user.email
                 token.role = (user as any).role || 'member'
             }
+
+            // 토큰에 uid가 없거나 이메일이 있으면 DB에서 확인
+            if (!token.uid && token.email) {
+                try {
+                    const dbUser = await prisma.user.findUnique({
+                        where: { email: token.email as string }
+                    })
+                    if (dbUser) {
+                        token.uid = dbUser.id
+                        token.role = dbUser.role || 'member'
+                    }
+                } catch {
+                    // 조회 실패 시 무시
+                }
+            }
+
             return token
         },
         async session({ session, token }) {
             if (session.user) {
-                (session.user as any).id = token.uid as string
-                (session.user as any).uid = token.uid as string
-                (session.user as any).role = token.role as string
+                const userEmail = session.user.email
+                // 이메일로 실제 DB 사용자 조회하여 정확한 ID 사용
+                if (userEmail) {
+                    try {
+                        const foundUser = await prisma.user.findUnique({
+                            where: { email: userEmail }
+                        })
+                        if (foundUser) {
+                            const foundId = foundUser.id
+                            const foundRole = foundUser.role || 'member';
+                            (session.user as any).id = foundId;
+                            (session.user as any).uid = foundId;
+                            (session.user as any).role = foundRole
+                        } else {
+                            // DB에 없으면 토큰 값 사용
+                            (session.user as any).id = token.uid as string;
+                            (session.user as any).uid = token.uid as string;
+                            (session.user as any).role = token.role as string
+                        }
+                    } catch {
+                        // 조회 실패 시 토큰 값 사용
+                        (session.user as any).id = token.uid as string;
+                        (session.user as any).uid = token.uid as string;
+                        (session.user as any).role = token.role as string
+                    }
+                } else {
+                    (session.user as any).id = token.uid as string;
+                    (session.user as any).uid = token.uid as string;
+                    (session.user as any).role = token.role as string
+                }
             }
             return session
         },
