@@ -53,6 +53,14 @@ export default function InviteAcceptPage({ params }: { params: { code: string } 
         throw new Error(data.error || 'Invalid invite code')
       }
       const data = await response.json()
+
+      // 이미 멤버인 경우 바로 대시보드로 이동
+      if (data.alreadyMember) {
+        toast.success('이미 이 워크스페이스의 멤버입니다!')
+        window.location.href = `/dashboard?workspace=${data.workspaceId}`
+        return
+      }
+
       setInvite(data)
     } catch (err: any) {
       setError(err.message)
@@ -69,14 +77,22 @@ export default function InviteAcceptPage({ params }: { params: { code: string } 
         method: 'POST',
       })
 
+      const data = await response.json()
+
       if (!response.ok) {
-        const data = await response.json()
         throw new Error(data.error || 'Failed to accept invite')
       }
 
-      toast.success('워크스페이스에 참여했습니다!')
+      // 이미 멤버인 경우와 새로 가입한 경우 모두 처리
+      if (data.alreadyMember) {
+        toast.success('이미 이 워크스페이스의 멤버입니다!')
+      } else {
+        toast.success('워크스페이스에 참여했습니다!')
+      }
+
       // 워크스페이스 목록을 새로고침하기 위해 전체 페이지 리로드
-      window.location.href = '/dashboard'
+      const workspaceId = data.workspaceId || invite?.workspace?.id
+      window.location.href = workspaceId ? `/dashboard?workspace=${workspaceId}` : '/dashboard'
     } catch (err: any) {
       toast.error(err.message)
       setError(err.message)
