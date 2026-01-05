@@ -31,8 +31,8 @@ export const LEGACY_DEPARTMENT_MAP: Record<string, { name: string; color: string
 
 const isDev = process.env.NODE_ENV === 'development'
 
-// 워크스페이스 생성 페이지에서는 리다이렉트하지 않음
-const EXCLUDED_PATHS = ['/workspace/create', '/login', '/register', '/forgot-password']
+// 워크스페이스 생성/초대 페이지에서는 리다이렉트하지 않음
+const EXCLUDED_PATHS = ['/workspace/create', '/login', '/register', '/forgot-password', '/invite', '/workspaces/join']
 
 interface WorkspaceFeatures {
     id: string

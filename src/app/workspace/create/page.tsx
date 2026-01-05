@@ -244,14 +244,29 @@ function WorkspaceCreateContent() {
         body: JSON.stringify({ code: inviteCode })
       })
 
+      const data = await response.json()
+
       if (!response.ok) {
-        const error = await response.json()
-        throw new Error(error.message || '참여 실패')
+        throw new Error(data.error || data.message || '참여 실패')
       }
 
+      // 이미 멤버인 경우와 새로 가입한 경우 모두 처리
       await refreshWorkspaces()
-      toast.success('워크스페이스에 참여했습니다!')
-      router.push('/dashboard')
+
+      if (data.alreadyMember) {
+        toast.success('이미 이 워크스페이스의 멤버입니다!')
+      } else {
+        toast.success('워크스페이스에 참여했습니다!')
+      }
+
+      // 해당 워크스페이스로 이동
+      const workspaceId = data.workspace?.id
+      if (workspaceId) {
+        localStorage.setItem('currentWorkspaceId', workspaceId)
+        router.push(`/dashboard?workspace=${workspaceId}`)
+      } else {
+        router.push('/dashboard')
+      }
     } catch (error: any) {
       if (isDev) console.error('Failed to join workspace:', error)
       toast.error(error.message || '회사 참여에 실패했습니다.')
