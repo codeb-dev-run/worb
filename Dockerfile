@@ -30,7 +30,8 @@ COPY prisma ./prisma
 COPY package.json package-lock.json* ./
 
 # Install dependencies (skip postinstall, run prisma generate manually)
-RUN npm ci --ignore-scripts && \
+# --legacy-peer-deps for React 19 compatibility
+RUN npm ci --ignore-scripts --legacy-peer-deps && \
     npx prisma generate
 
 # ==============================================================================
