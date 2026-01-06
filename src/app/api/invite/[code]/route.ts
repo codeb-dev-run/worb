@@ -10,11 +10,12 @@ import { authOptions } from '@/lib/auth-options'
 
 export async function GET(
     request: Request,
-    { params }: { params: { code: string } }
+    { params }: { params: Promise<{ code: string }> }
 ) {
     try {
+        const { code } = await params
         const invite = await prisma.invitation.findUnique({
-            where: { token: params.code },
+            where: { token: code },
             include: {
                 workspace: {
                     select: {

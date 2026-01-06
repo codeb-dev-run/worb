@@ -13,15 +13,14 @@ import { secureLogger, createErrorResponse } from '@/lib/security'
 // 멤버 정보 조회
 export async function GET(
     request: Request,
-    { params }: { params: { workspaceId: string; memberId: string } }
+    { params }: { params: Promise<{ workspaceId: string; memberId: string }> }
 ) {
     try {
+        const { workspaceId, memberId } = await params
         const session = await getServerSession(authOptions)
         if (!session?.user?.email) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
         }
-
-        const { workspaceId, memberId } = params
 
         const member = await prisma.workspaceMember.findFirst({
             where: {
@@ -61,15 +60,14 @@ export async function GET(
 // 멤버 제거
 export async function DELETE(
     request: Request,
-    { params }: { params: { workspaceId: string; memberId: string } }
+    { params }: { params: Promise<{ workspaceId: string; memberId: string }> }
 ) {
     try {
+        const { workspaceId, memberId } = await params
         const session = await getServerSession(authOptions)
         if (!session?.user?.email) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
         }
-
-        const { workspaceId, memberId } = params
 
         // 현재 사용자가 admin인지 확인
         const currentUser = await prisma.user.findUnique({

@@ -13,7 +13,7 @@ import { secureLogger, createErrorResponse, authenticateRequest } from '@/lib/se
 // GET - Get single post with view count increment
 export async function GET(
     request: Request,
-    { params }: { params: { id: string } }
+    { params }: { params: Promise<{ id: string }> }
 ) {
     try {
         // CVE-CB-002: Add authentication
@@ -22,9 +22,11 @@ export async function GET(
             return createErrorResponse('Unauthorized', 401, 'AUTH_REQUIRED')
         }
 
+        const { id } = await params
+
         // Increment view count and get post
         const post = await prisma.board.update({
-            where: { id: params.id },
+            where: { id },
             data: {
                 viewCount: { increment: 1 }
             },
@@ -58,7 +60,7 @@ export async function GET(
 // PUT - Update post
 export async function PUT(
     request: Request,
-    { params }: { params: { id: string } }
+    { params }: { params: Promise<{ id: string }> }
 ) {
     try {
         // CVE-CB-002: Add authentication
@@ -67,9 +69,11 @@ export async function PUT(
             return createErrorResponse('Unauthorized', 401, 'AUTH_REQUIRED')
         }
 
+        const { id } = await params
+
         // CVE-CB-004: Verify ownership before update
         const existingPost = await prisma.board.findUnique({
-            where: { id: params.id },
+            where: { id },
             select: { authorId: true }
         })
 
@@ -86,7 +90,7 @@ export async function PUT(
         const { title, content, category, isPinned } = body
 
         const post = await prisma.board.update({
-            where: { id: params.id },
+            where: { id },
             data: {
                 title,
                 content,
@@ -103,7 +107,7 @@ export async function PUT(
 
         secureLogger.info('Board post updated', {
             operation: 'board.update',
-            postId: params.id,
+            postId: id,
             userId: user.id,
         })
 
@@ -118,7 +122,7 @@ export async function PUT(
 // DELETE - Delete post
 export async function DELETE(
     request: Request,
-    { params }: { params: { id: string } }
+    { params }: { params: Promise<{ id: string }> }
 ) {
     try {
         // CVE-CB-002: Add authentication
@@ -127,9 +131,11 @@ export async function DELETE(
             return createErrorResponse('Unauthorized', 401, 'AUTH_REQUIRED')
         }
 
+        const { id } = await params
+
         // CVE-CB-004: Verify ownership before delete
         const existingPost = await prisma.board.findUnique({
-            where: { id: params.id },
+            where: { id },
             select: { authorId: true }
         })
 
@@ -143,12 +149,12 @@ export async function DELETE(
         }
 
         await prisma.board.delete({
-            where: { id: params.id },
+            where: { id },
         })
 
         secureLogger.info('Board post deleted', {
             operation: 'board.delete',
-            postId: params.id,
+            postId: id,
             userId: user.id,
         })
 

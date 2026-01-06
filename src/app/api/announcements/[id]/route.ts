@@ -9,9 +9,10 @@ import { secureLogger, createErrorResponse, authenticateRequest } from '@/lib/se
 // GET - Get single announcement
 export async function GET(
     request: Request,
-    { params }: { params: { id: string } }
+    { params }: { params: Promise<{ id: string }> }
 ) {
     try {
+        const { id } = await params
         // CVE-CB-002: Add authentication
         const user = await authenticateRequest()
         if (!user) {
@@ -19,7 +20,7 @@ export async function GET(
         }
 
         const announcement = await prisma.announcement.findUnique({
-            where: { id: params.id },
+            where: { id },
             include: {
                 author: {
                     select: { id: true, name: true, email: true, avatar: true }
@@ -42,9 +43,10 @@ export async function GET(
 // PUT - Update announcement
 export async function PUT(
     request: Request,
-    { params }: { params: { id: string } }
+    { params }: { params: Promise<{ id: string }> }
 ) {
     try {
+        const { id } = await params
         // CVE-CB-002: Add authentication
         const user = await authenticateRequest()
         if (!user) {
@@ -53,7 +55,7 @@ export async function PUT(
 
         // CVE-CB-004: Verify ownership or admin role
         const existing = await prisma.announcement.findUnique({
-            where: { id: params.id },
+            where: { id },
             select: { authorId: true }
         })
 
@@ -70,7 +72,7 @@ export async function PUT(
         const { title, content, isPinned } = body
 
         const announcement = await prisma.announcement.update({
-            where: { id: params.id },
+            where: { id },
             data: {
                 title,
                 content,
@@ -81,7 +83,7 @@ export async function PUT(
 
         secureLogger.info('Announcement updated', {
             operation: 'announcements.update',
-            announcementId: params.id,
+            announcementId: id,
             userId: user.id,
         })
 
@@ -96,9 +98,10 @@ export async function PUT(
 // DELETE - Delete announcement
 export async function DELETE(
     request: Request,
-    { params }: { params: { id: string } }
+    { params }: { params: Promise<{ id: string }> }
 ) {
     try {
+        const { id } = await params
         // CVE-CB-002: Add authentication
         const user = await authenticateRequest()
         if (!user) {
@@ -107,7 +110,7 @@ export async function DELETE(
 
         // CVE-CB-004: Verify ownership or admin role
         const existing = await prisma.announcement.findUnique({
-            where: { id: params.id },
+            where: { id },
             select: { authorId: true }
         })
 
@@ -121,12 +124,12 @@ export async function DELETE(
         }
 
         await prisma.announcement.delete({
-            where: { id: params.id },
+            where: { id },
         })
 
         secureLogger.info('Announcement deleted', {
             operation: 'announcements.delete',
-            announcementId: params.id,
+            announcementId: id,
             userId: user.id,
         })
 

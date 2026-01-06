@@ -11,10 +11,10 @@ import { secureLogger, createErrorResponse } from '@/lib/security';
 // POST /api/workspaces/[workspaceId]/invitations - Send invitation
 export async function POST(
   request: NextRequest,
-  { params }: { params: { workspaceId: string } }
+  { params }: { params: Promise<{ workspaceId: string }> }
 ) {
   try {
-    const { workspaceId } = params;
+    const { workspaceId } = await params;
     const { email, role, invitedBy } = await request.json();
 
     // Validate workspace exists and inviter has admin permission
@@ -161,10 +161,10 @@ export async function POST(
 // GET /api/workspaces/[workspaceId]/invitations - List invitations
 export async function GET(
   request: NextRequest,
-  { params }: { params: { workspaceId: string } }
+  { params }: { params: Promise<{ workspaceId: string }> }
 ) {
   try {
-    const { workspaceId } = params;
+    const { workspaceId } = await params;
     const { searchParams } = new URL(request.url);
     const status = searchParams.get('status');
 

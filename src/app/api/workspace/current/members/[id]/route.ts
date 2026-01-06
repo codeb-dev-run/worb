@@ -13,9 +13,10 @@ import { secureLogger, createErrorResponse } from '@/lib/security'
 
 export async function PATCH(
     request: Request,
-    { params }: { params: { id: string } }
+    { params }: { params: Promise<{ id: string }> }
 ) {
     try {
+        const { id } = await params
         const session = await getServerSession(authOptions)
         if (!session?.user?.email) {
             return createErrorResponse('Unauthorized', 401, 'AUTH_REQUIRED')
@@ -28,7 +29,7 @@ export async function PATCH(
             return createErrorResponse('Workspace ID required', 400, 'WORKSPACE_ID_REQUIRED')
         }
 
-        const userId = params.id
+        const userId = id
 
         // 현재 사용자 확인 및 권한 체크
         const currentUser = await prisma.user.findUnique({

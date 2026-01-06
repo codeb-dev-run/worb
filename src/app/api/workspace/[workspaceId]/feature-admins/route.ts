@@ -13,15 +13,15 @@ import { secureLogger, createErrorResponse } from '@/lib/security'
 // 기능별 관리자 목록 조회
 export async function GET(
     request: Request,
-    { params }: { params: { workspaceId: string } }
+    { params }: { params: Promise<{ workspaceId: string }> }
 ) {
     try {
+        const { workspaceId } = await params
         const session = await getServerSession(authOptions)
         if (!session?.user?.email) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
         }
 
-        const { workspaceId } = params
         const { searchParams } = new URL(request.url)
         const featureKey = searchParams.get('featureKey')
 
@@ -103,15 +103,15 @@ export async function GET(
 // 기능별 관리자 추가
 export async function POST(
     request: Request,
-    { params }: { params: { workspaceId: string } }
+    { params }: { params: Promise<{ workspaceId: string }> }
 ) {
     try {
+        const { workspaceId } = await params
         const session = await getServerSession(authOptions)
         if (!session?.user?.email) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
         }
 
-        const { workspaceId } = params
         const { userId, featureKey } = await request.json()
 
         if (!userId || !featureKey) {
@@ -231,15 +231,15 @@ export async function POST(
 // 기능별 관리자 삭제
 export async function DELETE(
     request: Request,
-    { params }: { params: { workspaceId: string } }
+    { params }: { params: Promise<{ workspaceId: string }> }
 ) {
     try {
+        const { workspaceId } = await params
         const session = await getServerSession(authOptions)
         if (!session?.user?.email) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
         }
 
-        const { workspaceId } = params
         const { searchParams } = new URL(request.url)
         const featureAdminId = searchParams.get('id')
 

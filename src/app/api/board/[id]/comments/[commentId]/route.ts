@@ -9,9 +9,10 @@ import { secureLogger, createErrorResponse } from '@/lib/security'
 // PUT - Update a comment
 export async function PUT(
     request: Request,
-    { params }: { params: { id: string; commentId: string } }
+    { params }: { params: Promise<{ id: string; commentId: string }> }
 ) {
     try {
+        const { id, commentId } = await params
         const body = await request.json()
         const { content } = body
 
@@ -23,7 +24,7 @@ export async function PUT(
         }
 
         const comment = await prisma.boardComment.update({
-            where: { id: params.commentId },
+            where: { id: commentId },
             data: {
                 content,
                 updatedAt: new Date(),
@@ -46,11 +47,12 @@ export async function PUT(
 // DELETE - Delete a comment
 export async function DELETE(
     request: Request,
-    { params }: { params: { id: string; commentId: string } }
+    { params }: { params: Promise<{ id: string; commentId: string }> }
 ) {
     try {
+        const { id, commentId } = await params
         await prisma.boardComment.delete({
-            where: { id: params.commentId },
+            where: { id: commentId },
         })
 
         return NextResponse.json({ success: true })

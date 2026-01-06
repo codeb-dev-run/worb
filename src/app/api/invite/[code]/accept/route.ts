@@ -12,9 +12,10 @@ import { secureLogger, createErrorResponse } from '@/lib/security'
 
 export async function POST(
     request: Request,
-    { params }: { params: { code: string } }
+    { params }: { params: Promise<{ code: string }> }
 ) {
     try {
+        const { code } = await params
         const session = await getServerSession(authOptions)
         if (!session?.user?.email) {
             return createErrorResponse('Unauthorized', 401, 'AUTH_REQUIRED')
@@ -22,7 +23,7 @@ export async function POST(
 
         // 1. 초대 확인
         const invite = await prisma.invitation.findUnique({
-            where: { token: params.code },
+            where: { token: code },
         })
 
         if (!invite) {

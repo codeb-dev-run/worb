@@ -22,15 +22,14 @@ const inviteSchema = z.object({
 // 초대 목록 조회
 export async function GET(
     request: Request,
-    { params }: { params: { workspaceId: string } }
+    { params }: { params: Promise<{ workspaceId: string }> }
 ) {
     try {
+        const { workspaceId } = await params
         const session = await getServerSession(authOptions)
         if (!session?.user?.email) {
             return createErrorResponse('Unauthorized', 401, 'AUTH_REQUIRED')
         }
-
-        const workspaceId = params.workspaceId
 
         // 권한 확인 (워크스페이스 멤버인지)
         const user = await prisma.user.findUnique({
@@ -81,9 +80,10 @@ export async function GET(
 
 export async function POST(
     request: Request,
-    { params }: { params: { workspaceId: string } }
+    { params }: { params: Promise<{ workspaceId: string }> }
 ) {
     try {
+        const { workspaceId } = await params
         const session = await getServerSession(authOptions)
         if (!session?.user?.email) {
             return createErrorResponse('Unauthorized', 401, 'AUTH_REQUIRED')
@@ -101,7 +101,6 @@ export async function POST(
         }
 
         const { email, name } = validatedData
-        const workspaceId = params.workspaceId
 
         // 1. 권한 확인 (초대자가 워크스페이스 멤버인지)
         const inviter = await prisma.user.findUnique({

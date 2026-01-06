@@ -21,15 +21,16 @@ import { validateBody, taskCreateSchema, validationErrorResponse } from '@/lib/v
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params
     const session = await getServerSession(authOptions)
     if (!session?.user?.id) {
       return createErrorResponse('Unauthorized', 401, 'AUTH_REQUIRED')
     }
 
-    const projectId = params.id
+    const projectId = id
     const readClient = getReadClient()
 
     // 캐시 키 설정
@@ -72,15 +73,16 @@ export async function GET(
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params
     const session = await getServerSession(authOptions)
     if (!session?.user?.id) {
       return createErrorResponse('Unauthorized', 401, 'AUTH_REQUIRED')
     }
 
-    const projectId = params.id
+    const projectId = id
 
     // CVE-CB-009 Fix: Validate request body with Zod schema
     const validation = await validateBody(request, taskCreateSchema.omit({ projectId: true }))

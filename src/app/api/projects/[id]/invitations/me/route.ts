@@ -13,9 +13,10 @@ import { secureLogger, createErrorResponse } from '@/lib/security'
 // GET /api/projects/[id]/invitations/me - Get my pending invitation for this project
 export async function GET(
     request: NextRequest,
-    { params }: { params: { id: string } }
+    { params }: { params: Promise<{ id: string }> }
 ) {
     try {
+        const { id } = await params
         const session = await getServerSession(authOptions)
         if (!session?.user?.email) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -32,7 +33,7 @@ export async function GET(
             const existingMember = await prisma.projectMember.findUnique({
                 where: {
                     projectId_userId: {
-                        projectId: params.id,
+                        projectId: id,
                         userId: user.id,
                     },
                 },
@@ -47,7 +48,7 @@ export async function GET(
         // Find pending invitation for this user in this project
         const invitation = await prisma.projectInvitation.findFirst({
             where: {
-                projectId: params.id,
+                projectId: id,
                 email: userEmail,
                 status: 'PENDING',
                 expiresAt: {

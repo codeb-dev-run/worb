@@ -13,15 +13,14 @@ import { secureLogger, createErrorResponse } from '@/lib/security'
 // 워크스페이스 멤버 목록 조회
 export async function GET(
     request: Request,
-    { params }: { params: { workspaceId: string } }
+    { params }: { params: Promise<{ workspaceId: string }> }
 ) {
     try {
+        const { workspaceId } = await params
         const session = await getServerSession(authOptions)
         if (!session?.user?.email) {
             return createErrorResponse('Unauthorized', 401, 'AUTH_REQUIRED')
         }
-
-        const { workspaceId } = params
 
         // 현재 사용자가 이 워크스페이스의 멤버인지 확인
         const currentUser = await prisma.user.findUnique({

@@ -91,7 +91,7 @@ export default function ProjectsPage() {
         if (project.createdBy === user.uid) return true
         // team 배열에 내가 포함된 경우
         if (project.team?.some(member =>
-          member.id === user.uid || member.email === user.email
+          member.userId === user.uid
         )) return true
         return false
       })

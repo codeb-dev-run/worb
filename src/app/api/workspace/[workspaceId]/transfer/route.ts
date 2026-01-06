@@ -13,15 +13,15 @@ import { secureLogger, createErrorResponse } from '@/lib/security'
 // 워크스페이스 소유권 이전 (승계)
 export async function POST(
     request: Request,
-    { params }: { params: { workspaceId: string } }
+    { params }: { params: Promise<{ workspaceId: string }> }
 ) {
     try {
+        const { workspaceId } = await params
         const session = await getServerSession(authOptions)
         if (!session?.user?.email) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
         }
 
-        const { workspaceId } = params
         const { newOwnerId } = await request.json()
 
         if (!newOwnerId) {

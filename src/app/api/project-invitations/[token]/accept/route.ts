@@ -13,9 +13,10 @@ import { secureLogger, createErrorResponse } from '@/lib/security'
 // POST /api/project-invitations/[token]/accept - Accept project invitation
 export async function POST(
     request: NextRequest,
-    { params }: { params: { token: string } }
+    { params }: { params: Promise<{ token: string }> }
 ) {
     try {
+        const { token } = await params
         const session = await getServerSession(authOptions)
         if (!session?.user?.email) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -23,7 +24,7 @@ export async function POST(
 
         // 1. Find invitation
         const invitation = await prisma.projectInvitation.findUnique({
-            where: { token: params.token },
+            where: { token },
             include: {
                 project: {
                     select: {

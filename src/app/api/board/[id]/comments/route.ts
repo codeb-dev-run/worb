@@ -19,7 +19,7 @@ const commentSchema = z.object({
 // GET - Get all comments for a post
 export async function GET(
     request: Request,
-    { params }: { params: { id: string } }
+    { params }: { params: Promise<{ id: string }> }
 ) {
     try {
         // CVE-CB-002: Add authentication
@@ -28,8 +28,10 @@ export async function GET(
             return createErrorResponse('Unauthorized', 401, 'AUTH_REQUIRED')
         }
 
+        const { id } = await params
+
         const comments = await prisma.boardComment.findMany({
-            where: { boardId: params.id },
+            where: { boardId: id },
             include: {
                 author: {
                     select: { id: true, name: true, email: true, avatar: true }
@@ -49,7 +51,7 @@ export async function GET(
 // POST - Create a new comment
 export async function POST(
     request: Request,
-    { params }: { params: { id: string } }
+    { params }: { params: Promise<{ id: string }> }
 ) {
     try {
         // CVE-CB-002, CVE-CB-003: Session-based authentication (not header-based authorId)
@@ -57,6 +59,8 @@ export async function POST(
         if (!session?.user?.email) {
             return createErrorResponse('Unauthorized', 401, 'AUTH_REQUIRED')
         }
+
+        const { id } = await params
 
         const currentUser = await prisma.user.findUnique({
             where: { email: session.user.email }
@@ -81,7 +85,7 @@ export async function POST(
 
         const comment = await prisma.boardComment.create({
             data: {
-                boardId: params.id,
+                boardId: id,
                 content,
                 authorId: currentUser.id, // Use session user ID, not request body
             },
@@ -94,7 +98,7 @@ export async function POST(
 
         secureLogger.info('Comment created', {
             operation: 'board.comments.create',
-            boardId: params.id,
+            boardId: id,
             commentId: comment.id,
             userId: currentUser.id,
         })

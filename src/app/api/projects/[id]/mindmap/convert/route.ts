@@ -8,11 +8,12 @@ import { secureLogger, createErrorResponse } from '@/lib/security'
 
 export async function POST(
     request: Request,
-    { params }: { params: { id: string } }
+    { params }: { params: Promise<{ id: string }> }
 ) {
     try {
+        const { id } = await params
         const { nodes } = await request.json()
-        const projectId = params.id
+        const projectId = id
 
         // Get current user (mock)
         const userId = 'test-user-id' // Replace with actual session user

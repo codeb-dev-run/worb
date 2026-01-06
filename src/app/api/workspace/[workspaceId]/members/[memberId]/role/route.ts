@@ -13,15 +13,15 @@ import { secureLogger, createErrorResponse } from '@/lib/security'
 // 멤버 역할 변경
 export async function PATCH(
     request: Request,
-    { params }: { params: { workspaceId: string; memberId: string } }
+    { params }: { params: Promise<{ workspaceId: string; memberId: string }> }
 ) {
     try {
+        const { workspaceId, memberId } = await params
         const session = await getServerSession(authOptions)
         if (!session?.user?.email) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
         }
 
-        const { workspaceId, memberId } = params
         const { role } = await request.json()
 
         // 유효한 역할인지 확인

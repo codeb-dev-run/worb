@@ -13,15 +13,14 @@ import { secureLogger, createErrorResponse } from '@/lib/security'
 // 개별 팀(부서) 조회
 export async function GET(
     request: Request,
-    { params }: { params: { workspaceId: string; teamId: string } }
+    { params }: { params: Promise<{ workspaceId: string; teamId: string }> }
 ) {
     try {
+        const { workspaceId, teamId } = await params
         const session = await getServerSession(authOptions)
         if (!session?.user?.email) {
             return createErrorResponse('Unauthorized', 401, 'AUTH_REQUIRED')
         }
-
-        const { workspaceId, teamId } = params
 
         // 현재 사용자가 이 워크스페이스의 멤버인지 확인
         const currentUser = await prisma.user.findUnique({
@@ -95,15 +94,14 @@ export async function GET(
 // 팀(부서) 수정
 export async function PATCH(
     request: Request,
-    { params }: { params: { workspaceId: string; teamId: string } }
+    { params }: { params: Promise<{ workspaceId: string; teamId: string }> }
 ) {
     try {
+        const { workspaceId, teamId } = await params
         const session = await getServerSession(authOptions)
         if (!session?.user?.email) {
             return createErrorResponse('Unauthorized', 401, 'AUTH_REQUIRED')
         }
-
-        const { workspaceId, teamId } = params
 
         // 현재 사용자 확인
         const currentUser = await prisma.user.findUnique({
@@ -197,15 +195,14 @@ export async function PATCH(
 // 팀(부서) 삭제
 export async function DELETE(
     request: Request,
-    { params }: { params: { workspaceId: string; teamId: string } }
+    { params }: { params: Promise<{ workspaceId: string; teamId: string }> }
 ) {
     try {
+        const { workspaceId, teamId } = await params
         const session = await getServerSession(authOptions)
         if (!session?.user?.email) {
             return createErrorResponse('Unauthorized', 401, 'AUTH_REQUIRED')
         }
-
-        const { workspaceId, teamId } = params
 
         // 현재 사용자 확인
         const currentUser = await prisma.user.findUnique({

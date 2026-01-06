@@ -565,7 +565,7 @@ const TeamInviteStep: React.FC<StepProps> = ({ projectData, setProjectData, onNe
                         <p className="text-sm font-medium text-slate-900">{member.name || member.email}</p>
                         <p className="text-xs text-slate-500">{member.email}</p>
                       </div>
-                      {member.departmentName && (
+                      {member.departmentName && member.departmentColor && (
                         <Badge
                           className="text-xs border-0"
                           style={{ backgroundColor: `${member.departmentColor}20`, color: member.departmentColor }}

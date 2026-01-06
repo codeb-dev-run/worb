@@ -9,10 +9,10 @@ import { secureLogger, createErrorResponse } from '@/lib/security';
 // POST /api/workspaces/[workspaceId]/join-requests - Create join request
 export async function POST(
   request: NextRequest,
-  { params }: { params: { workspaceId: string } }
+  { params }: { params: Promise<{ workspaceId: string }> }
 ) {
   try {
-    const { workspaceId } = params;
+    const { workspaceId } = await params;
     const { userId, message } = await request.json();
 
     if (!userId) {
@@ -181,10 +181,10 @@ export async function POST(
 // GET /api/workspaces/[workspaceId]/join-requests - List join requests
 export async function GET(
   request: NextRequest,
-  { params }: { params: { workspaceId: string } }
+  { params }: { params: Promise<{ workspaceId: string }> }
 ) {
   try {
-    const { workspaceId } = params;
+    const { workspaceId } = await params;
     const { searchParams } = new URL(request.url);
     const status = searchParams.get('status');
     const userId = searchParams.get('userId');

@@ -7,9 +7,10 @@ import { generateSecureToken } from '@/lib/security'
 // GET: 현재 초대 코드 조회
 export async function GET(
   request: NextRequest,
-  { params }: { params: { workspaceId: string } }
+  { params }: { params: Promise<{ workspaceId: string }> }
 ) {
   try {
+    const { workspaceId } = await params
     const session = await getServerSession(authOptions)
     if (!session?.user?.email) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -23,8 +24,6 @@ export async function GET(
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }
-
-    const { workspaceId } = params
 
     // 워크스페이스 멤버인지 확인 (관리자만 조회 가능)
     const member = await prisma.workspaceMember.findFirst({
@@ -59,9 +58,10 @@ export async function GET(
 // POST: 초대 코드 재생성
 export async function POST(
   request: NextRequest,
-  { params }: { params: { workspaceId: string } }
+  { params }: { params: Promise<{ workspaceId: string }> }
 ) {
   try {
+    const { workspaceId } = await params
     const session = await getServerSession(authOptions)
     if (!session?.user?.email) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -75,8 +75,6 @@ export async function POST(
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }
-
-    const { workspaceId } = params
 
     // 워크스페이스 관리자인지 확인
     const member = await prisma.workspaceMember.findFirst({

@@ -15,9 +15,10 @@ import { secureLogger, createErrorResponse } from '@/lib/security'
 // GET /api/projects/[id]/invitations - Get project invitations
 export async function GET(
     request: NextRequest,
-    { params }: { params: { id: string } }
+    { params }: { params: Promise<{ id: string }> }
 ) {
     try {
+        const { id } = await params
         const session = await getServerSession(authOptions)
         if (!session?.user?.email) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -35,7 +36,7 @@ export async function GET(
         const projectMember = await prisma.projectMember.findUnique({
             where: {
                 projectId_userId: {
-                    projectId: params.id,
+                    projectId: id,
                     userId: user.id,
                 },
             },
@@ -47,7 +48,7 @@ export async function GET(
 
         // Get invitations
         const invitations = await prisma.projectInvitation.findMany({
-            where: { projectId: params.id },
+            where: { projectId: id },
             include: {
                 inviter: {
                     select: {
@@ -70,9 +71,10 @@ export async function GET(
 // POST /api/projects/[id]/invitations - Create new invitation
 export async function POST(
     request: NextRequest,
-    { params }: { params: { id: string } }
+    { params }: { params: Promise<{ id: string }> }
 ) {
     try {
+        const { id } = await params
         const session = await getServerSession(authOptions)
         if (!session?.user?.email) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -90,7 +92,7 @@ export async function POST(
         const projectMember = await prisma.projectMember.findUnique({
             where: {
                 projectId_userId: {
-                    projectId: params.id,
+                    projectId: id,
                     userId: user.id,
                 },
             },
@@ -116,7 +118,7 @@ export async function POST(
             const existingMember = await prisma.projectMember.findUnique({
                 where: {
                     projectId_userId: {
-                        projectId: params.id,
+                        projectId: id,
                         userId: existingUser.id,
                     },
                 },
@@ -130,7 +132,7 @@ export async function POST(
         // Check for pending invitation
         const existingInvite = await prisma.projectInvitation.findFirst({
             where: {
-                projectId: params.id,
+                projectId: id,
                 email,
                 status: 'PENDING',
             },
@@ -142,7 +144,7 @@ export async function POST(
 
         // Get project info for email
         const project = await prisma.project.findUnique({
-            where: { id: params.id },
+            where: { id },
             select: { name: true },
         })
 
@@ -158,7 +160,7 @@ export async function POST(
         // Create invitation
         const invitation = await prisma.projectInvitation.create({
             data: {
-                projectId: params.id,
+                projectId: id,
                 email,
                 token,
                 role,
@@ -201,9 +203,10 @@ export async function POST(
 // DELETE /api/projects/[id]/invitations - Revoke invitation
 export async function DELETE(
     request: NextRequest,
-    { params }: { params: { id: string } }
+    { params }: { params: Promise<{ id: string }> }
 ) {
     try {
+        const { id } = await params
         const session = await getServerSession(authOptions)
         if (!session?.user?.email) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -221,7 +224,7 @@ export async function DELETE(
         const projectMember = await prisma.projectMember.findUnique({
             where: {
                 projectId_userId: {
-                    projectId: params.id,
+                    projectId: id,
                     userId: user.id,
                 },
             },

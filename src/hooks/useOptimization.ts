@@ -35,7 +35,7 @@ export function useThrottle<T extends (...args: any[]) => any>(
   delay: number
 ): T {
   const lastRun = useRef(Date.now())
-  const timeout = useRef<NodeJS.Timeout>()
+  const timeout = useRef<NodeJS.Timeout | null>(null)
 
   return useCallback(
     ((...args) => {
@@ -46,7 +46,7 @@ export function useThrottle<T extends (...args: any[]) => any>(
         callback(...args)
         lastRun.current = now
       } else {
-        clearTimeout(timeout.current)
+        if (timeout.current) clearTimeout(timeout.current)
         timeout.current = setTimeout(() => {
           callback(...args)
           lastRun.current = Date.now()
@@ -64,8 +64,8 @@ export function useThrottle<T extends (...args: any[]) => any>(
  */
 export function useIntersectionObserver(
   options?: IntersectionObserverInit
-): [React.RefObject<HTMLDivElement>, boolean] {
-  const ref = useRef<HTMLDivElement>(null)
+): [React.RefObject<HTMLDivElement | null>, boolean] {
+  const ref = useRef<HTMLDivElement | null>(null)
   const [isIntersecting, setIsIntersecting] = useState(false)
 
   useEffect(() => {
@@ -155,7 +155,7 @@ export function useIsHydrated(): boolean {
  * @returns The previous value
  */
 export function usePrevious<T>(value: T): T | undefined {
-  const ref = useRef<T>()
+  const ref = useRef<T | undefined>(undefined)
   
   useEffect(() => {
     ref.current = value

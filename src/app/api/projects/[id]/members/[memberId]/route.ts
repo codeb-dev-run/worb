@@ -13,9 +13,10 @@ import { secureLogger, createErrorResponse } from '@/lib/security'
 // DELETE /api/projects/[id]/members/[memberId] - Remove a member from project
 export async function DELETE(
     request: NextRequest,
-    { params }: { params: { id: string; memberId: string } }
+    { params }: { params: Promise<{ id: string; memberId: string }> }
 ) {
     try {
+        const { id, memberId } = await params
         const session = await getServerSession(authOptions)
         if (!session?.user?.email) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -33,7 +34,7 @@ export async function DELETE(
         const currentUserMember = await prisma.projectMember.findUnique({
             where: {
                 projectId_userId: {
-                    projectId: params.id,
+                    projectId: id,
                     userId: currentUser.id,
                 },
             },
@@ -48,7 +49,7 @@ export async function DELETE(
 
         // Get the member to be removed
         const memberToRemove = await prisma.projectMember.findUnique({
-            where: { id: params.memberId },
+            where: { id: memberId },
             include: {
                 user: {
                     select: {
@@ -75,7 +76,7 @@ export async function DELETE(
         if (memberToRemove.role === 'Admin') {
             const adminCount = await prisma.projectMember.count({
                 where: {
-                    projectId: params.id,
+                    projectId: id,
                     role: 'Admin',
                 },
             })
@@ -90,12 +91,12 @@ export async function DELETE(
 
         // Remove the member
         await prisma.projectMember.delete({
-            where: { id: params.memberId },
+            where: { id: memberId },
         })
 
         secureLogger.info('Project member removed', {
             operation: 'projects.members.remove',
-            projectId: params.id,
+            projectId: id,
             removedUserId: memberToRemove.userId,
             removedByUserId: currentUser.id,
         })

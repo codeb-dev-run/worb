@@ -9,10 +9,10 @@ import { secureLogger, createErrorResponse } from '@/lib/security';
 // POST /api/workspaces/[workspaceId]/join-requests/[requestId]/review - Approve or reject join request
 export async function POST(
   request: NextRequest,
-  { params }: { params: { workspaceId: string; requestId: string } }
+  { params }: { params: Promise<{ workspaceId: string; requestId: string }> }
 ) {
   try {
-    const { workspaceId, requestId } = params;
+    const { workspaceId, requestId } = await params;
     const { reviewerId, action, reviewNote } = await request.json();
 
     if (!reviewerId || !action) {
@@ -214,10 +214,10 @@ export async function POST(
 // DELETE /api/workspaces/[workspaceId]/join-requests/[requestId]/review - Cancel join request
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { workspaceId: string; requestId: string } }
+  { params }: { params: Promise<{ workspaceId: string; requestId: string }> }
 ) {
   try {
-    const { requestId } = params;
+    const { requestId } = await params;
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get('userId');
 

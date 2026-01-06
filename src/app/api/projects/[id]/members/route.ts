@@ -13,9 +13,10 @@ import { secureLogger, createErrorResponse } from '@/lib/security'
 // GET /api/projects/[id]/members - Get project members
 export async function GET(
     request: NextRequest,
-    { params }: { params: { id: string } }
+    { params }: { params: Promise<{ id: string }> }
 ) {
     try {
+        const { id } = await params
         const session = await getServerSession(authOptions)
         if (!session?.user?.email) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -34,7 +35,7 @@ export async function GET(
 
         // Get all project members with user details
         const members = await prisma.projectMember.findMany({
-            where: { projectId: params.id },
+            where: { projectId: id },
             include: {
                 user: {
                     select: {
@@ -69,9 +70,10 @@ export async function GET(
 // POST /api/projects/[id]/members - Add workspace member directly to project
 export async function POST(
     request: NextRequest,
-    { params }: { params: { id: string } }
+    { params }: { params: Promise<{ id: string }> }
 ) {
     try {
+        const { id } = await params
         const session = await getServerSession(authOptions)
         if (!session?.user?.email) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -89,7 +91,7 @@ export async function POST(
         const projectMember = await prisma.projectMember.findUnique({
             where: {
                 projectId_userId: {
-                    projectId: params.id,
+                    projectId: id,
                     userId: currentUser.id,
                 },
             },
@@ -120,7 +122,7 @@ export async function POST(
         const existingMember = await prisma.projectMember.findUnique({
             where: {
                 projectId_userId: {
-                    projectId: params.id,
+                    projectId: id,
                     userId,
                 },
             },
@@ -132,7 +134,7 @@ export async function POST(
 
         // Get project info
         const project = await prisma.project.findUnique({
-            where: { id: params.id },
+            where: { id },
             select: { name: true, workspaceId: true }
         })
 
@@ -159,7 +161,7 @@ export async function POST(
         // Add member to project
         const newMember = await prisma.projectMember.create({
             data: {
-                projectId: params.id,
+                projectId: id,
                 userId,
                 role,
             },
