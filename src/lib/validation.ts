@@ -566,3 +566,79 @@ export function sanitizeRichText(input: string): string {
 export function escapeHtml(input: string): string {
   return escapeAllHtml(input)
 }
+
+// =============================================================================
+// QA Issue Schemas
+// =============================================================================
+
+export const qaIssueTypeSchema = z.enum(['BUG', 'FEATURE', 'IMPROVEMENT', 'TASK', 'QUESTION'])
+export const qaIssueStatusSchema = z.enum(['OPEN', 'IN_PROGRESS', 'RESOLVED', 'CLOSED', 'REOPENED'])
+export const qaIssuePrioritySchema = z.enum(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'])
+
+export const qaIssueCreateSchema = z.object({
+  workspaceId: uuidSchema,
+  projectId: uuidSchema.optional(),
+  title: z.string()
+    .min(1, 'Title is required')
+    .max(500, 'Title must be less than 500 characters')
+    .transform(val => DOMPurify.sanitize(val, { ALLOWED_TAGS: [] })),
+  description: richTextSchema,
+  type: qaIssueTypeSchema.default('BUG'),
+  priority: qaIssuePrioritySchema.default('MEDIUM'),
+  stepsToReproduce: richTextSchema.optional(),
+  expectedBehavior: richTextSchema.optional(),
+  actualBehavior: richTextSchema.optional(),
+  environment: z.string().max(500).optional(),
+  affectedFiles: z.array(z.string().max(500)).max(50).optional(),
+  codeChanges: z.any().optional(), // JSON with diff information
+  assigneeId: uuidSchema.optional(),
+  dueDate: z.coerce.date().optional(),
+  checklist: z.array(z.object({
+    id: z.string(),
+    text: z.string().max(500),
+    completed: z.boolean().default(false),
+  })).optional(),
+  labels: z.array(z.string().max(50)).max(20).optional(),
+  // GitHub integration
+  syncToGitHub: z.boolean().optional(),
+  githubRepoOwner: z.string().max(100).optional(),
+  githubRepoName: z.string().max(100).optional(),
+})
+
+export const qaIssueUpdateSchema = qaIssueCreateSchema.partial().omit({ workspaceId: true }).extend({
+  status: qaIssueStatusSchema.optional(),
+})
+
+export const qaIssueSearchSchema = z.object({
+  workspaceId: uuidSchema,
+  projectId: uuidSchema.optional(),
+  status: qaIssueStatusSchema.optional(),
+  type: qaIssueTypeSchema.optional(),
+  priority: qaIssuePrioritySchema.optional(),
+  assigneeId: uuidSchema.optional(),
+  reporterId: uuidSchema.optional(),
+  search: searchSchema,
+  labels: z.string().optional(), // comma-separated labels
+  ...paginationSchema.shape,
+})
+
+export const qaIssueCommentSchema = z.object({
+  content: richTextSchema.transform(val => val.slice(0, 10000)),
+  filePath: z.string().max(500).optional(),
+  lineNumber: z.number().int().min(1).optional(),
+  codeSnippet: z.string().max(2000).optional(),
+  isInternal: z.boolean().default(false),
+})
+
+export const githubIntegrationSchema = z.object({
+  workspaceId: uuidSchema,
+  accessToken: z.string().min(1, 'Access token is required'),
+  tokenType: z.enum(['PAT', 'APP']).default('PAT'),
+  defaultRepoOwner: z.string().max(100).optional(),
+  defaultRepoName: z.string().max(100).optional(),
+  autoSyncEnabled: z.boolean().default(true),
+  syncLabels: z.boolean().default(true),
+  syncAssignees: z.boolean().default(true),
+  syncComments: z.boolean().default(true),
+  labelMapping: z.record(z.string(), z.record(z.string(), z.string())).optional(),
+})

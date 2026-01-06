@@ -229,6 +229,11 @@ model Workspace {
   weeklyEvaluations         WeeklyEvaluation[]
   monthlyEvaluationSummaries MonthlyEvaluationSummary[]
   yearlyEvaluationSummaries  YearlyEvaluationSummary[]
+
+  // QA Board relations
+  qaIssues              QAIssue[]
+  qaChecklistTemplates  QAChecklistTemplate[]
+  githubIntegration     GitHubIntegration?
 }
 
 model WorkspaceMember {
@@ -307,6 +312,14 @@ model User {
   // Performance Evaluation relations
   evaluatorRoles Evaluator[] @relation("EvaluatorUser")
 
+  // QA Board relations
+  qaIssuesReported      QAIssue[]             @relation("QAIssueReporter")
+  qaIssuesAssigned      QAIssue[]             @relation("QAIssueAssignee")
+  qaIssueComments       QAIssueComment[]      @relation("QAIssueCommentAuthor")
+  qaIssueHistory        QAIssueHistory[]      @relation("QAIssueHistoryUser")
+  qaIssueAttachments    QAIssueAttachment[]   @relation("QAIssueAttachmentUploader")
+  qaChecklistTemplates  QAChecklistTemplate[] @relation("QAChecklistTemplateCreator")
+
   // 100K CCU 인덱스: 자주 쿼리되는 필드
   @@index([isActive])
   @@index([createdAt])
@@ -346,6 +359,9 @@ model Project {
   contracts    Contract[]
   transactions Transaction[]
   invitations  ProjectInvitation[]
+
+  // QA Board relations
+  qaIssues     QAIssue[]
 
   @@index([status])
   @@index([workspaceId])
@@ -1548,4 +1564,216 @@ model EvaluationFeedback {
   employee   Employee         @relation("EmployeeFeedback", fields: [employeeId], references: [id], onDelete: Cascade)
 
   @@index([employeeId])
+}
+
+// ============================================
+// Phase 15: QA Board & Issue Management
+// ============================================
+
+enum QAIssueStatus {
+  OPEN        // 열림
+  IN_PROGRESS // 진행중
+  RESOLVED    // 해결됨
+  CLOSED      // 닫힘
+  REOPENED    // 재오픈
+}
+
+enum QAIssuePriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum QAIssueType {
+  BUG         // 버그
+  FEATURE     // 기능 요청
+  IMPROVEMENT // 개선
+  TASK        // 작업
+  QUESTION    // 질문
+}
+
+// QA 이슈 (버그 리포트, 기능 요청 등)
+model QAIssue {
+  id          String   @id @default(uuid())
+  workspaceId String
+  projectId   String?  // 관련 프로젝트 (선택)
+
+  // 기본 정보
+  title       String
+  description String   @db.Text
+  type        QAIssueType     @default(BUG)
+  status      QAIssueStatus   @default(OPEN)
+  priority    QAIssuePriority @default(MEDIUM)
+
+  // 버그 관련 정보
+  stepsToReproduce String?  @db.Text // 재현 방법
+  expectedBehavior String?  @db.Text // 기대 동작
+  actualBehavior   String?  @db.Text // 실제 동작
+  environment      String?           // 환경 정보 (브라우저, OS 등)
+
+  // 코드 관련 정보
+  affectedFiles    String[]          // 영향받는 파일 목록
+  codeChanges      Json?             // 수정된 코드 라인 정보 [{file, lines: [from, to], diff}]
+
+  // GitHub 연동
+  githubIssueUrl   String?           // GitHub Issue URL
+  githubIssueNumber Int?             // GitHub Issue 번호
+  githubRepoOwner  String?           // GitHub 저장소 소유자
+  githubRepoName   String?           // GitHub 저장소 이름
+  syncedToGitHub   Boolean  @default(false)
+
+  // 담당 및 추적
+  reporterId  String            // 보고자
+  assigneeId  String?           // 담당자
+
+  // 진행 상황
+  resolvedAt  DateTime?
+  closedAt    DateTime?
+  dueDate     DateTime?
+
+  // 체크리스트
+  checklist   Json?             // [{id, text, completed, completedAt, completedBy}]
+
+  // 라벨 및 태그
+  labels      String[]  @default([])
+
+  // 메타데이터
+  viewCount   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  workspace   Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project     Project?      @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  reporter    User          @relation("QAIssueReporter", fields: [reporterId], references: [id])
+  assignee    User?         @relation("QAIssueAssignee", fields: [assigneeId], references: [id])
+
+  comments    QAIssueComment[]
+  history     QAIssueHistory[]
+  attachments QAIssueAttachment[]
+
+  @@index([workspaceId, status])
+  @@index([workspaceId, type])
+  @@index([workspaceId, priority])
+  @@index([workspaceId, createdAt])
+  @@index([projectId])
+  @@index([reporterId])
+  @@index([assigneeId])
+  @@index([githubIssueNumber])
+}
+
+// QA 이슈 댓글
+model QAIssueComment {
+  id       String   @id @default(uuid())
+  issueId  String
+  authorId String
+  content  String   @db.Text
+
+  // 코드 참조 (라인 코멘트)
+  filePath   String?
+  lineNumber Int?
+  codeSnippet String?
+
+  isInternal Boolean @default(false) // 내부 메모 (외부 공개 X)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  issue  QAIssue @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  author User    @relation("QAIssueCommentAuthor", fields: [authorId], references: [id])
+
+  @@index([issueId, createdAt])
+  @@index([authorId])
+}
+
+// QA 이슈 변경 이력
+model QAIssueHistory {
+  id       String   @id @default(uuid())
+  issueId  String
+  userId   String
+
+  action   String   // created, status_changed, assigned, commented, etc.
+  field    String?  // 변경된 필드명
+  oldValue String?  // 이전 값
+  newValue String?  // 새 값
+
+  // GitHub 동기화 관련
+  syncedToGitHub Boolean @default(false)
+
+  createdAt DateTime @default(now())
+
+  issue QAIssue @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  user  User    @relation("QAIssueHistoryUser", fields: [userId], references: [id])
+
+  @@index([issueId, createdAt])
+  @@index([userId])
+}
+
+// QA 이슈 첨부파일
+model QAIssueAttachment {
+  id       String @id @default(uuid())
+  issueId  String
+  uploaderId String
+
+  fileName    String
+  fileUrl     String
+  fileSize    Int
+  mimeType    String
+
+  createdAt DateTime @default(now())
+
+  issue    QAIssue @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  uploader User    @relation("QAIssueAttachmentUploader", fields: [uploaderId], references: [id])
+
+  @@index([issueId])
+}
+
+// QA 체크리스트 템플릿
+model QAChecklistTemplate {
+  id          String   @id @default(uuid())
+  workspaceId String
+
+  name        String
+  description String?
+  items       Json     // [{id, text, required}]
+
+  isDefault   Boolean  @default(false) // 기본 템플릿 여부
+
+  createdBy   String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  creator   User      @relation("QAChecklistTemplateCreator", fields: [createdBy], references: [id])
+
+  @@index([workspaceId])
+}
+
+// GitHub 연동 설정
+model GitHubIntegration {
+  id          String   @id @default(uuid())
+  workspaceId String   @unique
+
+  // GitHub App 또는 Personal Access Token
+  accessToken       String   // 암호화 저장
+  tokenType         String   @default("PAT") // PAT, APP
+
+  // 기본 저장소 설정
+  defaultRepoOwner  String?
+  defaultRepoName   String?
+
+  // 동기화 설정
+  autoSyncEnabled   Boolean  @default(true)
+  syncLabels        Boolean  @default(true)
+  syncAssignees     Boolean  @default(true)
+  syncComments      Boolean  @default(true)
+
+  // 라벨 매핑
+  labelMapping      Json?    // {priority: {HIGH: 'high-priority'}, type: {BUG: 'bug'}}
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 }
