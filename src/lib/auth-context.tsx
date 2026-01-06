@@ -80,16 +80,23 @@ function AuthProviderContent({ children }: { children: React.ReactNode }) {
 
         setUser(userData)
         setUserProfile(profileData)
-        localStorage.setItem('user', JSON.stringify(userData))
-        localStorage.setItem('userProfile', JSON.stringify(profileData))
-      } else {
-        // No session, check local storage (Legacy/Local Auth)
-        const storedUser = localStorage.getItem('user')
-        const storedProfile = localStorage.getItem('userProfile')
-
-        if (storedUser && storedProfile) {
-          setUser(JSON.parse(storedUser))
-          setUserProfile(JSON.parse(storedProfile))
+        // Sync to localStorage for offline/quick access
+        try {
+          localStorage.setItem('user', JSON.stringify(userData))
+          localStorage.setItem('userProfile', JSON.stringify(profileData))
+        } catch {
+          // localStorage not available (SSR or quota exceeded)
+        }
+      } else if (status === 'unauthenticated') {
+        // No session - clear all auth state to prevent stale data
+        // This fixes the issue where users couldn't reconnect after cache clear
+        setUser(null)
+        setUserProfile(null)
+        try {
+          localStorage.removeItem('user')
+          localStorage.removeItem('userProfile')
+        } catch {
+          // localStorage not available
         }
       }
       setLoading(false)

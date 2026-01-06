@@ -2,7 +2,7 @@
 
 const isDev = process.env.NODE_ENV === 'development'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '@/lib/auth-context'
 import { useWorkspace } from '@/lib/workspace-context'
 import { Card, CardContent } from '@/components/ui/card'
@@ -55,6 +55,8 @@ export default function HRPage() {
   const [activeTab, setActiveTab] = useState<HRTab>('attendance')
   const [loading, setLoading] = useState(true)
   const [userRole, setUserRole] = useState<UserRole>('employee')
+  // Refresh key to force re-mount components when switching tabs
+  const [refreshKey, setRefreshKey] = useState(0)
 
   const userId = userProfile?.uid || user?.uid || ''
   const workspaceId = currentWorkspace?.id || ''
@@ -101,6 +103,13 @@ export default function HRPage() {
 
   // 권한에 따라 표시할 탭 결정
   const visibleTabs = isAdmin ? [...baseTabs, ...adminTabs] : baseTabs
+
+  // Handle tab change - increment refresh key to force data reload
+  const handleTabChange = useCallback((newTab: HRTab) => {
+    setActiveTab(newTab)
+    // Increment refresh key to force component remount and data refresh
+    setRefreshKey(prev => prev + 1)
+  }, [])
 
   // 워크스페이스 로딩 중
   if (workspaceLoading) {
@@ -173,7 +182,7 @@ export default function HRPage() {
                 ? 'bg-black text-lime-400 shadow-lg shadow-lime-400/20'
                 : 'text-slate-500 hover:text-slate-900 hover:bg-white/60'
             }`}
-            onClick={() => setActiveTab(tab.id)}
+            onClick={() => handleTabChange(tab.id)}
           >
             <tab.icon className="w-4 h-4" />
             {tab.label}
@@ -185,6 +194,7 @@ export default function HRPage() {
       <div className="min-h-[400px]">
         {activeTab === 'attendance' && (
           <AttendanceTab
+            key={`attendance-${refreshKey}`}
             userId={userId}
             workspaceId={workspaceId}
             isAdmin={isAdmin}
@@ -192,6 +202,7 @@ export default function HRPage() {
         )}
         {activeTab === 'flexible' && (
           <FlexibleWorkDashboard
+            key={`flexible-${refreshKey}`}
             userId={userId}
             workspaceId={workspaceId}
           />

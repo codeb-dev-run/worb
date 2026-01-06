@@ -1,6 +1,7 @@
 // =============================================================================
 // Attendance Check-in API - CVE-CB-003 Fixed: Session-based Authentication
 // 지원 기능: 출근, 퇴근 후 이어서 근무 (isResume)
+// CVE-CB-010 Fixed: Server-side IP validation for office check-in
 // =============================================================================
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -24,6 +25,47 @@ export async function POST(request: NextRequest) {
     }
 
     const { workLocation, note, isResume, ipAddress, workspaceId } = validation.data!
+
+    // CVE-CB-010 Fix: Server-side IP validation for office check-in
+    // Fetch Work Policy to get office IP whitelist
+    const policy = await prisma.workPolicy.findFirst({
+      where: { workspaceId: workspaceId || null }
+    })
+
+    if (policy && policy.officeIpWhitelist && (policy.officeIpWhitelist as string[]).length > 0) {
+      const officeIps = policy.officeIpWhitelist as string[]
+      const isOfficeIP = ipAddress && officeIps.includes(ipAddress)
+
+      // Block: Trying to check-in as OFFICE from non-office IP
+      if (workLocation === 'OFFICE' && !isOfficeIP) {
+        secureLogger.warn('Office check-in attempted from non-office IP', {
+          operation: 'attendance.checkin.blocked',
+          userId: user.id,
+          ipAddress,
+          workLocation,
+        })
+        return createErrorResponse(
+          '회사 IP가 아닙니다. 재택근무로 전환해주세요.',
+          403,
+          'OFFICE_IP_REQUIRED'
+        )
+      }
+
+      // Block: Trying to check-in as REMOTE from office IP
+      if (workLocation === 'REMOTE' && isOfficeIP) {
+        secureLogger.warn('Remote check-in attempted from office IP', {
+          operation: 'attendance.checkin.blocked',
+          userId: user.id,
+          ipAddress,
+          workLocation,
+        })
+        return createErrorResponse(
+          '사무실 IP에서는 재택근무를 선택할 수 없습니다.',
+          403,
+          'REMOTE_NOT_ALLOWED_FROM_OFFICE'
+        )
+      }
+    }
 
     const now = new Date()
     const today = new Date()
@@ -78,12 +120,7 @@ export async function POST(request: NextRequest) {
       return createErrorResponse('Already checked in today', 400, 'ALREADY_CHECKED_IN')
     }
 
-    // Fetch Work Policy for this workspace
-    const policy = await prisma.workPolicy.findFirst({
-      where: { workspaceId: workspaceId || null }
-    })
-
-    // Determine status based on policy
+    // Determine status based on policy (policy already fetched for IP validation)
     let status = 'PRESENT'
     const hour = now.getHours()
     const minute = now.getMinutes()

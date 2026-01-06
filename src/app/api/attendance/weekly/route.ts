@@ -62,24 +62,60 @@ export async function GET(request: NextRequest) {
     })
 
     // 현재 주 실시간 통계 계산
+    // 두 가지 근무 기록 방식 통합:
+    // 1. WorkSession (유연근무): workSessions 테이블 사용
+    // 2. 기본 출퇴근: checkIn/checkOut 필드 사용
     let currentWeekTotal = 0
     let currentWeekOffice = 0
     let currentWeekRemote = 0
 
     for (const attendance of currentWeekAttendances) {
-      for (const session of attendance.workSessions) {
-        let duration = session.durationMinutes || 0
+      // 1) WorkSession 기반 계산 (유연근무)
+      if (attendance.workSessions && attendance.workSessions.length > 0) {
+        for (const session of attendance.workSessions) {
+          let duration = session.durationMinutes || 0
 
-        // 활성 세션인 경우 현재까지 시간 추가
-        if (!session.endTime) {
-          duration = Math.floor((now.getTime() - session.startTime.getTime()) / 60000)
+          // 활성 세션인 경우 현재까지 시간 추가
+          if (!session.endTime) {
+            duration = Math.floor((now.getTime() - session.startTime.getTime()) / 60000)
+          }
+
+          currentWeekTotal += duration
+          if (session.sessionType === 'OFFICE_WORK') {
+            currentWeekOffice += duration
+          } else {
+            currentWeekRemote += duration
+          }
+        }
+      }
+      // 2) 기본 출퇴근 기반 계산 (checkIn/checkOut)
+      else if (attendance.checkIn) {
+        let duration = 0
+
+        if (attendance.checkOut) {
+          // 퇴근 기록이 있으면 차이 계산
+          duration = Math.floor(
+            (new Date(attendance.checkOut).getTime() - new Date(attendance.checkIn).getTime()) / 60000
+          )
+        } else {
+          // 아직 퇴근 안 했으면 현재까지 시간 계산
+          duration = Math.floor((now.getTime() - new Date(attendance.checkIn).getTime()) / 60000)
+        }
+
+        // DB에 저장된 totalWorkedMinutes가 있으면 그것을 우선 사용
+        if (attendance.totalWorkedMinutes && attendance.totalWorkedMinutes > 0) {
+          duration = attendance.totalWorkedMinutes
         }
 
         currentWeekTotal += duration
-        if (session.sessionType === 'OFFICE_WORK') {
-          currentWeekOffice += duration
-        } else {
+
+        // 근무 위치에 따라 분류
+        const isRemote = attendance.status === 'REMOTE' ||
+          (attendance.note && attendance.note.includes('재택'))
+        if (isRemote) {
           currentWeekRemote += duration
+        } else {
+          currentWeekOffice += duration
         }
       }
     }
@@ -101,13 +137,33 @@ export async function GET(request: NextRequest) {
       remainingMinutes: Math.max(0, targetMinutes - currentWeekTotal),
       isCompleted: currentWeekTotal >= targetMinutes,
       progressPercent: Math.min(100, Math.round((currentWeekTotal / targetMinutes) * 100)),
-      dailyBreakdown: currentWeekAttendances.map(a => ({
-        date: a.date,
-        totalMinutes: a.totalWorkedMinutes,
-        officeMinutes: a.officeWorkedMinutes,
-        remoteMinutes: a.remoteWorkedMinutes,
-        status: a.status,
-      })),
+      dailyBreakdown: currentWeekAttendances.map(a => {
+        // 실시간 근무시간 계산 (checkIn/checkOut 기반)
+        let calculatedMinutes = 0
+        if (a.checkIn) {
+          if (a.checkOut) {
+            calculatedMinutes = Math.floor(
+              (new Date(a.checkOut).getTime() - new Date(a.checkIn).getTime()) / 60000
+            )
+          } else {
+            calculatedMinutes = Math.floor((now.getTime() - new Date(a.checkIn).getTime()) / 60000)
+          }
+        }
+
+        // DB 저장값과 실시간 계산값 중 더 정확한 값 사용
+        const totalMinutes = a.totalWorkedMinutes || calculatedMinutes
+        const isRemote = a.status === 'REMOTE' || (a.note && a.note.includes('재택'))
+
+        return {
+          date: a.date,
+          checkIn: a.checkIn,
+          checkOut: a.checkOut,
+          totalMinutes,
+          officeMinutes: isRemote ? 0 : (a.officeWorkedMinutes || totalMinutes),
+          remoteMinutes: isRemote ? (a.remoteWorkedMinutes || totalMinutes) : 0,
+          status: a.status,
+        }
+      }),
     }
 
     // 이전 주 요약 데이터

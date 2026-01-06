@@ -169,12 +169,13 @@ export default function AttendanceTab({ userId, workspaceId, isAdmin }: Attendan
         },
         body: JSON.stringify({ workLocation, ipAddress: userIP, workspaceId })
       })
+      const data = await res.json()
       if (res.ok) {
         toast.success('출근이 기록되었습니다')
-        loadAttendance()
+        // Use API response directly to avoid race condition with cache
+        setTodayAttendance(data)
       } else {
-        const err = await res.json()
-        toast.error(err.error || '출근 기록 실패')
+        toast.error(data.error || '출근 기록 실패')
       }
     } catch (e) {
       toast.error('출근 기록 중 오류가 발생했습니다')
@@ -208,12 +209,13 @@ export default function AttendanceTab({ userId, workspaceId, isAdmin }: Attendan
           isResume: true  // 이어서 근무 플래그
         })
       })
+      const data = await res.json()
       if (res.ok) {
         toast.success(`${workLocation === 'OFFICE' ? '사무실' : '재택'}에서 근무를 다시 시작합니다`)
-        loadAttendance()
+        // Use API response directly to avoid race condition with cache
+        setTodayAttendance(data)
       } else {
-        const err = await res.json()
-        toast.error(err.error || '근무 재시작 실패')
+        toast.error(data.error || '근무 재시작 실패')
       }
     } catch (e) {
       toast.error('근무 재시작 중 오류가 발생했습니다')
@@ -231,12 +233,13 @@ export default function AttendanceTab({ userId, workspaceId, isAdmin }: Attendan
         },
         body: JSON.stringify({ workspaceId })
       })
+      const data = await res.json()
       if (res.ok) {
         toast.success('퇴근이 기록되었습니다')
-        loadAttendance()
+        // Use API response directly to avoid race condition with cache
+        setTodayAttendance(data)
       } else {
-        const err = await res.json()
-        toast.error(err.error || '퇴근 기록 실패')
+        toast.error(data.error || '퇴근 기록 실패')
       }
     } catch (e) {
       toast.error('퇴근 기록 중 오류가 발생했습니다')
