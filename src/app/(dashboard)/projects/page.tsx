@@ -17,7 +17,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { cn } from '@/lib/utils'
-import { Search, LayoutGrid, LayoutList, Plus, Calendar, Filter, ChevronRight, Users, DollarSign, FolderOpen, BarChart3, TrendingUp, Star } from 'lucide-react'
+import { Search, LayoutGrid, LayoutList, Plus, Calendar, Filter, ChevronRight, Users, FolderOpen, BarChart3, TrendingUp, Star } from 'lucide-react'
 import { Progress } from '@/components/ui/progress'
 import { getProjects, createProject } from '@/actions/project'
 import { toast } from 'react-hot-toast'
@@ -58,6 +58,7 @@ export default function ProjectsPage() {
   const [filterStatus, setFilterStatus] = useState<Project['status'] | 'all'>('all')
   const [searchTerm, setSearchTerm] = useState('')
   const [sortBy, setSortBy] = useState<'name' | 'date' | 'progress'>('date')
+  const [showMyProjectsOnly, setShowMyProjectsOnly] = useState(false)
 
   // 프로젝트 데이터 로드
   useEffect(() => {
@@ -82,6 +83,19 @@ export default function ProjectsPage() {
   // 프로젝트 필터링 및 검색
   const filteredProjects = useMemo(() => {
     let filtered = projects
+
+    // 내 프로젝트만 필터링
+    if (showMyProjectsOnly && user) {
+      filtered = filtered.filter(project => {
+        // createdBy가 내 ID인 경우
+        if (project.createdBy === user.uid) return true
+        // team 배열에 내가 포함된 경우
+        if (project.team?.some(member =>
+          member.id === user.uid || member.email === user.email
+        )) return true
+        return false
+      })
+    }
 
     // 탭 필터링
     if (selectedTab === 'active') {
@@ -115,16 +129,7 @@ export default function ProjectsPage() {
     })
 
     return filtered
-  }, [projects, selectedTab, filterStatus, searchTerm, sortBy])
-
-  // 예산 포맷팅
-  const formatBudget = (amount: number) => {
-    return new Intl.NumberFormat('ko-KR', {
-      style: 'currency',
-      currency: 'KRW',
-      maximumFractionDigits: 0,
-    }).format(amount)
-  }
+  }, [projects, selectedTab, filterStatus, searchTerm, sortBy, showMyProjectsOnly, user])
 
   // 프로젝트 생성 핸들러
   const handleCreateProject = async (projectData: Omit<Project, 'id' | 'createdAt' | 'updatedAt'> & { inviteMembers?: Array<{ email: string; role: string }> }) => {
@@ -242,6 +247,17 @@ export default function ProjectsPage() {
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           {/* 상태 필터 */}
           <div className="flex flex-wrap gap-2">
+            {/* 내 프로젝트만 보기 토글 */}
+            <Button
+              variant={showMyProjectsOnly ? 'limePrimary' : 'outline'}
+              size="sm"
+              onClick={() => setShowMyProjectsOnly(!showMyProjectsOnly)}
+              className="gap-1.5"
+            >
+              <Users className="h-3.5 w-3.5" />
+              내 프로젝트
+            </Button>
+            <div className="w-px h-6 bg-slate-200 mx-1" />
             <Button
               variant={filterStatus === 'all' ? 'default' : 'outline'}
               size="sm"
@@ -318,7 +334,6 @@ export default function ProjectsPage() {
                 <TableHead>상태</TableHead>
                 <TableHead>진행률</TableHead>
                 <TableHead>팀</TableHead>
-                <TableHead>예산</TableHead>
                 <TableHead>기간</TableHead>
                 <TableHead className="text-right">액션</TableHead>
               </TableRow>
@@ -364,7 +379,6 @@ export default function ProjectsPage() {
                       )}
                     </div>
                   </TableCell>
-                  <TableCell>{formatBudget(project.budget || 0)}</TableCell>
                   <TableCell className="text-muted-foreground">
                     {project.startDate ? new Date(project.startDate).toLocaleDateString('ko-KR') : '-'} - {project.endDate ? new Date(project.endDate).toLocaleDateString('ko-KR') : '-'}
                   </TableCell>
@@ -439,12 +453,6 @@ export default function ProjectsPage() {
                   </div>
 
                   <div className="grid grid-cols-2 gap-3 text-sm">
-                    <div className="flex items-center gap-2">
-                      <DollarSign className="h-4 w-4 text-slate-400" />
-                      <span className="text-slate-500">예산</span>
-                    </div>
-                    <span className="font-medium text-slate-900 text-right">{formatBudget(project.budget || 0)}</span>
-
                     <div className="flex items-center gap-2">
                       <Users className="h-4 w-4 text-slate-400" />
                       <span className="text-slate-500">팀원</span>

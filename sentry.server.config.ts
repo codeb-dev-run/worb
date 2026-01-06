@@ -26,9 +26,10 @@ Sentry.init({
   release: process.env.NEXT_PUBLIC_SENTRY_RELEASE || 'codeb-platform@1.0.0',
 
   // Integrations for server-side
+  // Prisma 6+: prismaIntegration은 자동으로 활성화됨
   integrations: [
-    // Automatically instrument Node.js libraries
     Sentry.httpIntegration(),
+    // Prisma 6에서는 별도 설정 없이 자동 작동
     Sentry.prismaIntegration(),
   ],
 

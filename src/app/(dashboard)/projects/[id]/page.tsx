@@ -28,7 +28,8 @@ import {
   ArrowLeft, Plus, Info, LayoutGrid, Calendar, FileText, Activity,
   PanelRightClose, PanelRightOpen, Loader2, FolderOpen, Users, Wallet,
   CalendarDays, Clock, CheckCircle, UserPlus, TrendingUp, Target,
-  AlertCircle, BarChart3, ListTodo, CircleDot, Zap, Trophy, Settings
+  AlertCircle, BarChart3, ListTodo, CircleDot, Zap, Trophy, Settings,
+  Search, ChevronDown, AlertTriangle, Flame
 } from 'lucide-react'
 import ProjectInvitations from '@/components/projects/ProjectInvitations'
 import ProjectInviteBanner from '@/components/projects/ProjectInviteBanner'
@@ -91,7 +92,7 @@ export default function ProjectDetailPage() {
   const params = useParams()
   const router = useRouter()
   const { user, userProfile } = useAuth()
-  const { departments } = useWorkspace()
+  const { departments, isAdmin: isWorkspaceAdmin } = useWorkspace()
   const { subscribe, publish, isConnected } = useCentrifugo()
   const [project, setProject] = useState<ProjectDetail | null>(null)
   const [activities, setActivities] = useState<Activity[]>([])
@@ -114,6 +115,10 @@ export default function ProjectDetailPage() {
     color: '#a3e635'
   })
 
+  // Search and filter state for Kanban
+  const [searchQuery, setSearchQuery] = useState('')
+  const [filterPriority, setFilterPriority] = useState<string>('all')
+
   // Use ref to track if we're currently updating to prevent loops
   const isUpdatingRef = useRef(false)
 
@@ -127,10 +132,10 @@ export default function ProjectDetailPage() {
     (member: any) => member.userId === user?.uid
   ) ?? false
 
-  // Check if current user is project admin
-  const isProjectAdmin = project?.teamMembers?.some(
+  // Check if current user is project admin (프로젝트 Admin 역할 OR 워크스페이스 관리자)
+  const isProjectAdmin = isWorkspaceAdmin || (project?.teamMembers?.some(
     (member: any) => member.userId === user?.uid && member.role === 'Admin'
-  ) ?? false
+  ) ?? false)
 
   // Status to columnId mapping
   const getColumnIdFromStatus = (status: string): string => {
@@ -441,36 +446,84 @@ export default function ProjectDetailPage() {
           </div>
         </div>
 
-        {/* Tabs - Glass Morphism */}
+        {/* Tabs + Filters - Glass Morphism (한 줄) */}
         <div className="flex-shrink-0 bg-white/60 backdrop-blur-sm border-b border-white/40 px-6">
-          <nav className="flex gap-1 py-2">
-            {[
-              { id: 'overview', label: '개요', icon: Info },
-              { id: 'kanban', label: '보드', icon: LayoutGrid },
-              { id: 'gantt', label: '타임라인', icon: Calendar },
-              { id: 'mindmap', label: '마인드맵', icon: FileText },
-              { id: 'files', label: '파일', icon: FileText },
-              { id: 'activity', label: '활동', icon: Activity },
-              { id: 'team', label: '팀', icon: UserPlus },
-              ...(isProjectAdmin ? [{ id: 'settings', label: '설정', icon: Settings }] : []),
-            ].map(tab => {
-              const Icon = tab.icon
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id as any)}
-                  className={`px-4 py-2 rounded-xl text-sm font-medium transition-all flex items-center gap-2 ${
-                    activeTab === tab.id
-                      ? 'bg-black text-lime-400 shadow-lg'
-                      : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
-                  }`}
-                >
-                  <Icon className="w-4 h-4" />
-                  {tab.label}
-                </button>
-              )
-            })}
-          </nav>
+          <div className="flex items-center justify-between gap-4 py-2">
+            {/* Left: Tabs */}
+            <nav className="flex gap-1 flex-shrink-0">
+              {[
+                { id: 'overview', label: '개요', icon: Info },
+                { id: 'kanban', label: '보드', icon: LayoutGrid },
+                { id: 'gantt', label: '타임라인', icon: Calendar },
+                { id: 'mindmap', label: '마인드맵', icon: FileText },
+                { id: 'files', label: '파일', icon: FileText },
+                { id: 'activity', label: '활동', icon: Activity },
+                { id: 'team', label: '팀', icon: UserPlus },
+                ...(isProjectAdmin ? [{ id: 'settings', label: '설정', icon: Settings }] : []),
+              ].map(tab => {
+                const Icon = tab.icon
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id as any)}
+                    className={`px-3 py-1.5 rounded-xl text-sm font-medium transition-all flex items-center gap-1.5 ${
+                      activeTab === tab.id
+                        ? 'bg-black text-lime-400 shadow-lg'
+                        : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
+                    }`}
+                  >
+                    <Icon className="w-4 h-4" />
+                    {tab.label}
+                  </button>
+                )
+              })}
+            </nav>
+
+            {/* Right: Search + Priority Filters (보드 탭일 때만 표시) */}
+            {activeTab === 'kanban' && (
+              <div className="flex items-center gap-2 flex-shrink-0">
+                {/* Search */}
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-1/2 transform -translate-y-1/2 text-slate-400 h-3.5 w-3.5" />
+                  <Input
+                    type="text"
+                    placeholder="작업 검색"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-8 h-8 w-36 text-sm bg-white/60 border-white/40"
+                  />
+                </div>
+
+                {/* Priority Filters */}
+                <div className="flex gap-0.5 bg-white/40 rounded-xl p-0.5">
+                  {[
+                    { value: 'all', label: '전체', icon: null, activeStyle: 'bg-slate-700 text-white' },
+                    { value: 'LOW', label: '낮음', icon: ChevronDown, activeStyle: 'bg-emerald-500 text-white' },
+                    { value: 'MEDIUM', label: '중간', icon: AlertCircle, activeStyle: 'bg-amber-500 text-white' },
+                    { value: 'HIGH', label: '높음', icon: AlertTriangle, activeStyle: 'bg-orange-500 text-white' },
+                    { value: 'URGENT', label: '긴급', icon: Flame, activeStyle: 'bg-rose-500 text-white' }
+                  ].map(priority => {
+                    const Icon = priority.icon
+                    return (
+                      <button
+                        key={priority.value}
+                        type="button"
+                        onClick={() => setFilterPriority(priority.value)}
+                        className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium transition-all ${
+                          filterPriority === priority.value
+                            ? priority.activeStyle
+                            : 'text-slate-500 hover:text-slate-700 hover:bg-white/60'
+                        }`}
+                      >
+                        {Icon && <Icon className="h-3 w-3" />}
+                        {priority.label}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Tab Content */}
@@ -1052,21 +1105,28 @@ export default function ProjectDetailPage() {
           )}
 
           {activeTab === 'kanban' && (
-            <div className="h-full">
+            <div className="h-full isolate" style={{ transform: 'none' }}>
               <KanbanBoardDnD
-                columns={kanbanColumns.map(col => ({
-                  ...col,
-                  // status를 기준으로 필터링하여 /tasks 페이지와 동기화 (columnId fallback 포함)
-                  tasks: tasks.filter(task =>
+                columns={kanbanColumns.map(col => {
+                  // /tasks 페이지와 동일한 필터링 로직 사용
+                  const colTasks = tasks.filter(task =>
                     task.status === col.id ||
-                    (task.columnId === col.id && !task.status) ||
-                    (col.id === 'todo' && !task.status && !task.columnId)
-                  ).map(task => ({
-                    ...task,
-                    dueDate: task.dueDate ? new Date(task.dueDate) : undefined,
-                    priority: (task.priority || TaskPriority.MEDIUM) as TaskPriority
-                  }))
-                }))}
+                    (col.id === 'todo' && !['in_progress', 'review', 'done'].includes(task.status as string))
+                  )
+                  return {
+                    ...col,
+                    tasks: colTasks.map(task => ({
+                      ...task,
+                      dueDate: task.dueDate ? new Date(task.dueDate) : undefined,
+                      priority: (task.priority || TaskPriority.MEDIUM) as TaskPriority
+                    }))
+                  }
+                })}
+                searchQuery={searchQuery}
+                filterPriority={filterPriority}
+                hideFilters={true}
+                currentUserId={user?.uid}
+                isAdmin={isWorkspaceAdmin}
                 onColumnsChange={(newColumns) => {
                   handleColumnsChange(newColumns as KanbanColumnWithTasks[])
                 }}
@@ -1542,7 +1602,7 @@ export default function ProjectDetailPage() {
 
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-2">색상</label>
-                <div className="flex gap-2">
+                <div className="flex gap-2 items-center">
                   {[
                     '#a3e635', // Lime
                     '#ef4444', // Red
@@ -1564,6 +1624,37 @@ export default function ProjectDetailPage() {
                       style={{ backgroundColor: color }}
                     />
                   ))}
+                  {/* 커스텀 색상 선택기 */}
+                  <div className="relative ml-2">
+                    <input
+                      type="color"
+                      value={newTask.color}
+                      onChange={(e) => setNewTask({ ...newTask, color: e.target.value })}
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                    />
+                    <div
+                      className={cn(
+                        "w-8 h-8 rounded-full border-2 transition-all flex items-center justify-center",
+                        ![
+                          '#a3e635', '#ef4444', '#10b981', '#f59e0b',
+                          '#8b5cf6', '#6b7280', '#ec4899', '#14b8a6'
+                        ].includes(newTask.color) ? 'border-slate-900 scale-110' : 'border-dashed border-slate-400 hover:border-slate-600'
+                      )}
+                      style={{
+                        backgroundColor: ![
+                          '#a3e635', '#ef4444', '#10b981', '#f59e0b',
+                          '#8b5cf6', '#6b7280', '#ec4899', '#14b8a6'
+                        ].includes(newTask.color) ? newTask.color : 'transparent'
+                      }}
+                    >
+                      {[
+                        '#a3e635', '#ef4444', '#10b981', '#f59e0b',
+                        '#8b5cf6', '#6b7280', '#ec4899', '#14b8a6'
+                      ].includes(newTask.color) && (
+                        <Plus className="h-4 w-4 text-slate-500" />
+                      )}
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>

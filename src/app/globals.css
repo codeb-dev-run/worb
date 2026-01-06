@@ -1,9 +1,9 @@
+/* Gantt chart styles - @import must be at the top */
+@import 'gantt-task-react/dist/index.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
-/* Gantt chart styles */
-@import 'gantt-task-react/dist/index.css';
 
 @layer base {
   :root {

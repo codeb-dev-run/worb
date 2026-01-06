@@ -32,7 +32,9 @@ import {
   Flag,
   ArrowUp,
   ArrowDown,
-  Minus
+  Minus,
+  ChevronDown,
+  ChevronRight
 } from 'lucide-react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
@@ -69,14 +71,15 @@ const priorityConfig = {
 }
 
 export default function TasksPage() {
-  const { userProfile } = useAuth()
-  const { currentWorkspace, loading: workspaceLoading, getDepartmentColor } = useWorkspace()
+  const { user, userProfile } = useAuth()
+  const { currentWorkspace, loading: workspaceLoading, getDepartmentColor, isAdmin } = useWorkspace()
   const [tasks, setTasks] = useState<TaskType[]>([])
   const [projects, setProjects] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [filterStatus, setFilterStatus] = useState<string>('all')
   const [filterProject, setFilterProject] = useState<string>('all')
   const [activeTab, setActiveTab] = useState<'list' | 'kanban' | 'trash'>('list')
+  const [showOtherProjects, setShowOtherProjects] = useState(false) // 다른 프로젝트 펼침 상태
 
   // 휴지통 상태 (로컬 스토리지로 관리)
   const [trashedTasks, setTrashedTasks] = useState<TaskType[]>([])
@@ -113,6 +116,7 @@ export default function TasksPage() {
 
       if (isDev) console.log('[TasksPage] Loaded tasks:', tasksData.length)
       if (isDev) console.log('[TasksPage] Loaded projects:', projectsData.length)
+      if (isDev) console.log('[TasksPage] Projects with isMember:', projectsData.map((p: any) => ({ name: p.name, isMember: p.isMember, userRole: p.userRole })))
 
       setTasks(tasksData as unknown as TaskType[])
       setProjects(projectsData)
@@ -526,7 +530,7 @@ export default function TasksPage() {
 
           <div className="flex items-center gap-3 flex-wrap">
             <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Project:</span>
-            <div className="flex gap-1.5 flex-wrap">
+            <div className="flex gap-1.5 flex-wrap items-center">
               <button
                 onClick={() => setFilterProject('all')}
                 className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all duration-300 ${filterProject === 'all'
@@ -546,18 +550,57 @@ export default function TasksPage() {
                 <User className="w-3 h-3" />
                 개인 작업
               </button>
-              {projects.map(project => (
-                <button
-                  key={project.id}
-                  onClick={() => setFilterProject(project.id)}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all duration-300 ${filterProject === project.id
-                    ? 'bg-lime-400 text-black shadow-lg shadow-lime-400/30'
-                    : 'bg-white/60 hover:bg-lime-50 text-slate-500 hover:text-slate-700'
-                    }`}
-                >
-                  {project.name}
-                </button>
-              ))}
+
+              {/* 내 프로젝트 그룹 */}
+              {projects.filter((p: any) => p.isMember).length > 0 && (
+                <>
+                  <div className="w-px h-5 bg-slate-300/60 mx-1" />
+                  <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider">내 프로젝트</span>
+                  {projects.filter((p: any) => p.isMember).map((project: any) => (
+                    <button
+                      key={project.id}
+                      onClick={() => setFilterProject(project.id)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all duration-300 flex items-center gap-1.5 ${filterProject === project.id
+                        ? 'bg-lime-400 text-black shadow-lg shadow-lime-400/30'
+                        : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 hover:text-emerald-800 border border-emerald-200'
+                        }`}
+                    >
+                      <Folder className="w-3 h-3" />
+                      {project.name}
+                    </button>
+                  ))}
+                </>
+              )}
+
+              {/* 다른 프로젝트 그룹 - 클릭하면 펼쳐짐 */}
+              {projects.filter((p: any) => !p.isMember).length > 0 && (
+                <>
+                  <div className="w-px h-5 bg-slate-300/60 mx-1" />
+                  <button
+                    onClick={() => setShowOtherProjects(!showOtherProjects)}
+                    className="flex items-center gap-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider hover:text-slate-600 transition-colors cursor-pointer"
+                  >
+                    {showOtherProjects ? (
+                      <ChevronDown className="w-3 h-3" />
+                    ) : (
+                      <ChevronRight className="w-3 h-3" />
+                    )}
+                    다른 프로젝트 ({projects.filter((p: any) => !p.isMember).length})
+                  </button>
+                  {showOtherProjects && projects.filter((p: any) => !p.isMember).map((project: any) => (
+                    <button
+                      key={project.id}
+                      onClick={() => setFilterProject(project.id)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all duration-300 ${filterProject === project.id
+                        ? 'bg-lime-400 text-black shadow-lg shadow-lime-400/30'
+                        : 'bg-white/60 hover:bg-lime-50 text-slate-500 hover:text-slate-700'
+                        }`}
+                    >
+                      {project.name}
+                    </button>
+                  ))}
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -783,6 +826,8 @@ export default function TasksPage() {
             }}
             onTaskEdit={openEditModal}
             onTaskDelete={(taskId) => handleMoveToTrash(taskId)}
+            currentUserId={user?.uid}
+            isAdmin={isAdmin}
           />
         </div>
       )}

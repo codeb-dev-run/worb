@@ -4,14 +4,15 @@
 // Glass Morphism Project Create Wizard
 // ===========================================
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Project } from '@/types'
 import {
   LayoutTemplate, Code, Smartphone, Megaphone, FileText,
   X, ChevronLeft, ChevronRight, Check, Users, Calendar,
-  Wallet, Info, Save, Sparkles, Shield, Eye, UserPlus, Trash2
+  Info, Save, Sparkles, Shield, Eye, UserPlus, Trash2, Search
 } from 'lucide-react'
+import { useWorkspace } from '@/lib/workspace-context'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent } from '@/components/ui/card'
@@ -33,8 +34,21 @@ interface StepProps {
 }
 
 interface InviteMember {
+  userId: string
   email: string
+  name: string
+  avatar?: string | null
   role: 'Viewer' | 'Developer' | 'Designer' | 'PM' | 'Admin'
+}
+
+interface WorkspaceMember {
+  id: string
+  email: string
+  name: string
+  avatar?: string | null
+  department?: string | null
+  departmentName?: string | null
+  departmentColor?: string | null
 }
 
 // Template Definitions
@@ -56,7 +70,6 @@ const TEMPLATES = [
     data: {
       name: '새 웹사이트 프로젝트',
       description: '반응형 웹사이트 구축 프로젝트입니다.',
-      budget: 10000000,
       status: 'planning' as const
     }
   },
@@ -69,7 +82,6 @@ const TEMPLATES = [
     data: {
       name: '새 모바일 앱 프로젝트',
       description: '크로스 플랫폼 모바일 앱 개발 프로젝트입니다.',
-      budget: 20000000,
       status: 'planning' as const
     }
   },
@@ -82,7 +94,6 @@ const TEMPLATES = [
     data: {
       name: '새 마케팅 캠페인',
       description: '분기별 마케팅 캠페인 기획 및 실행',
-      budget: 5000000,
       status: 'planning' as const
     }
   }
@@ -307,8 +318,8 @@ const BasicInfoStep: React.FC<StepProps> = ({ projectData, setProjectData, onNex
   )
 }
 
-// Step 3: 일정 및 예산
-const ScheduleBudgetStep: React.FC<StepProps> = ({ projectData, setProjectData, onNext, onBack, onSaveDraft }) => {
+// Step 3: 일정 설정
+const ScheduleStep: React.FC<StepProps> = ({ projectData, setProjectData, onNext, onBack, onSaveDraft }) => {
   const [errors, setErrors] = useState<Record<string, string>>({})
 
   const validate = () => {
@@ -330,8 +341,8 @@ const ScheduleBudgetStep: React.FC<StepProps> = ({ projectData, setProjectData, 
   return (
     <div className="space-y-6">
       <div>
-        <h3 className="text-lg font-bold text-slate-900 mb-1">일정 및 예산</h3>
-        <p className="text-sm text-slate-500">프로젝트 일정과 예산을 설정해주세요.</p>
+        <h3 className="text-lg font-bold text-slate-900 mb-1">일정 설정</h3>
+        <p className="text-sm text-slate-500">프로젝트 일정을 설정해주세요.</p>
       </div>
 
       <div className="space-y-4">
@@ -362,24 +373,6 @@ const ScheduleBudgetStep: React.FC<StepProps> = ({ projectData, setProjectData, 
             {errors.endDate && <p className="text-sm text-rose-500 mt-1">{errors.endDate}</p>}
           </div>
         </div>
-
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1.5 flex items-center gap-2">
-            <Wallet className="w-4 h-4 text-violet-600" />
-            예산 (원)
-          </label>
-          <Input
-            type="number"
-            value={projectData.budget || ''}
-            onChange={(e) => setProjectData({ ...projectData, budget: parseInt(e.target.value) || 0 })}
-            placeholder="10000000"
-          />
-          {projectData.budget && projectData.budget > 0 && (
-            <p className="text-sm text-lime-600 font-medium mt-1.5">
-              {new Intl.NumberFormat('ko-KR', { style: 'currency', currency: 'KRW', maximumFractionDigits: 0 }).format(projectData.budget)}
-            </p>
-          )}
-        </div>
       </div>
 
       <div className="flex justify-between items-center pt-4">
@@ -402,52 +395,78 @@ const ScheduleBudgetStep: React.FC<StepProps> = ({ projectData, setProjectData, 
   )
 }
 
-// Step 4: 팀 초대
+// Step 4: 팀 초대 (워크스페이스 멤버 선택 방식)
 const TeamInviteStep: React.FC<StepProps> = ({ projectData, setProjectData, onNext, onBack, onSaveDraft }) => {
-  const [email, setEmail] = useState('')
+  const { currentWorkspace } = useWorkspace()
+  const [workspaceMembers, setWorkspaceMembers] = useState<WorkspaceMember[]>([])
+  const [loading, setLoading] = useState(true)
+  const [searchQuery, setSearchQuery] = useState('')
   const [selectedRole, setSelectedRole] = useState<InviteMember['role']>('Developer')
-  const [emailError, setEmailError] = useState('')
 
-  const validateEmail = (email: string) => {
-    const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-    return re.test(email)
+  // 워크스페이스 멤버 조회
+  useEffect(() => {
+    const loadMembers = async () => {
+      if (!currentWorkspace?.id) return
+
+      try {
+        setLoading(true)
+        const response = await fetch(`/api/workspace/current/members?workspaceId=${currentWorkspace.id}`)
+        if (response.ok) {
+          const members = await response.json()
+          setWorkspaceMembers(members)
+        }
+      } catch (error) {
+        console.error('Failed to load workspace members:', error)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    loadMembers()
+  }, [currentWorkspace?.id])
+
+  // 검색 필터링
+  const filteredMembers = workspaceMembers.filter(member => {
+    const query = searchQuery.toLowerCase()
+    return (
+      member.name?.toLowerCase().includes(query) ||
+      member.email?.toLowerCase().includes(query)
+    )
+  })
+
+  // 이미 초대된 멤버인지 확인
+  const isInvited = (memberId: string) => {
+    return projectData.inviteMembers?.some(m => m.userId === memberId)
   }
 
-  const addMember = () => {
-    if (!email.trim()) {
-      setEmailError('이메일을 입력해주세요')
-      return
-    }
-    if (!validateEmail(email)) {
-      setEmailError('올바른 이메일 형식이 아닙니다')
-      return
-    }
-    if (projectData.inviteMembers?.some(m => m.email === email)) {
-      setEmailError('이미 추가된 이메일입니다')
-      return
-    }
+  const addMember = (member: WorkspaceMember) => {
+    if (isInvited(member.id)) return
 
-    const newMember: InviteMember = { email, role: selectedRole }
+    const newMember: InviteMember = {
+      userId: member.id,
+      email: member.email,
+      name: member.name || member.email,
+      avatar: member.avatar,
+      role: selectedRole
+    }
     setProjectData({
       ...projectData,
       inviteMembers: [...(projectData.inviteMembers || []), newMember]
     })
-    setEmail('')
-    setEmailError('')
   }
 
-  const removeMember = (emailToRemove: string) => {
+  const removeMember = (userId: string) => {
     setProjectData({
       ...projectData,
-      inviteMembers: projectData.inviteMembers?.filter(m => m.email !== emailToRemove) || []
+      inviteMembers: projectData.inviteMembers?.filter(m => m.userId !== userId) || []
     })
   }
 
-  const updateMemberRole = (email: string, role: InviteMember['role']) => {
+  const updateMemberRole = (userId: string, role: InviteMember['role']) => {
     setProjectData({
       ...projectData,
       inviteMembers: projectData.inviteMembers?.map(m =>
-        m.email === email ? { ...m, role } : m
+        m.userId === userId ? { ...m, role } : m
       ) || []
     })
   }
@@ -456,80 +475,153 @@ const TeamInviteStep: React.FC<StepProps> = ({ projectData, setProjectData, onNe
     <div className="space-y-6">
       <div>
         <h3 className="text-lg font-bold text-slate-900 mb-1">팀 초대</h3>
-        <p className="text-sm text-slate-500">프로젝트에 참여할 팀원을 초대하세요. 프로젝트 생성 후 이메일로 초대장이 발송됩니다.</p>
+        <p className="text-sm text-slate-500">워크스페이스 멤버 중 프로젝트에 참여할 팀원을 선택하세요.</p>
       </div>
 
       <Card variant="glass">
         <CardContent className="p-4 space-y-4">
-          <div className="flex gap-2">
-            <div className="flex-1">
-              <Input
-                type="email"
-                value={email}
-                onChange={(e) => {
-                  setEmail(e.target.value)
-                  setEmailError('')
-                }}
-                onKeyPress={(e) => e.key === 'Enter' && addMember()}
-                placeholder="이메일 주소 입력"
-                className={cn(emailError && "border-rose-500")}
-              />
-              {emailError && <p className="text-xs text-rose-500 mt-1">{emailError}</p>}
+          {/* 역할 선택 */}
+          <div>
+            <label className="block text-xs font-medium text-slate-500 mb-2">추가할 역할 선택</label>
+            <div className="grid grid-cols-5 gap-2">
+              {ROLES.map(role => {
+                const Icon = role.icon
+                return (
+                  <div
+                    key={role.value}
+                    className={cn(
+                      "p-2 rounded-xl text-center cursor-pointer transition-all",
+                      selectedRole === role.value
+                        ? "bg-lime-100 border border-lime-300"
+                        : "bg-slate-50 border border-transparent hover:bg-slate-100"
+                    )}
+                    onClick={() => setSelectedRole(role.value as InviteMember['role'])}
+                  >
+                    <Icon className={cn(
+                      "w-4 h-4 mx-auto mb-1",
+                      selectedRole === role.value ? "text-lime-600" : "text-slate-400"
+                    )} />
+                    <p className="text-xs font-medium text-slate-700">{role.label}</p>
+                  </div>
+                )
+              })}
             </div>
-{/* Role selection via button grid below */}
-            <Button variant="limePrimary" onClick={addMember} className="rounded-xl">
-              <UserPlus className="w-4 h-4" />
-            </Button>
           </div>
 
-          {/* Role descriptions */}
-          <div className="grid grid-cols-5 gap-2">
-            {ROLES.map(role => {
-              const Icon = role.icon
-              return (
-                <div
-                  key={role.value}
-                  className={cn(
-                    "p-2 rounded-xl text-center cursor-pointer transition-all",
-                    selectedRole === role.value
-                      ? "bg-lime-100 border border-lime-300"
-                      : "bg-slate-50 border border-transparent hover:bg-slate-100"
-                  )}
-                  onClick={() => setSelectedRole(role.value as InviteMember['role'])}
-                >
-                  <Icon className={cn(
-                    "w-4 h-4 mx-auto mb-1",
-                    selectedRole === role.value ? "text-lime-600" : "text-slate-400"
-                  )} />
-                  <p className="text-xs font-medium text-slate-700">{role.label}</p>
-                </div>
-              )
-            })}
+          {/* 멤버 검색 */}
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <Input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="이름 또는 이메일로 검색"
+              className="pl-10"
+            />
+          </div>
+
+          {/* 멤버 목록 */}
+          <div className="max-h-48 overflow-y-auto space-y-2">
+            {loading ? (
+              <div className="text-center py-4">
+                <div className="animate-spin w-6 h-6 border-2 border-lime-400 border-t-transparent rounded-full mx-auto"></div>
+                <p className="text-sm text-slate-500 mt-2">멤버 불러오는 중...</p>
+              </div>
+            ) : filteredMembers.length === 0 ? (
+              <div className="text-center py-4">
+                <p className="text-sm text-slate-500">
+                  {searchQuery ? '검색 결과가 없습니다' : '워크스페이스에 멤버가 없습니다'}
+                </p>
+              </div>
+            ) : (
+              filteredMembers.map((member) => {
+                const invited = isInvited(member.id)
+                return (
+                  <div
+                    key={member.id}
+                    className={cn(
+                      "flex items-center justify-between p-3 rounded-xl transition-all",
+                      invited
+                        ? "bg-lime-50 border border-lime-200"
+                        : "bg-white/60 border border-transparent hover:bg-slate-50 cursor-pointer"
+                    )}
+                    onClick={() => !invited && addMember(member)}
+                  >
+                    <div className="flex items-center gap-3">
+                      {member.avatar ? (
+                        <img
+                          src={member.avatar}
+                          alt={member.name || member.email}
+                          className="w-8 h-8 rounded-xl object-cover"
+                        />
+                      ) : (
+                        <div className="w-8 h-8 rounded-xl bg-slate-100 flex items-center justify-center">
+                          <span className="text-sm font-medium text-slate-600">
+                            {(member.name || member.email)[0].toUpperCase()}
+                          </span>
+                        </div>
+                      )}
+                      <div>
+                        <p className="text-sm font-medium text-slate-900">{member.name || member.email}</p>
+                        <p className="text-xs text-slate-500">{member.email}</p>
+                      </div>
+                      {member.departmentName && (
+                        <Badge
+                          className="text-xs border-0"
+                          style={{ backgroundColor: `${member.departmentColor}20`, color: member.departmentColor }}
+                        >
+                          {member.departmentName}
+                        </Badge>
+                      )}
+                    </div>
+                    {invited ? (
+                      <Badge className="bg-lime-100 text-lime-700 border-0">
+                        <Check className="w-3 h-3 mr-1" />
+                        선택됨
+                      </Badge>
+                    ) : (
+                      <Button variant="ghost" size="sm" className="rounded-lg h-7 text-xs">
+                        <UserPlus className="w-3 h-3 mr-1" />
+                        추가
+                      </Button>
+                    )}
+                  </div>
+                )
+              })
+            )}
           </div>
         </CardContent>
       </Card>
 
-      {/* Invited Members List */}
+      {/* 선택된 팀원 목록 */}
       <div>
         <label className="block text-sm font-medium text-slate-700 mb-2">
-          초대할 팀원 ({projectData.inviteMembers?.length || 0}명)
+          선택된 팀원 ({projectData.inviteMembers?.length || 0}명)
         </label>
         <div className="space-y-2 max-h-48 overflow-y-auto">
           {projectData.inviteMembers?.map((member) => {
             const roleInfo = ROLES.find(r => r.value === member.role)
             const RoleIcon = roleInfo?.icon || Users
             return (
-              <Card key={member.email} variant="glass" className="hover:shadow-md transition-shadow">
+              <Card key={member.userId} variant="glass" className="hover:shadow-md transition-shadow">
                 <CardContent className="p-3">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-xl bg-slate-100 flex items-center justify-center">
-                        <span className="text-sm font-medium text-slate-600">
-                          {member.email[0].toUpperCase()}
-                        </span>
-                      </div>
+                      {member.avatar ? (
+                        <img
+                          src={member.avatar}
+                          alt={member.name}
+                          className="w-8 h-8 rounded-xl object-cover"
+                        />
+                      ) : (
+                        <div className="w-8 h-8 rounded-xl bg-slate-100 flex items-center justify-center">
+                          <span className="text-sm font-medium text-slate-600">
+                            {member.name[0].toUpperCase()}
+                          </span>
+                        </div>
+                      )}
                       <div>
-                        <p className="text-sm font-medium text-slate-900">{member.email}</p>
+                        <p className="text-sm font-medium text-slate-900">{member.name}</p>
                         <div className="flex items-center gap-1 mt-0.5">
                           <RoleIcon className="w-3 h-3 text-slate-400" />
                           <span className="text-xs text-slate-500">{roleInfo?.label}</span>
@@ -541,7 +633,7 @@ const TeamInviteStep: React.FC<StepProps> = ({ projectData, setProjectData, onNe
                         {ROLES.map(role => (
                           <button
                             key={role.value}
-                            onClick={() => updateMemberRole(member.email, role.value as InviteMember['role'])}
+                            onClick={() => updateMemberRole(member.userId, role.value as InviteMember['role'])}
                             className={cn(
                               "px-2 py-1 text-xs rounded-lg transition-all",
                               member.role === role.value
@@ -554,7 +646,7 @@ const TeamInviteStep: React.FC<StepProps> = ({ projectData, setProjectData, onNe
                         ))}
                       </div>
                       <button
-                        onClick={() => removeMember(member.email)}
+                        onClick={() => removeMember(member.userId)}
                         className="p-1.5 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-colors"
                       >
                         <Trash2 className="w-4 h-4" />
@@ -572,8 +664,8 @@ const TeamInviteStep: React.FC<StepProps> = ({ projectData, setProjectData, onNe
                   <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center mb-3">
                     <Users className="w-6 h-6 text-slate-400" />
                   </div>
-                  <p className="text-sm text-slate-500">초대할 팀원이 없습니다</p>
-                  <p className="text-xs text-slate-400 mt-1">위에서 이메일을 입력하여 팀원을 추가하세요</p>
+                  <p className="text-sm text-slate-500">선택된 팀원이 없습니다</p>
+                  <p className="text-xs text-slate-400 mt-1">위에서 멤버를 클릭하여 추가하세요</p>
                 </div>
               </CardContent>
             </Card>
@@ -651,7 +743,7 @@ const ReviewStep: React.FC<StepProps & { onSubmit: () => void }> = ({ projectDat
               <div className="p-1.5 bg-violet-100 rounded-lg">
                 <Calendar className="w-4 h-4 text-violet-600" />
               </div>
-              <h4 className="font-semibold text-slate-900">일정 및 예산</h4>
+              <h4 className="font-semibold text-slate-900">일정</h4>
             </div>
             <dl className="space-y-2 text-sm">
               <div className="flex justify-between">
@@ -664,14 +756,6 @@ const ReviewStep: React.FC<StepProps & { onSubmit: () => void }> = ({ projectDat
                 <dt className="text-slate-500">종료일</dt>
                 <dd className="font-medium text-slate-900">
                   {projectData.endDate ? new Date(projectData.endDate).toLocaleDateString('ko-KR') : '-'}
-                </dd>
-              </div>
-              <div className="flex justify-between">
-                <dt className="text-slate-500">예산</dt>
-                <dd className="font-medium text-lime-600">
-                  {projectData.budget
-                    ? new Intl.NumberFormat('ko-KR', { style: 'currency', currency: 'KRW', maximumFractionDigits: 0 }).format(projectData.budget)
-                    : '-'}
                 </dd>
               </div>
             </dl>
@@ -695,8 +779,19 @@ const ReviewStep: React.FC<StepProps & { onSubmit: () => void }> = ({ projectDat
                   {projectData.inviteMembers.map((member) => {
                     const roleInfo = ROLES.find(r => r.value === member.role)
                     return (
-                      <div key={member.email} className="flex items-center justify-between py-1">
-                        <span className="text-slate-600">{member.email}</span>
+                      <div key={member.userId || member.email} className="flex items-center justify-between py-1">
+                        <div className="flex items-center gap-2">
+                          {member.avatar ? (
+                            <img src={member.avatar} alt={member.name} className="w-5 h-5 rounded-lg object-cover" />
+                          ) : (
+                            <div className="w-5 h-5 rounded-lg bg-slate-100 flex items-center justify-center">
+                              <span className="text-xs font-medium text-slate-600">
+                                {member.name[0].toUpperCase()}
+                              </span>
+                            </div>
+                          )}
+                          <span className="text-slate-600">{member.name}</span>
+                        </div>
                         <Badge className="bg-slate-100 text-slate-600 border-0 text-xs">
                           {roleInfo?.label}
                         </Badge>
@@ -752,7 +847,7 @@ export default function ProjectCreateWizard({ isOpen, onClose, onSubmit }: Proje
       progress: 0,
       startDate: projectData.startDate || new Date(),
       endDate: projectData.endDate || new Date(),
-      budget: projectData.budget || 0,
+      budget: 0,
       team: projectData.team || [],
       clientId: projectData.clientId || '',
       priority: 'medium',
@@ -801,7 +896,7 @@ export default function ProjectCreateWizard({ isOpen, onClose, onSubmit }: Proje
   const steps = [
     { id: 1, label: '템플릿' },
     { id: 2, label: '기본 정보' },
-    { id: 3, label: '일정/예산' },
+    { id: 3, label: '일정' },
     { id: 4, label: '팀 초대' },
     { id: 5, label: '확인' },
   ]
@@ -901,7 +996,7 @@ export default function ProjectCreateWizard({ isOpen, onClose, onSubmit }: Proje
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -20 }}
               >
-                <ScheduleBudgetStep
+                <ScheduleStep
                   projectData={projectData}
                   setProjectData={setProjectData}
                   onNext={() => setCurrentStep(4)}

@@ -202,26 +202,79 @@ export default function AttendancePage() {
         }
     }
 
-    const handleCheckOut = async () => {
+    const [isCheckingOut, setIsCheckingOut] = useState(false)
+
+    const handleCheckOut = async (retryCount = 0) => {
         if (!user?.uid) return
+
+        setIsCheckingOut(true)
+
+        // 낙관적 UI 업데이트 - 즉시 퇴근 시간 표시
+        const checkOutTime = new Date()
+        setTodayAttendance((prev: any) => prev ? { ...prev, checkOut: checkOutTime } : null)
 
         try {
             const response = await fetch('/api/attendance/checkout', {
                 method: 'POST',
                 headers: {
-                    'x-user-id': user.uid
-                }
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({})
             })
             if (response.ok) {
-                loadAttendanceData()
                 toast.success('퇴근 처리되었습니다')
+                // 백그라운드에서 데이터 새로고침
+                loadAttendanceData()
             } else {
                 const data = await response.json()
-                toast.error(data.error || '퇴근 처리 실패')
+                // 실패 시 롤백
+                setTodayAttendance((prev: any) => prev ? { ...prev, checkOut: null } : null)
+                toast.error(data.message || data.error || '퇴근 처리 실패')
             }
         } catch (error) {
+            // 네트워크 에러 시 재시도 (최대 2회)
+            if (retryCount < 2) {
+                if (isDev) console.log(`Check-out retry ${retryCount + 1}`)
+                setTimeout(() => handleCheckOut(retryCount + 1), 1000)
+                return
+            }
+            // 실패 시 롤백
+            setTodayAttendance((prev: any) => prev ? { ...prev, checkOut: null } : null)
             if (isDev) console.error('Check-out failed:', error)
-            toast.error('퇴근 처리 중 오류가 발생했습니다')
+            toast.error('퇴근 처리 중 오류가 발생했습니다. 다시 시도해주세요.')
+        } finally {
+            setIsCheckingOut(false)
+        }
+    }
+
+    // 이어서 근무하기 (퇴근 후 다시 출근)
+    const handleResumeWork = async () => {
+        if (!user?.uid) return
+
+        try {
+            const response = await fetch('/api/attendance/checkin', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    workLocation,
+                    ipAddress: userIP,
+                    isResume: true // 이어서 근무하기 플래그
+                })
+            })
+            if (response.ok) {
+                const data = await response.json()
+                loadAttendanceData()
+                toast.success(data.message || '근무를 재개했습니다')
+                setIsCheckInModalOpen(false)
+            } else {
+                const data = await response.json()
+                toast.error(data.message || data.error || '근무 재개 실패')
+            }
+        } catch (error) {
+            if (isDev) console.error('Resume work failed:', error)
+            toast.error('근무 재개 중 오류가 발생했습니다')
         }
     }
 
@@ -433,9 +486,13 @@ export default function AttendancePage() {
             <Dialog open={isCheckInModalOpen} onOpenChange={setIsCheckInModalOpen}>
                 <DialogContent className="bg-white/90 backdrop-blur-2xl border-white/40 rounded-3xl">
                     <DialogHeader>
-                        <DialogTitle>출근 위치 확인</DialogTitle>
+                        <DialogTitle>
+                            {todayAttendance?.checkOut ? '이어서 근무하기' : '출근 위치 확인'}
+                        </DialogTitle>
                         <DialogDescription>
-                            오늘 근무 위치를 선택해주세요.
+                            {todayAttendance?.checkOut
+                                ? '퇴근 후 다시 근무를 시작합니다. 근무 위치를 선택해주세요.'
+                                : '오늘 근무 위치를 선택해주세요.'}
                         </DialogDescription>
                     </DialogHeader>
                     <div className="space-y-4 py-4">
@@ -468,9 +525,15 @@ export default function AttendancePage() {
                         <Button variant="glass" onClick={() => setIsCheckInModalOpen(false)}>
                             취소
                         </Button>
-                        <Button variant="limePrimary" onClick={handleCheckIn}>
-                            출근 처리
-                        </Button>
+                        {todayAttendance?.checkOut ? (
+                            <Button variant="limePrimary" onClick={handleResumeWork}>
+                                근무 재개
+                            </Button>
+                        ) : (
+                            <Button variant="limePrimary" onClick={handleCheckIn}>
+                                출근 처리
+                            </Button>
+                        )}
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
@@ -503,23 +566,46 @@ export default function AttendancePage() {
                     </div>
 
                     <div className="flex gap-3">
+                        {/* 출근하기 / 이어서 근무하기 버튼 */}
+                        {todayAttendance?.checkIn && todayAttendance?.checkOut ? (
+                            // 퇴근한 상태 - 이어서 근무하기 버튼 표시
+                            <Button
+                                onClick={() => setIsCheckInModalOpen(true)}
+                                variant="limePrimary"
+                                className="flex-1 rounded-xl"
+                            >
+                                <CheckCircle className="w-4 h-4 mr-2" />
+                                이어서 근무하기
+                            </Button>
+                        ) : (
+                            // 출근 전 또는 근무 중 - 출근하기 버튼
+                            <Button
+                                onClick={handleCheckInClick}
+                                disabled={!!todayAttendance?.checkIn}
+                                variant="limePrimary"
+                                className="flex-1 rounded-xl"
+                            >
+                                <CheckCircle className="w-4 h-4 mr-2" />
+                                출근하기
+                            </Button>
+                        )}
                         <Button
-                            onClick={handleCheckInClick}
-                            disabled={!!todayAttendance?.checkIn}
-                            variant="limePrimary"
-                            className="flex-1 rounded-xl"
-                        >
-                            <CheckCircle className="w-4 h-4 mr-2" />
-                            출근하기
-                        </Button>
-                        <Button
-                            onClick={handleCheckOut}
-                            disabled={!todayAttendance?.checkIn || !!todayAttendance?.checkOut}
+                            onClick={() => handleCheckOut()}
+                            disabled={!todayAttendance?.checkIn || !!todayAttendance?.checkOut || isCheckingOut}
                             variant="glass"
                             className="flex-1 rounded-xl border-2 border-slate-200"
                         >
-                            <XCircle className="w-4 h-4 mr-2" />
-                            퇴근하기
+                            {isCheckingOut ? (
+                                <>
+                                    <div className="w-4 h-4 mr-2 border-2 border-slate-400 border-t-transparent rounded-full animate-spin" />
+                                    처리 중...
+                                </>
+                            ) : (
+                                <>
+                                    <XCircle className="w-4 h-4 mr-2" />
+                                    퇴근하기
+                                </>
+                            )}
                         </Button>
                     </div>
                 </CardContent>

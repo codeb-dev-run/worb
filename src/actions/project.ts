@@ -33,14 +33,22 @@ export async function getProjects(userId: string, workspaceId?: string) {
                 }
             })
 
-            return projects.map(p => ({
-                ...p,
-                team: p.members.map((m: any) => ({
-                    userId: m.userId,
-                    name: m.user.name,
-                    role: m.role
-                }))
-            }))
+            return projects.map(p => {
+                // 사용자가 이 프로젝트의 멤버인지 확인
+                const isMember = p.members.some((m: any) => m.userId === userId)
+                const userRole = p.members.find((m: any) => m.userId === userId)?.role
+
+                return {
+                    ...p,
+                    isMember, // 사용자가 멤버인지 여부
+                    userRole, // 사용자의 역할 (멤버인 경우)
+                    team: p.members.map((m: any) => ({
+                        userId: m.userId,
+                        name: m.user.name,
+                        role: m.role
+                    }))
+                }
+            })
         }
 
         // workspaceId가 없으면 기존 로직 사용 (하위 호환성)
@@ -111,7 +119,7 @@ export async function createProject(data: {
     priority?: ProjectPriority
     createdBy: string
     workspaceId?: string
-    inviteMembers?: Array<{ email: string; role: string }>
+    inviteMembers?: Array<{ userId?: string; email: string; role: string }>
 }) {
     try {
         // 1. 프로젝트 생성
@@ -136,50 +144,73 @@ export async function createProject(data: {
             }
         })
 
-        // 2. 초대할 멤버가 있으면 초대 생성 및 이메일 발송
+        // 2. 초대할 멤버가 있으면 처리
         if (data.inviteMembers && data.inviteMembers.length > 0) {
-            // 생성자 정보 가져오기
-            const inviter = await prisma.user.findUnique({
-                where: { id: data.createdBy },
-                select: { name: true, email: true }
-            })
-
-            const inviterName = inviter?.name || inviter?.email || '팀원'
-            const baseUrl = process.env.NEXTAUTH_URL || 'http://localhost:3000'
-
-            // 각 멤버에 대해 초대 생성
             for (const member of data.inviteMembers) {
                 try {
-                    // 토큰 생성
-                    const token = nanoid(32)
-                    const expiresAt = new Date()
-                    expiresAt.setDate(expiresAt.getDate() + 7) // 7일 후 만료
+                    // userId가 있으면 직접 멤버로 추가 (워크스페이스 멤버 선택 방식)
+                    if (member.userId) {
+                        // 이미 멤버인지 확인
+                        const existingMember = await prisma.projectMember.findUnique({
+                            where: {
+                                projectId_userId: {
+                                    projectId: project.id,
+                                    userId: member.userId
+                                }
+                            }
+                        })
 
-                    // 초대 레코드 생성
-                    await prisma.projectInvitation.create({
-                        data: {
-                            projectId: project.id,
-                            email: member.email,
-                            role: member.role,
-                            token,
-                            expiresAt,
-                            invitedBy: data.createdBy,
-                            status: 'PENDING'
+                        if (!existingMember) {
+                            await prisma.projectMember.create({
+                                data: {
+                                    projectId: project.id,
+                                    userId: member.userId,
+                                    role: member.role
+                                }
+                            })
+                            secureLogger.info('Project member added directly', { operation: 'project.addMember', projectName: project.name })
                         }
-                    })
+                    } else {
+                        // userId가 없으면 이메일 초대 방식 (기존 로직)
+                        const inviter = await prisma.user.findUnique({
+                            where: { id: data.createdBy },
+                            select: { name: true, email: true }
+                        })
 
-                    // 초대 이메일 발송
-                    const inviteUrl = `${baseUrl}/invite/project/${token}`
-                    await sendProjectInviteEmail(
-                        member.email,
-                        inviteUrl,
-                        project.name,
-                        inviterName
-                    )
+                        const inviterName = inviter?.name || inviter?.email || '팀원'
+                        const baseUrl = process.env.NEXTAUTH_URL || 'http://localhost:3000'
 
-                    secureLogger.info('Project invitation sent', { operation: 'project.invite', projectName: project.name })
+                        // 토큰 생성
+                        const token = nanoid(32)
+                        const expiresAt = new Date()
+                        expiresAt.setDate(expiresAt.getDate() + 7) // 7일 후 만료
+
+                        // 초대 레코드 생성
+                        await prisma.projectInvitation.create({
+                            data: {
+                                projectId: project.id,
+                                email: member.email,
+                                role: member.role,
+                                token,
+                                expiresAt,
+                                invitedBy: data.createdBy,
+                                status: 'PENDING'
+                            }
+                        })
+
+                        // 초대 이메일 발송
+                        const inviteUrl = `${baseUrl}/invite/project/${token}`
+                        await sendProjectInviteEmail(
+                            member.email,
+                            inviteUrl,
+                            project.name,
+                            inviterName
+                        )
+
+                        secureLogger.info('Project invitation sent', { operation: 'project.invite', projectName: project.name })
+                    }
                 } catch (inviteError) {
-                    secureLogger.error('Failed to send invitation', inviteError as Error, { operation: 'project.invite' })
+                    secureLogger.error('Failed to add member or send invitation', inviteError as Error, { operation: 'project.invite' })
                     // 개별 초대 실패는 전체 프로젝트 생성을 실패시키지 않음
                 }
             }
@@ -260,6 +291,57 @@ export async function getProject(projectId: string) {
 
 export async function updateProject(projectId: string, data: Partial<Project>) {
     try {
+        // 1. 세션 확인
+        const session = await getServerSession(authOptions)
+        if (!session?.user?.id) {
+            return { success: false, error: 'Unauthorized' }
+        }
+
+        // 2. 프로젝트 존재 확인
+        const existingProject = await prisma.project.findUnique({
+            where: { id: projectId },
+            select: {
+                createdBy: true,
+                workspaceId: true,
+                members: {
+                    where: { userId: session.user.id },
+                    select: { role: true }
+                }
+            }
+        })
+
+        if (!existingProject) {
+            return { success: false, error: 'Project not found' }
+        }
+
+        // 3. 권한 확인: 프로젝트 소유자 OR 프로젝트 Admin OR 워크스페이스 관리자
+        const isProjectOwner = existingProject.createdBy === session.user.id
+        const isProjectAdmin = existingProject.members.some(m => m.role === 'Admin')
+
+        let isWorkspaceAdmin = false
+        if (existingProject.workspaceId) {
+            const workspaceMember = await prisma.workspaceMember.findUnique({
+                where: {
+                    workspaceId_userId: {
+                        workspaceId: existingProject.workspaceId,
+                        userId: session.user.id
+                    }
+                },
+                select: { role: true }
+            })
+            isWorkspaceAdmin = workspaceMember?.role === 'admin'
+        }
+
+        if (!isProjectOwner && !isProjectAdmin && !isWorkspaceAdmin) {
+            secureLogger.warn('Unauthorized project update attempt', {
+                operation: 'project.update',
+                projectId,
+                attemptedBy: session.user.id
+            })
+            return { success: false, error: 'Permission denied' }
+        }
+
+        // 4. 프로젝트 업데이트
         const project = await prisma.project.update({
             where: { id: projectId },
             data
@@ -282,18 +364,37 @@ export async function deleteProject(projectId: string) {
             return { success: false, error: 'Unauthorized' }
         }
 
-        // 2. 프로젝트 존재 및 소유자 확인
+        // 2. 프로젝트 존재 및 소유자/워크스페이스 확인
         const project = await prisma.project.findUnique({
             where: { id: projectId },
-            select: { createdBy: true }
+            select: {
+                createdBy: true,
+                workspaceId: true
+            }
         })
 
         if (!project) {
             return { success: false, error: 'Project not found' }
         }
 
-        // 3. 소유자 권한 확인
-        if (project.createdBy !== session.user.id) {
+        // 3. 권한 확인: 프로젝트 소유자 OR 워크스페이스 관리자
+        let hasPermission = project.createdBy === session.user.id
+
+        // 워크스페이스 관리자인지 확인
+        if (!hasPermission && project.workspaceId) {
+            const workspaceMember = await prisma.workspaceMember.findUnique({
+                where: {
+                    workspaceId_userId: {
+                        workspaceId: project.workspaceId,
+                        userId: session.user.id
+                    }
+                },
+                select: { role: true }
+            })
+            hasPermission = workspaceMember?.role === 'admin'
+        }
+
+        if (!hasPermission) {
             secureLogger.warn('Unauthorized project deletion attempt', {
                 operation: 'project.delete',
                 projectId,

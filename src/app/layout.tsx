@@ -5,6 +5,7 @@ import './globals.css'
 // import { SocketProvider } from '@/components/providers/socket-provider'
 import { WorkspaceProvider } from '@/lib/workspace-context'
 import { NotificationProvider } from '@/lib/notification-context'
+import { VersionCheckProvider } from '@/components/providers/version-check-provider'
 import NotificationToast from '@/components/notification/NotificationToast'
 import { getNonce } from '@/lib/csp-nonce'
 
@@ -40,7 +41,9 @@ export default async function RootLayout({
           <WorkspaceProvider>
             {/* SocketProvider 임시 비활성화 - webpack 문제 디버깅 */}
             <NotificationProvider>
-              {children}
+              <VersionCheckProvider>
+                {children}
+              </VersionCheckProvider>
               <NotificationToast />
             </NotificationProvider>
           </WorkspaceProvider>

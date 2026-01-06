@@ -15,9 +15,21 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Bell, Pin, Plus, ArrowLeft, Edit, Trash2, Eye } from 'lucide-react'
-import { format } from 'date-fns'
+import { format, isValid, parseISO } from 'date-fns'
 import { ko } from 'date-fns/locale'
 import { toast } from 'react-hot-toast'
+
+// 안전한 날짜 포맷 함수
+const formatDate = (dateValue: string | Date | null | undefined, formatStr: string = 'yyyy.MM.dd'): string => {
+    if (!dateValue) return '-'
+    try {
+        const date = typeof dateValue === 'string' ? parseISO(dateValue) : dateValue
+        if (!isValid(date)) return '-'
+        return format(date, formatStr, { locale: ko })
+    } catch {
+        return '-'
+    }
+}
 import { useAuth } from '@/lib/auth-context'
 import { useWorkspace } from '@/lib/workspace-context'
 import TipTapEditor, { TipTapViewer } from '@/components/editor/TipTapEditor'
@@ -265,7 +277,7 @@ export default function AnnouncementsPage() {
                                         {announcement.author?.name || '관리자'}
                                     </td>
                                     <td className="px-4 py-3 text-center text-sm text-slate-500">
-                                        {format(new Date(announcement.createdAt), 'yyyy.MM.dd', { locale: ko })}
+                                        {formatDate(announcement.createdAt)}
                                     </td>
                                 </tr>
                             ))}
@@ -327,7 +339,7 @@ export default function AnnouncementsPage() {
                         <div className="flex items-center gap-4 mt-4 text-sm text-slate-500">
                             <span>{selectedAnnouncement.author?.name || '관리자'}</span>
                             <span>|</span>
-                            <span>{format(new Date(selectedAnnouncement.createdAt), 'yyyy.MM.dd HH:mm', { locale: ko })}</span>
+                            <span>{formatDate(selectedAnnouncement.createdAt, 'yyyy.MM.dd HH:mm')}</span>
                         </div>
                     </div>
                     <div className="p-6">

@@ -49,6 +49,9 @@ export default function OrganizationPage() {
     const handleDragEnd = async (event: DragEndEvent) => {
         const { active, over } = event
 
+        // 드래그 상태 초기화
+        setActiveMember(null)
+
         if (!over || !currentWorkspace) return
 
         const memberId = active.id as string
@@ -57,14 +60,24 @@ export default function OrganizationPage() {
         // 드롭 대상이 부서인지 확인 (departments 배열에 있는 id인지)
         const targetDept = departments.find(d => d.id === newDepartment)
 
+        // 부서 영역에 드롭하지 않은 경우 무시
+        if (!targetDept) return
+
+        // 현재 멤버 찾기
+        const currentMember = members.find(m => m.id === memberId)
+        if (!currentMember) return
+
+        // 같은 부서로 드롭한 경우 무시 (클릭 시 초기화 방지)
+        if (currentMember.department === newDepartment) return
+
         // Update UI optimistically
         setMembers(prev =>
             prev.map(m =>
                 m.id === memberId ? {
                     ...m,
                     department: newDepartment,
-                    departmentName: targetDept?.name || null,
-                    departmentColor: targetDept?.color || null,
+                    departmentName: targetDept.name,
+                    departmentColor: targetDept.color,
                 } : m
             )
         )
@@ -85,8 +98,6 @@ export default function OrganizationPage() {
             toast.error('부서 변경에 실패했습니다')
             loadMembers()
         }
-
-        setActiveMember(null)
     }
 
     const getMembersByDepartment = (departmentId: string) => {

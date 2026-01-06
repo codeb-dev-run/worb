@@ -8,19 +8,44 @@ const nextConfig = {
   reactStrictMode: true,
 
   // =============================================================================
-  // Performance Optimization - Hyperscale Production
+  // Build ID를 환경변수로 노출 (버전 체크용)
   // =============================================================================
-  swcMinify: true,
+  generateBuildId: async () => {
+    // 고유한 빌드 ID 생성 (timestamp + random)
+    const buildId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+    return buildId
+  },
+  env: {
+    NEXT_BUILD_ID: process.env.NEXT_BUILD_ID || `${Date.now()}`,
+  },
+
+  // =============================================================================
+  // Performance Optimization - Hyperscale Production
+  // Next.js 16: swcMinify는 기본값이므로 제거
+  // =============================================================================
   compress: true,
   poweredByHeader: false,
+
+  // =============================================================================
+  // Server External Packages - Next.js 16 새 위치
+  // (experimental.serverComponentsExternalPackages에서 이동)
+  // =============================================================================
+  serverExternalPackages: [
+    '@sentry/nextjs',
+    '@sentry/node',
+    '@opentelemetry/instrumentation',
+    '@opentelemetry/api',
+    '@prisma/instrumentation',
+    'require-in-the-middle',
+    'import-in-the-middle',
+  ],
 
   // =============================================================================
   // Experimental Features - CSP Nonce Support
   // =============================================================================
   experimental: {
-    // Enable React Server Components to access nonce
     serverActions: {
-      allowedOrigins: ['localhost:3000', 'localhost:3003', 'codeb.app', 'www.codeb.app'],
+      allowedOrigins: ['localhost:3000', 'localhost:3003', 'localhost:3100', 'codeb.app', 'www.codeb.app'],
     },
   },
 
@@ -28,15 +53,31 @@ const nextConfig = {
   output: 'standalone',
 
   // =============================================================================
-  // Image Optimization with CDN
+  // Image Optimization with CDN - Next.js 16 remotePatterns
+  // (images.domains는 deprecated, remotePatterns 사용)
   // =============================================================================
   images: {
-    domains: [
-      'firebasestorage.googleapis.com',
-      'codeb-web.firebasestorage.app',
-      'lh3.googleusercontent.com',
-      'cdn.codeb.app',
-      'images.codeb.app'
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: 'firebasestorage.googleapis.com',
+      },
+      {
+        protocol: 'https',
+        hostname: 'codeb-web.firebasestorage.app',
+      },
+      {
+        protocol: 'https',
+        hostname: 'lh3.googleusercontent.com',
+      },
+      {
+        protocol: 'https',
+        hostname: 'cdn.codeb.app',
+      },
+      {
+        protocol: 'https',
+        hostname: 'images.codeb.app',
+      },
     ],
     formats: ['image/webp', 'image/avif'],
     minimumCacheTTL: 31536000, // 1 year
@@ -117,10 +158,36 @@ const nextConfig = {
           },
         ],
       },
-      // All other pages - Stale while revalidate
+      // =============================================================================
+      // HTML Pages - NO CACHE (핵심: 브라우저 캐시 문제 근본 해결)
+      // 해외 1% 개발자 전략: HTML은 항상 서버에서 새로 받고, JS/CSS는 해시로 관리
+      // =============================================================================
       {
         source: '/:path*',
         headers: [
+          // HTML 페이지 캐시 완전 비활성화 - 항상 최신 버전 로드
+          {
+            key: 'Cache-Control',
+            value: 'no-cache, no-store, must-revalidate',
+          },
+          {
+            key: 'Pragma',
+            value: 'no-cache',
+          },
+          {
+            key: 'Expires',
+            value: '0',
+          },
+          // CDN도 캐시하지 않음
+          {
+            key: 'CDN-Cache-Control',
+            value: 'no-store',
+          },
+          {
+            key: 'Surrogate-Control',
+            value: 'no-store',
+          },
+          // 보안 헤더
           {
             key: 'X-Frame-Options',
             value: 'DENY',
@@ -152,26 +219,6 @@ const nextConfig = {
         ],
       },
     ]
-  },
-  webpack: (config, { isServer }) => {
-    // Firebase 관련 설정
-    if (!isServer) {
-      config.resolve.fallback = {
-        ...config.resolve.fallback,
-        fs: false,
-        net: false,
-        tls: false,
-        'child_process': false,
-      }
-    }
-
-    // undici 모듈 문제 해결
-    config.resolve.alias = {
-      ...config.resolve.alias,
-      'undici': false,
-    }
-
-    return config
   },
 }
 

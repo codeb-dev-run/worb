@@ -263,7 +263,10 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
 
                 // 제외된 경로에서는 리다이렉트하지 않음
                 const isExcludedPath = EXCLUDED_PATHS.some(path => pathname?.startsWith(path))
-                if (!isExcludedPath) {
+
+                // 세션이 authenticated 상태일 때만 리다이렉트 (무한 루프 방지)
+                // sessionStatus가 authenticated가 아니면 로그인 페이지로 자연스럽게 이동됨
+                if (!isExcludedPath && sessionStatus === 'authenticated') {
                     if (isDev) console.log('[DEV] 워크스페이스 생성 페이지로 이동')
                     router.push('/workspace/create')
                 }

@@ -6,7 +6,7 @@ const isDev = process.env.NODE_ENV === 'development'
 // Glass Morphism Profile Page
 // ===========================================
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { useAuth } from '@/lib/auth-context'
 import { useWorkspace } from '@/lib/workspace-context'
 import toast from 'react-hot-toast'
@@ -19,7 +19,7 @@ import { Badge } from '@/components/ui/badge'
 import {
   User, Mail, Phone, Building, Camera, Save,
   Loader2, AlertCircle, Shield, Key, Clock,
-  Calendar, Briefcase, MapPin
+  Calendar, Briefcase, MapPin, X
 } from 'lucide-react'
 
 interface ProfileData {
@@ -53,6 +53,8 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [hasChanges, setHasChanges] = useState(false)
+  const [uploadingAvatar, setUploadingAvatar] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   // 프로필 데이터 로드
   useEffect(() => {
@@ -74,26 +76,33 @@ export default function ProfilePage() {
     setSaving(true)
 
     try {
-      // API 호출로 프로필 저장
-      const response = await fetch('/api/employees/me', {
+      // 사용자 기본 정보 업데이트 (이름, 아바타)
+      const userResponse = await fetch('/api/user/profile', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          displayName: profile.displayName,
-          phone: profile.phone,
-          company: profile.company,
-          department: profile.department,
-          bio: profile.bio,
-          location: profile.location
+          name: profile.displayName,
+          avatar: profile.avatar
         })
       })
 
-      if (response.ok) {
-        toast.success('프로필이 저장되었습니다.')
-        setHasChanges(false)
-      } else {
-        toast.error('프로필 저장에 실패했습니다.')
+      if (!userResponse.ok) {
+        throw new Error('Failed to update user profile')
       }
+
+      // 직원 정보 업데이트 (phone, company, department 등)
+      const employeeResponse = await fetch('/api/employees/me', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          nameKor: profile.displayName,
+          mobile: profile.phone,
+          // company, department는 Employee 테이블에 없을 수 있음
+        })
+      })
+
+      toast.success('프로필이 저장되었습니다. 변경사항은 다음 로그인 시 반영됩니다.')
+      setHasChanges(false)
     } catch (error) {
       if (isDev) console.error('Error saving profile:', error)
       toast.error('프로필 저장 중 오류가 발생했습니다.')
@@ -108,8 +117,88 @@ export default function ProfilePage() {
   }
 
   const handleAvatarUpload = () => {
-    // TODO: 아바타 업로드 기능 구현
-    toast.error('아바타 업로드 기능은 준비 중입니다.')
+    fileInputRef.current?.click()
+  }
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    // 이미지 파일만 허용
+    if (!file.type.startsWith('image/')) {
+      toast.error('이미지 파일만 업로드할 수 있습니다.')
+      return
+    }
+
+    // 파일 크기 제한 (2MB)
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error('이미지 크기는 2MB 이하여야 합니다.')
+      return
+    }
+
+    setUploadingAvatar(true)
+
+    try {
+      // 이미지를 base64로 변환
+      const reader = new FileReader()
+      reader.onloadend = async () => {
+        const base64 = reader.result as string
+
+        // 이미지 리사이즈 (200x200)
+        const resizedBase64 = await resizeImage(base64, 200, 200)
+
+        setProfile(prev => ({ ...prev, avatar: resizedBase64 }))
+        setHasChanges(true)
+        setUploadingAvatar(false)
+        toast.success('이미지가 선택되었습니다. 저장 버튼을 눌러 적용하세요.')
+      }
+      reader.readAsDataURL(file)
+    } catch (error) {
+      if (isDev) console.error('Error uploading avatar:', error)
+      toast.error('이미지 업로드 중 오류가 발생했습니다.')
+      setUploadingAvatar(false)
+    }
+
+    // input 초기화 (같은 파일 재선택 가능하도록)
+    e.target.value = ''
+  }
+
+  const resizeImage = (base64: string, maxWidth: number, maxHeight: number): Promise<string> => {
+    return new Promise((resolve) => {
+      const img = new Image()
+      img.onload = () => {
+        const canvas = document.createElement('canvas')
+        let width = img.width
+        let height = img.height
+
+        // 비율 유지하며 리사이즈
+        if (width > height) {
+          if (width > maxWidth) {
+            height = Math.round((height * maxWidth) / width)
+            width = maxWidth
+          }
+        } else {
+          if (height > maxHeight) {
+            width = Math.round((width * maxHeight) / height)
+            height = maxHeight
+          }
+        }
+
+        canvas.width = width
+        canvas.height = height
+
+        const ctx = canvas.getContext('2d')
+        ctx?.drawImage(img, 0, 0, width, height)
+
+        resolve(canvas.toDataURL('image/jpeg', 0.8))
+      }
+      img.src = base64
+    })
+  }
+
+  const handleRemoveAvatar = () => {
+    setProfile(prev => ({ ...prev, avatar: '' }))
+    setHasChanges(true)
   }
 
   if (loading) {
@@ -165,8 +254,10 @@ export default function ProfilePage() {
           {/* 아바타 및 기본 정보 */}
           <div className="flex flex-col sm:flex-row items-start gap-6">
             <div className="relative">
-              <div className="w-28 h-28 bg-lime-100 rounded-2xl flex items-center justify-center shadow-lg">
-                {profile.avatar ? (
+              <div className="w-28 h-28 bg-lime-100 rounded-2xl flex items-center justify-center shadow-lg overflow-hidden">
+                {uploadingAvatar ? (
+                  <Loader2 className="h-8 w-8 animate-spin text-lime-600" />
+                ) : profile.avatar ? (
                   <img
                     src={profile.avatar}
                     alt="Avatar"
@@ -178,14 +269,35 @@ export default function ProfilePage() {
                   </span>
                 )}
               </div>
+              {/* 파일 input (숨김) */}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleFileChange}
+                className="hidden"
+              />
+              {/* 업로드 버튼 */}
               <Button
                 size="icon"
                 variant="glass"
                 className="absolute -bottom-2 -right-2 rounded-xl shadow-lg"
                 onClick={handleAvatarUpload}
+                disabled={uploadingAvatar}
               >
                 <Camera className="h-4 w-4" />
               </Button>
+              {/* 삭제 버튼 (아바타가 있을 때만) */}
+              {profile.avatar && !uploadingAvatar && (
+                <Button
+                  size="icon"
+                  variant="destructive"
+                  className="absolute -top-2 -right-2 rounded-xl shadow-lg w-6 h-6"
+                  onClick={handleRemoveAvatar}
+                >
+                  <X className="h-3 w-3" />
+                </Button>
+              )}
             </div>
 
             <div className="flex-1 space-y-2">
