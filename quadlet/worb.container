@@ -5,7 +5,7 @@
 # ==============================================================================
 # Environment: production
 # Port: 4000
-# Domain: worb.codeb.kr
+# Domain: workb.net
 # ==============================================================================
 # Infrastructure:
 #   - App Server: app.codeb.kr (158.247.203.55)
@@ -32,6 +32,9 @@ PublishPort=4000:3000
 Environment=NODE_ENV=production
 Environment=PORT=3000
 Environment=HOSTNAME=0.0.0.0
+
+# NextAuth (CRITICAL: Must match production domain)
+Environment=NEXTAUTH_URL=https://workb.net
 
 # Database (Storage Server: db.codeb.kr)
 Environment=DATABASE_URL=postgresql://worb_user:worb_secure_pass@db.codeb.kr:5432/workb?schema=public

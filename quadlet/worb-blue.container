@@ -5,7 +5,7 @@
 # ==============================================================================
 # Environment: production (Blue slot)
 # Port: 4000
-# Domain: worb.codeb.kr (via Caddy switch)
+# Domain: workb.net (via Caddy)
 # ==============================================================================
 # Blue-Green Deployment:
 #   - Blue (4000): Primary production slot
@@ -32,6 +32,9 @@ Environment=NODE_ENV=production
 Environment=PORT=3000
 Environment=HOSTNAME=0.0.0.0
 Environment=DEPLOYMENT_SLOT=blue
+
+# NextAuth (CRITICAL: Must match production domain)
+Environment=NEXTAUTH_URL=https://workb.net
 
 # Database (Storage Server: db.codeb.kr)
 Environment=DATABASE_URL=postgresql://worb_user:worb_secure_pass@db.codeb.kr:5432/worb?schema=public
