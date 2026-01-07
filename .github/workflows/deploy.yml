@@ -166,7 +166,7 @@ jobs:
 
           # Deploy to inactive slot via MCP API
           HTTP_CODE=$(curl -s -o /tmp/response.json -w "%{http_code}" -X POST "${{ env.MCP_API_URL }}/tool" \
-            -H "Authorization: Bearer ${{ secrets.CODEB_API_KEY }}" \
+            -H "X-API-Key: ${{ secrets.CODEB_API_KEY }}" \
             -H "Content-Type: application/json" \
             -d "{
               \"tool\": \"slot_deploy\",
@@ -220,7 +220,7 @@ jobs:
           if [ -z "$PREVIEW_URL" ] || [ "$PREVIEW_URL" = "null" ]; then
             echo "No preview URL available, checking via API..."
             curl -sf -X POST "${{ env.MCP_API_URL }}/tool" \
-              -H "Authorization: Bearer ${{ secrets.CODEB_API_KEY }}" \
+              -H "X-API-Key: ${{ secrets.CODEB_API_KEY }}" \
               -H "Content-Type: application/json" \
               -d '{"tool": "slot_status", "params": {"project": "${{ env.PROJECT_NAME }}"}}'
             exit 0
@@ -259,7 +259,7 @@ jobs:
           echo "Promoting $SLOT slot to active..."
 
           RESPONSE=$(curl -sf -X POST "${{ env.MCP_API_URL }}/tool" \
-            -H "Authorization: Bearer ${{ secrets.CODEB_API_KEY }}" \
+            -H "X-API-Key: ${{ secrets.CODEB_API_KEY }}" \
             -H "Content-Type: application/json" \
             -d "{
               \"tool\": \"slot_promote\",
@@ -321,7 +321,7 @@ jobs:
           ENVIRONMENT="${{ github.event.inputs.environment }}"
 
           RESPONSE=$(curl -sf -X POST "${{ env.MCP_API_URL }}/tool" \
-            -H "Authorization: Bearer ${{ secrets.CODEB_API_KEY }}" \
+            -H "X-API-Key: ${{ secrets.CODEB_API_KEY }}" \
             -H "Content-Type: application/json" \
             -d "{
               \"tool\": \"slot_status\",
@@ -351,7 +351,7 @@ jobs:
           echo "Promoting $SLOT slot to active..."
 
           RESPONSE=$(curl -sf -X POST "${{ env.MCP_API_URL }}/tool" \
-            -H "Authorization: Bearer ${{ secrets.CODEB_API_KEY }}" \
+            -H "X-API-Key: ${{ secrets.CODEB_API_KEY }}" \
             -H "Content-Type: application/json" \
             -d "{
               \"tool\": \"slot_promote\",
@@ -388,7 +388,7 @@ jobs:
           echo "Rolling back ${{ env.PROJECT_NAME }} in $ENVIRONMENT..."
 
           RESPONSE=$(curl -sf -X POST "${{ env.MCP_API_URL }}/tool" \
-            -H "Authorization: Bearer ${{ secrets.CODEB_API_KEY }}" \
+            -H "X-API-Key: ${{ secrets.CODEB_API_KEY }}" \
             -H "Content-Type: application/json" \
             -d "{
               \"tool\": \"slot_rollback\",
