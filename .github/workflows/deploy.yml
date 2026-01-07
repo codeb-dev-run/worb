@@ -206,14 +206,25 @@ jobs:
           echo "preview_url=$PREVIEW_URL" >> $GITHUB_OUTPUT
 
           # Check if deployment was successful
+          # Note: MCP API may fail health check even if container started successfully
+          # We check if start_container succeeded, then do our own extended health check
           if echo "$RESPONSE" | jq -e '.result.success == true or .success == true' > /dev/null 2>&1; then
             echo ""
             echo "::notice::Deployed to $SLOT slot successfully!"
             echo "Preview URL: $PREVIEW_URL"
           else
-            ERROR=$(echo "$RESPONSE" | jq -r '.result.error // .error // "Unknown error"')
-            echo "::error::Deployment failed: $ERROR"
-            exit 1
+            # Check if container started even though health check failed
+            START_STATUS=$(echo "$RESPONSE" | jq -r '.steps[] | select(.name == "start_container") | .status // "unknown"')
+            HEALTH_ERROR=$(echo "$RESPONSE" | jq -r '.error // "unknown"')
+
+            if [ "$START_STATUS" = "success" ] && [[ "$HEALTH_ERROR" == *"Health check"* ]]; then
+              echo "::warning::Container started but MCP health check failed (will retry with extended timeout)"
+              echo "Continuing to manual health check step..."
+            else
+              ERROR=$(echo "$RESPONSE" | jq -r '.result.error // .error // "Unknown error"')
+              echo "::error::Deployment failed: $ERROR"
+              exit 1
+            fi
           fi
 
       - name: Wait for Container Startup and Health Check
