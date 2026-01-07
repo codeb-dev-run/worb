@@ -184,7 +184,7 @@ jobs:
                 \"version\": \"$SHORT_SHA\",
                 \"commit\": \"${{ github.sha }}\",
                 \"actor\": \"${{ github.actor }}\",
-                \"healthCheckTimeout\": 120
+                \"skipHealthCheck\": true
               }
             }")
 
@@ -216,38 +216,54 @@ jobs:
             exit 1
           fi
 
-      - name: Wait for Container Startup
+      - name: Wait for Container Startup and Health Check
         run: |
-          echo "Waiting for container to be ready..."
-          sleep 20
-
-      - name: Health Check on Slot
-        run: |
-          PREVIEW_URL="${{ steps.deploy.outputs.preview_url }}"
           SLOT="${{ steps.deploy.outputs.slot }}"
+          ENVIRONMENT="${{ needs.build.outputs.environment }}"
 
-          if [ -z "$PREVIEW_URL" ] || [ "$PREVIEW_URL" = "null" ]; then
-            echo "No preview URL available, checking via API..."
-            curl -sf -X POST "${{ env.MCP_API_URL }}" \
-              -H "X-API-Key: ${{ secrets.CODEB_API_KEY }}" \
-              -H "Content-Type: application/json" \
-              -d '{"tool": "slot_status", "params": {"projectName": "${{ env.PROJECT_NAME }}"}}'
-            exit 0
+          # Determine port based on slot and environment
+          if [ "$ENVIRONMENT" = "production" ]; then
+            if [ "$SLOT" = "blue" ]; then
+              PORT=4000
+            else
+              PORT=4001
+            fi
+          else
+            if [ "$SLOT" = "blue" ]; then
+              PORT=4500
+            else
+              PORT=4501
+            fi
           fi
 
-          echo "Health check on $SLOT slot: $PREVIEW_URL/api/health"
+          HEALTH_URL="http://158.247.203.55:${PORT}/api/health"
 
-          for i in {1..5}; do
-            if curl -sf "$PREVIEW_URL/api/health"; then
+          echo "========================================"
+          echo " Health Check (Extended Timeout)"
+          echo "========================================"
+          echo "Slot:        $SLOT"
+          echo "Port:        $PORT"
+          echo "Health URL:  $HEALTH_URL"
+          echo "Timeout:     120s (12 attempts x 10s)"
+          echo "========================================"
+
+          # Wait for container startup with extended timeout (120s total)
+          for i in {1..12}; do
+            echo "Attempt $i/12: Checking $HEALTH_URL"
+            if curl -sf --max-time 5 "$HEALTH_URL" > /dev/null 2>&1; then
               echo ""
-              echo "::notice::Slot $SLOT is healthy!"
+              echo "::notice::Slot $SLOT is healthy on port $PORT!"
+              curl -sf "$HEALTH_URL" | jq .
               exit 0
             fi
-            echo "Attempt $i/5, retrying in 10s..."
+            echo "Not ready yet, waiting 10s..."
             sleep 10
           done
 
-          echo "::warning::Health check pending - container may still be starting"
+          echo ""
+          echo "::error::Health check failed after 120s"
+          echo "Container may have startup issues. Check server logs."
+          exit 1
 
   # =============================================================================
   # Auto-Promote Job - Automatically promote if health check passes
