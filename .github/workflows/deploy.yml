@@ -273,7 +273,28 @@ jobs:
 
           echo ""
           echo "::error::Health check failed after 120s"
-          echo "Container may have startup issues. Check server logs."
+          echo "Container may have startup issues. Fetching container logs..."
+
+          # Fetch container logs via MCP API
+          LOGS_RESPONSE=$(curl -sf -X POST "${{ env.MCP_API_URL }}" \
+            -H "X-API-Key: ${{ secrets.CODEB_API_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"tool\": \"container_logs\",
+              \"params\": {
+                \"projectName\": \"${{ env.PROJECT_NAME }}\",
+                \"environment\": \"$ENVIRONMENT\",
+                \"slot\": \"$SLOT\",
+                \"lines\": 100
+              }
+            }" 2>/dev/null || echo '{"error": "Failed to fetch logs"}')
+
+          echo "========================================"
+          echo " Container Logs (last 100 lines)"
+          echo "========================================"
+          echo "$LOGS_RESPONSE" | jq -r '.logs // .result.logs // .error // "No logs available"' 2>/dev/null || echo "$LOGS_RESPONSE"
+          echo "========================================"
+
           exit 1
 
   # =============================================================================
