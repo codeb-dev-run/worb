@@ -126,9 +126,12 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
           build-args: |
+            NPM_TOKEN=${{ secrets.GHCR_PAT }}
             BUILDTIME=${{ github.event.head_commit.timestamp }}
             VERSION=${{ steps.vars.outputs.short_sha }}
             REVISION=${{ github.sha }}
+          secrets: |
+            "npm_token=${{ secrets.GHCR_PAT }}"
 
   # =============================================================================
   # Deploy Job - Deploy to inactive Blue-Green slot

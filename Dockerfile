@@ -21,6 +21,9 @@
 # ==============================================================================
 FROM node:20-slim AS deps
 
+# Build argument for GitHub Package Registry authentication
+ARG NPM_TOKEN
+
 # Install system dependencies for Prisma and native modules
 RUN apt-get update && apt-get install -y \
     openssl \
@@ -32,6 +35,10 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
+# Configure npm for GitHub Package Registry
+RUN echo "//npm.pkg.github.com/:_authToken=${NPM_TOKEN}" > .npmrc && \
+    echo "@codeblabdev-max:registry=https://npm.pkg.github.com" >> .npmrc
+
 # Copy Prisma schema first (needed for postinstall)
 COPY prisma ./prisma
 
@@ -42,7 +49,8 @@ COPY package.json package-lock.json* ./
 # --legacy-peer-deps for React 19 compatibility
 # --ignore-scripts to skip postinstall, run prisma generate manually
 RUN npm ci --ignore-scripts --legacy-peer-deps && \
-    npx prisma generate
+    npx prisma generate && \
+    rm -f .npmrc
 
 # ==============================================================================
 # Stage 2: Builder
