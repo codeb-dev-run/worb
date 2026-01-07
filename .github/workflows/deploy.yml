@@ -183,7 +183,8 @@ jobs:
                 \"image\": \"$IMAGE\",
                 \"version\": \"$SHORT_SHA\",
                 \"commit\": \"${{ github.sha }}\",
-                \"actor\": \"${{ github.actor }}\"
+                \"actor\": \"${{ github.actor }}\",
+                \"healthCheckTimeout\": 120
               }
             }")
 
