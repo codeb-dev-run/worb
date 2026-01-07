@@ -1,0 +1,5 @@
+export { NotificationsTab } from './NotificationsTab'
+export { PreferencesTab } from './PreferencesTab'
+export { PrivacyTab } from './PrivacyTab'
+export { SecurityTab } from './SecurityTab'
+export { FeaturesTab } from './FeaturesTab'

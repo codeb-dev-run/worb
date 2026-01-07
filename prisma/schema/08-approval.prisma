@@ -1,0 +1,40 @@
+// ============================================
+// Domain: Approval & Documents
+// ============================================
+
+model ApprovalDocument {
+  id          String         @id @default(uuid())
+  workspaceId String?
+  title       String
+  content     String
+  type        ApprovalType   @default(GENERAL)
+  requesterId String
+  status      ApprovalStatus @default(PENDING)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  workspace Workspace?     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  requester User           @relation("ApprovalRequester", fields: [requesterId], references: [id])
+  approvals ApprovalStep[]
+
+  // 100K CCU 인덱스
+  @@index([workspaceId, status])
+  @@index([requesterId, status])
+  @@index([workspaceId, createdAt])
+}
+
+model ApprovalStep {
+  id         String         @id @default(uuid())
+  documentId String
+  approverId String
+  order      Int
+  status     ApprovalStatus @default(PENDING)
+  comment    String?
+  approvedAt DateTime?
+  createdAt  DateTime       @default(now())
+
+  document ApprovalDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  approver User             @relation("ApprovalApprover", fields: [approverId], references: [id])
+
+  @@index([documentId, order])
+}

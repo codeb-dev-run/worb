@@ -1,0 +1,176 @@
+// ============================================
+// Domain: QA Board & Issue Management
+// ============================================
+
+model QAIssue {
+  id          String @id @default(uuid())
+  workspaceId String
+  projectId   String?
+
+  // 기본 정보
+  title       String
+  description String          @db.Text
+  type        QAIssueType     @default(BUG)
+  status      QAIssueStatus   @default(OPEN)
+  priority    QAIssuePriority @default(MEDIUM)
+
+  // 버그 관련 정보
+  stepsToReproduce String? @db.Text
+  expectedBehavior String? @db.Text
+  actualBehavior   String? @db.Text
+  environment      String?
+
+  // 코드 관련 정보
+  affectedFiles String[]
+  codeChanges   Json?
+
+  // GitHub 연동
+  githubIssueUrl    String?
+  githubIssueNumber Int?
+  githubRepoOwner   String?
+  githubRepoName    String?
+  syncedToGitHub    Boolean @default(false)
+
+  // 담당 및 추적
+  reporterId String
+  assigneeId String?
+
+  // 진행 상황
+  resolvedAt DateTime?
+  closedAt   DateTime?
+  dueDate    DateTime?
+
+  // 체크리스트
+  checklist Json?
+
+  // 라벨 및 태그
+  labels String[] @default([])
+
+  // 메타데이터
+  viewCount Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  workspace   Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project     Project?            @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  reporter    User                @relation("QAIssueReporter", fields: [reporterId], references: [id])
+  assignee    User?               @relation("QAIssueAssignee", fields: [assigneeId], references: [id])
+  comments    QAIssueComment[]
+  history     QAIssueHistory[]
+  attachments QAIssueAttachment[]
+
+  @@index([workspaceId, status])
+  @@index([workspaceId, type])
+  @@index([workspaceId, priority])
+  @@index([workspaceId, createdAt])
+  @@index([projectId])
+  @@index([reporterId])
+  @@index([assigneeId])
+  @@index([githubIssueNumber])
+}
+
+model QAIssueComment {
+  id       String @id @default(uuid())
+  issueId  String
+  authorId String
+  content  String @db.Text
+
+  // 코드 참조 (라인 코멘트)
+  filePath    String?
+  lineNumber  Int?
+  codeSnippet String?
+
+  isInternal Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  issue  QAIssue @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  author User    @relation("QAIssueCommentAuthor", fields: [authorId], references: [id])
+
+  @@index([issueId, createdAt])
+  @@index([authorId])
+}
+
+model QAIssueHistory {
+  id      String @id @default(uuid())
+  issueId String
+  userId  String
+
+  action   String
+  field    String?
+  oldValue String?
+  newValue String?
+
+  syncedToGitHub Boolean @default(false)
+
+  createdAt DateTime @default(now())
+
+  issue QAIssue @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  user  User    @relation("QAIssueHistoryUser", fields: [userId], references: [id])
+
+  @@index([issueId, createdAt])
+  @@index([userId])
+}
+
+model QAIssueAttachment {
+  id         String @id @default(uuid())
+  issueId    String
+  uploaderId String
+
+  fileName String
+  fileUrl  String
+  fileSize Int
+  mimeType String
+
+  createdAt DateTime @default(now())
+
+  issue    QAIssue @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  uploader User    @relation("QAIssueAttachmentUploader", fields: [uploaderId], references: [id])
+
+  @@index([issueId])
+}
+
+model QAChecklistTemplate {
+  id          String @id @default(uuid())
+  workspaceId String
+
+  name        String
+  description String?
+  items       Json
+
+  isDefault Boolean @default(false)
+
+  createdBy String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  creator   User      @relation("QAChecklistTemplateCreator", fields: [createdBy], references: [id])
+
+  @@index([workspaceId])
+}
+
+model GitHubIntegration {
+  id          String @id @default(uuid())
+  workspaceId String @unique
+
+  accessToken String
+  tokenType   String @default("PAT")
+
+  defaultRepoOwner String?
+  defaultRepoName  String?
+
+  autoSyncEnabled Boolean @default(true)
+  syncLabels      Boolean @default(true)
+  syncAssignees   Boolean @default(true)
+  syncComments    Boolean @default(true)
+
+  labelMapping Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+}

@@ -2,11 +2,12 @@
 
 const isDev = process.env.NODE_ENV === 'development'
 
-import React, { useState } from 'react'
+import React, { useState, Suspense } from 'react'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
-import GanttChartPro from '@/components/gantt/GanttChartPro'
-import { Task } from 'gantt-task-react'
+import { LazyGanttChartPro } from '@/components/lazy'
+import { Loader2 } from 'lucide-react'
+import type { Task } from 'gantt-task-react'
 
 // Mock 간트차트 데이터를 gantt-task-react 형식으로 변환
 const mockGanttTasks: Task[] = [
@@ -211,14 +212,23 @@ export default function GanttPage() {
         </div>
       </div>
 
-      {/* 간트차트 */}
-      <GanttChartPro
-        tasks={tasks}
-        onTaskChange={handleTaskChange}
-        onTaskDelete={handleTaskDelete}
-        onProgressChange={handleProgressChange}
-        onDateChange={handleDateChange}
-      />
+      {/* 간트차트 - 동적 로딩 */}
+      <Suspense fallback={
+        <div className="flex items-center justify-center min-h-[400px] bg-white rounded-lg">
+          <div className="text-center">
+            <Loader2 className="h-8 w-8 animate-spin text-lime-500 mx-auto" />
+            <p className="mt-2 text-sm text-slate-500">간트 차트 로딩 중...</p>
+          </div>
+        </div>
+      }>
+        <LazyGanttChartPro
+          tasks={tasks}
+          onTaskChange={handleTaskChange}
+          onTaskDelete={handleTaskDelete}
+          onProgressChange={handleProgressChange}
+          onDateChange={handleDateChange}
+        />
+      </Suspense>
     </div>
   )
 }

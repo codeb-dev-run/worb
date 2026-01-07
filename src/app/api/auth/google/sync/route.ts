@@ -111,7 +111,8 @@ export async function POST(request: Request) {
 
         // Add user to all projects in this workspace
         const projects = await prisma.project.findMany({
-          where: { workspaceId: firstWorkspace.id }
+          where: { workspaceId: firstWorkspace.id },
+          select: { id: true }
         })
 
         secureLogger.info('Adding user to workspace projects', {
@@ -120,26 +121,30 @@ export async function POST(request: Request) {
           projectCount: projects.length,
         })
 
-        for (const project of projects) {
-          // Check if already a member
-          const existingMember = await prisma.projectMember.findUnique({
-            where: {
-              projectId_userId: {
-                projectId: project.id,
-                userId: user.id
-              }
-            }
-          })
+        // N+1 Fix: Batch check existing memberships
+        const projectIds = projects.map(p => p.id)
+        const existingMemberships = await prisma.projectMember.findMany({
+          where: {
+            projectId: { in: projectIds },
+            userId: user.id
+          },
+          select: { projectId: true }
+        })
+        const existingProjectIds = new Set(existingMemberships.map(m => m.projectId))
 
-          if (!existingMember) {
-            await prisma.projectMember.create({
-              data: {
-                projectId: project.id,
-                userId: user.id,
-                role: 'Member'
-              }
-            })
-          }
+        // Filter projects where user is not a member
+        const projectsToAdd = projects.filter(p => !existingProjectIds.has(p.id))
+
+        // N+1 Fix: Batch create memberships
+        if (projectsToAdd.length > 0) {
+          await prisma.projectMember.createMany({
+            data: projectsToAdd.map(project => ({
+              projectId: project.id,
+              userId: user.id,
+              role: 'Member'
+            })),
+            skipDuplicates: true
+          })
         }
       }
     }

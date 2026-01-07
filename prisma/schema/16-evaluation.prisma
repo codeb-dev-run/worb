@@ -1,0 +1,139 @@
+// ============================================
+// Domain: Performance Evaluation System
+// ============================================
+
+model Evaluator {
+  id          String   @id @default(uuid())
+  workspaceId String
+  userId      String
+
+  isActive   Boolean  @default(true)
+  assignedAt DateTime @default(now())
+  assignedBy String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workspace   Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user        User               @relation("EvaluatorUser", fields: [userId], references: [id], onDelete: Cascade)
+  evaluations WeeklyEvaluation[]
+
+  @@unique([workspaceId, userId])
+  @@index([workspaceId, isActive])
+}
+
+model WeeklyEvaluation {
+  id          String @id @default(uuid())
+  workspaceId String
+  employeeId  String
+  evaluatorId String
+
+  year          Int
+  weekNumber    Int
+  weekStartDate DateTime
+  weekEndDate   DateTime
+
+  // 5개 평가 항목 (각 0-20점)
+  projectQuality    Int @default(0)
+  deadlineAdherence Int @default(0)
+  presentation      Int @default(0)
+  collaboration     Int @default(0)
+  selfInitiative    Int @default(0)
+
+  totalScore Int @default(0)
+
+  feedback    String?
+  isDefault   Boolean @default(false)
+  isSubmitted Boolean @default(false)
+
+  submittedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  employee  Employee  @relation("EvaluatedEmployee", fields: [employeeId], references: [id], onDelete: Cascade)
+  evaluator Evaluator @relation(fields: [evaluatorId], references: [id], onDelete: Cascade)
+
+  employeeFeedback EvaluationFeedback?
+
+  @@unique([workspaceId, employeeId, year, weekNumber])
+  @@index([workspaceId, year, weekNumber])
+  @@index([employeeId, year])
+  @@index([evaluatorId])
+}
+
+model MonthlyEvaluationSummary {
+  id          String @id @default(uuid())
+  workspaceId String
+  employeeId  String
+
+  year  Int
+  month Int
+
+  weekCount    Int   @default(0)
+  totalScore   Int   @default(0)
+  averageScore Float @default(0)
+
+  avgProjectQuality    Float @default(0)
+  avgDeadlineAdherence Float @default(0)
+  avgPresentation      Float @default(0)
+  avgCollaboration     Float @default(0)
+  avgSelfInitiative    Float @default(0)
+
+  flexWorkTier FlexWorkTier @default(MID_FLEX)
+
+  calculatedAt DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  employee  Employee  @relation("MonthlyEvaluated", fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, employeeId, year, month])
+  @@index([workspaceId, year, month])
+  @@index([employeeId, year])
+}
+
+model YearlyEvaluationSummary {
+  id          String @id @default(uuid())
+  workspaceId String
+  employeeId  String
+
+  year Int
+
+  monthlyScores Float[]
+
+  averageScore Float @default(0)
+  highestMonth Int?
+  lowestMonth  Int?
+
+  q1Average Float @default(0)
+  q2Average Float @default(0)
+  q3Average Float @default(0)
+  q4Average Float @default(0)
+
+  suggestedRaisePercent Float @default(0)
+
+  calculatedAt DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  employee  Employee  @relation("YearlyEvaluated", fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, employeeId, year])
+  @@index([workspaceId, year])
+  @@index([employeeId, year])
+}
+
+model EvaluationFeedback {
+  id           String @id @default(uuid())
+  evaluationId String @unique
+  employeeId   String
+
+  comment  String?
+  isAgreed Boolean @default(true)
+
+  submittedAt DateTime @default(now())
+
+  evaluation WeeklyEvaluation @relation(fields: [evaluationId], references: [id], onDelete: Cascade)
+  employee   Employee         @relation("EmployeeFeedback", fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([employeeId])
+}

@@ -1,5 +1,6 @@
 // =============================================================================
 // Mindmap Convert API - CVE-CB-005 Fixed: Secure Logging
+// N+1 Query Fixed: Batch operations instead of loop
 // =============================================================================
 
 import { NextResponse } from 'next/server'
@@ -18,34 +19,38 @@ export async function POST(
         // Get current user (mock)
         const userId = 'test-user-id' // Replace with actual session user
 
-        const createdTasks = []
+        // N+1 Fix: Batch fetch existing tasks
+        const nodeIds = nodes.map((node: { id: string }) => node.id)
+        const existingTasks = await prisma.task.findMany({
+            where: {
+                projectId,
+                mindmapNodeId: { in: nodeIds }
+            },
+            select: { mindmapNodeId: true }
+        })
+        const existingNodeIds = new Set(existingTasks.map(t => t.mindmapNodeId))
 
-        for (const node of nodes) {
-            // Check if task already exists for this node
-            const existingTask = await prisma.task.findFirst({
-                where: {
+        // Filter nodes that don't have tasks yet
+        const nodesToCreate = nodes.filter(
+            (node: { id: string }) => !existingNodeIds.has(node.id)
+        )
+
+        // N+1 Fix: Batch create tasks using createMany
+        if (nodesToCreate.length > 0) {
+            await prisma.task.createMany({
+                data: nodesToCreate.map((node: { id: string; data: { label: string } }) => ({
+                    title: node.data.label,
                     projectId,
-                    mindmapNodeId: node.id
-                }
+                    createdBy: userId,
+                    status: 'todo',
+                    mindmapNodeId: node.id,
+                    priority: 'medium',
+                })),
+                skipDuplicates: true
             })
-
-            if (!existingTask) {
-                const task = await prisma.task.create({
-                    data: {
-                        title: node.data.label,
-                        projectId,
-                        createdBy: userId,
-                        status: 'todo',
-                        mindmapNodeId: node.id,
-                        // Default values
-                        priority: 'medium',
-                    }
-                })
-                createdTasks.push(task)
-            }
         }
 
-        return NextResponse.json({ success: true, createdCount: createdTasks.length })
+        return NextResponse.json({ success: true, createdCount: nodesToCreate.length })
     } catch (error) {
         // CVE-CB-005: Secure logging
         secureLogger.error('Failed to convert mindmap to tasks', error as Error, { operation: 'mindmap.convert' })

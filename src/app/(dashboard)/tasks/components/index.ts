@@ -1,0 +1,6 @@
+export { TasksHeader } from './TasksHeader'
+export { TaskFilters } from './TaskFilters'
+export { ListView } from './ListView'
+export { TrashView } from './TrashView'
+export { TaskInput } from './TaskInput'
+export { TaskEditModal } from './TaskEditModal'

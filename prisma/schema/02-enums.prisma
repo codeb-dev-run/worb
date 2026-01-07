@@ -1,0 +1,236 @@
+// ============================================
+// All Enums - Domain: Shared
+// ============================================
+
+// User & Workspace
+enum Role {
+  admin
+  member
+}
+
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  EXPIRED
+  REVOKED
+}
+
+enum JoinRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+// Project Management
+enum ProjectStatus {
+  planning
+  design
+  development
+  testing
+  completed
+  pending
+  draft
+}
+
+enum ProjectVisibility {
+  public
+  private
+  client
+}
+
+enum ProjectPriority {
+  low
+  medium
+  high
+  urgent
+}
+
+enum ProjectInvitationStatus {
+  PENDING
+  ACCEPTED
+  EXPIRED
+  REVOKED
+}
+
+// Task Management
+enum TaskStatus {
+  backlog
+  todo
+  in_progress
+  review
+  done
+}
+
+enum TaskPriority {
+  low
+  medium
+  high
+  urgent
+}
+
+// HR & Attendance
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  LATE
+  HALF_DAY
+  REMOTE
+}
+
+enum WorkLocationType {
+  OFFICE
+  REMOTE
+}
+
+enum WorkSessionType {
+  OFFICE_WORK
+  REMOTE_WORK
+}
+
+enum AttendanceChangeType {
+  CHECK_IN
+  CHECK_OUT
+  BOTH
+}
+
+enum AttendanceChangeStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum WorkType {
+  FIXED
+  FLEXIBLE
+  CORE_TIME
+}
+
+// Approval
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+enum ApprovalType {
+  EXPENSE
+  LEAVE
+  PURCHASE
+  GENERAL
+}
+
+// Finance
+enum ContractStatus {
+  DRAFT
+  ACTIVE
+  COMPLETED
+  TERMINATED
+}
+
+enum TransactionType {
+  INCOME
+  EXPENSE
+}
+
+// HRIS: Workspace Settings
+enum WorkspaceType {
+  ENTERPRISE    // 프로젝트 + HR + 급여 (풀패키지)
+  HR_ONLY       // 근태관리 + 급여만 (소상공인용)
+  PROJECT_ONLY  // 프로젝트관리만 (프리랜서/에이전시)
+}
+
+enum BusinessType {
+  RESTAURANT    // 음식점
+  CAFE          // 카페
+  RETAIL        // 소매/편의점
+  BEAUTY        // 미용실/네일샵
+  CLINIC        // 병원/의원
+  ACADEMY       // 학원
+  LOGISTICS     // 물류/배송
+  MANUFACTURING // 제조업
+  IT_SERVICE    // IT/소프트웨어
+  CONSULTING    // 컨설팅
+  OTHER         // 기타
+}
+
+enum OnboardingStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  COMPLETED
+}
+
+// HRIS: Employee
+enum PayrollType {
+  MONTHLY     // 월급제
+  HOURLY      // 시급제
+  DAILY       // 일급제
+  PROJECT     // 프로젝트 단위
+}
+
+enum EmploymentType {
+  FULL_TIME     // 정규직
+  PART_TIME     // 파트타임
+  CONTRACT      // 계약직
+  INTERN        // 인턴
+  FREELANCER    // 프리랜서
+}
+
+enum EmployeeStatus {
+  ONBOARDING    // 온보딩 진행중
+  ACTIVE        // 재직중
+  ON_LEAVE      // 휴직
+  RESIGNED      // 퇴사
+}
+
+// HRIS: Leave
+enum LeaveType {
+  ANNUAL       // 연차
+  SICK         // 병가
+  HALF_AM      // 오전 반차
+  HALF_PM      // 오후 반차
+  SPECIAL      // 특별휴가
+  MATERNITY    // 출산휴가
+  CHILDCARE    // 육아휴직
+  OFFICIAL     // 공가
+}
+
+enum LeaveStatus {
+  PENDING      // 대기중
+  APPROVED     // 승인
+  REJECTED     // 반려
+  CANCELLED    // 취소
+}
+
+// Performance Evaluation
+enum FlexWorkTier {
+  FULL_FLEX   // 85+ 완전자율 (재택 100%, 최소 30시간)
+  HIGH_FLEX   // 80-84 고유연 (재택 80%)
+  MID_FLEX    // 75-79 중유연 (재택 50%, 주 2회 사무실)
+  STANDARD    // 75 미만 표준 (사무실 70%)
+}
+
+// QA Board
+enum QAIssueStatus {
+  OPEN        // 열림
+  IN_PROGRESS // 진행중
+  RESOLVED    // 해결됨
+  CLOSED      // 닫힘
+  REOPENED    // 재오픈
+}
+
+enum QAIssuePriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum QAIssueType {
+  BUG         // 버그
+  FEATURE     // 기능 요청
+  IMPROVEMENT // 개선
+  TASK        // 작업
+  QUESTION    // 질문
+}

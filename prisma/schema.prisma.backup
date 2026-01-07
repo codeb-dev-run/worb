@@ -234,6 +234,9 @@ model Workspace {
   qaIssues              QAIssue[]
   qaChecklistTemplates  QAChecklistTemplate[]
   githubIntegration     GitHubIntegration?
+
+  // Attendance change request relations
+  attendanceChangeRequests AttendanceChangeRequest[]
 }
 
 model WorkspaceMember {
@@ -319,6 +322,10 @@ model User {
   qaIssueHistory        QAIssueHistory[]      @relation("QAIssueHistoryUser")
   qaIssueAttachments    QAIssueAttachment[]   @relation("QAIssueAttachmentUploader")
   qaChecklistTemplates  QAChecklistTemplate[] @relation("QAChecklistTemplateCreator")
+
+  // Attendance change request relations
+  attendanceChangeRequests  AttendanceChangeRequest[] @relation("AttendanceChangeRequestUser")
+  reviewedAttendanceChanges AttendanceChangeRequest[] @relation("AttendanceChangeRequestReviewer")
 
   // 100K CCU 인덱스: 자주 쿼리되는 필드
   @@index([isActive])
@@ -542,6 +549,7 @@ model Attendance {
   user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   workspace    Workspace?    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   workSessions WorkSession[]
+  changeRequests AttendanceChangeRequest[]
 
   @@index([userId, date])
   // 100K CCU 인덱스: 근태 조회 최적화
@@ -580,6 +588,50 @@ model WorkSession {
   @@index([attendanceId])
   @@index([userId, startTime])
   @@index([workspaceId, startTime])
+}
+
+// 출근 시간 변경 요청
+model AttendanceChangeRequest {
+  id           String                      @id @default(uuid())
+  attendanceId String
+  userId       String
+  workspaceId  String?
+
+  // 변경 요청 내용
+  requestType  AttendanceChangeType        @default(CHECK_IN)
+  originalTime DateTime?                   // 기존 시간
+  requestedTime DateTime                   // 요청 시간
+  reason       String                      // 변경 사유
+
+  // 처리 상태
+  status       AttendanceChangeStatus      @default(PENDING)
+  reviewedBy   String?                     // 처리자 ID
+  reviewedAt   DateTime?                   // 처리 시간
+  rejectReason String?                     // 반려 사유
+
+  createdAt    DateTime                    @default(now())
+  updatedAt    DateTime                    @updatedAt
+
+  attendance   Attendance                  @relation(fields: [attendanceId], references: [id], onDelete: Cascade)
+  user         User                        @relation("AttendanceChangeRequestUser", fields: [userId], references: [id], onDelete: Cascade)
+  reviewer     User?                       @relation("AttendanceChangeRequestReviewer", fields: [reviewedBy], references: [id])
+  workspace    Workspace?                  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status])
+  @@index([workspaceId, status])
+  @@index([attendanceId])
+}
+
+enum AttendanceChangeType {
+  CHECK_IN
+  CHECK_OUT
+  BOTH
+}
+
+enum AttendanceChangeStatus {
+  PENDING
+  APPROVED
+  REJECTED
 }
 
 // 관리자가 등록한 사무실 WiFi 네트워크

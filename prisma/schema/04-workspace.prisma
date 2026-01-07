@@ -1,0 +1,168 @@
+// ============================================
+// Domain: Workspace & Organization
+// ============================================
+
+model Workspace {
+  id     String  @id @default(uuid())
+  name   String
+  domain String? @unique // Optional: for custom domain
+  plan   String  @default("free") // free, pro, enterprise
+
+  // HRIS: Workspace Type & Business Settings
+  type         WorkspaceType  @default(ENTERPRISE)
+  businessType BusinessType?
+  businessName String?        // 상호명 (ex: "맛있는 김밥집")
+  ownerName    String?        // 대표자명
+
+  // Workspace discovery and joining
+  slug            String  @unique // URL friendly identifier: codeb-team
+  inviteCode      String  @unique // Short invite code: ABC123
+  isPublic        Boolean @default(false)
+  requireApproval Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Core Relations
+  members       WorkspaceMember[]
+  projects      Project[]
+  teams         Team[]
+
+  // HR Relations
+  attendances   Attendance[]
+  workPolicy    WorkPolicy?
+
+  // Groupware Relations
+  approvals     ApprovalDocument[]
+  announcements Announcement[]
+  boards        Board[]
+  events        CalendarEvent[]
+
+  // Finance Relations
+  contracts     Contract[]
+  transactions  Transaction[]
+
+  // Invitation Relations
+  invitations   Invitation[]
+  joinRequests  JoinRequest[]
+
+  // HRIS Relations
+  features            WorkspaceFeatures?
+  workspaceOnboarding WorkspaceOnboarding?
+  employees           Employee[]
+  workSchedules       WorkSchedule[]
+  payrollRecords      PayrollRecord[]
+  leaveRequests       LeaveRequest[]
+  leaveBalances       LeaveBalance[]
+
+  // Flexible Work Relations
+  workSessions        WorkSession[]
+  officeWifiNetworks  OfficeWifiNetwork[]
+  weeklyWorkSummaries WeeklyWorkSummary[]
+
+  // Performance Evaluation Relations
+  evaluators                 Evaluator[]
+  weeklyEvaluations          WeeklyEvaluation[]
+  monthlyEvaluationSummaries MonthlyEvaluationSummary[]
+  yearlyEvaluationSummaries  YearlyEvaluationSummary[]
+
+  // QA Board Relations
+  qaIssues              QAIssue[]
+  qaChecklistTemplates  QAChecklistTemplate[]
+  githubIntegration     GitHubIntegration?
+
+  // Attendance Change Request Relations
+  attendanceChangeRequests AttendanceChangeRequest[]
+}
+
+model WorkspaceMember {
+  id          String @id @default(uuid())
+  workspaceId String
+  userId      String
+  role        Role   @default(member)
+
+  joinedAt DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, userId])
+  // 100K CCU 인덱스
+  @@index([workspaceId, role])
+  @@index([userId])
+}
+
+model Team {
+  id          String   @id @default(uuid())
+  workspaceId String
+  name        String
+  color       String   @default("#3B82F6")
+  order       Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  members   TeamMember[]
+  tasks     Task[]
+
+  @@index([workspaceId, order])
+}
+
+model TeamMember {
+  id       String   @id @default(uuid())
+  teamId   String
+  userId   String
+  role     String?
+  joinedAt DateTime @default(now())
+
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, userId])
+  @@index([teamId])
+  @@index([userId])
+}
+
+// Invitation System
+model Invitation {
+  id          String           @id @default(uuid())
+  workspaceId String
+  email       String
+  token       String           @unique
+  role        Role             @default(member)
+  invitedBy   String
+  status      InvitationStatus @default(PENDING)
+  expiresAt   DateTime
+  acceptedAt  DateTime?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  inviter   User      @relation("InvitedBy", fields: [invitedBy], references: [id])
+
+  @@index([email])
+  @@index([token])
+  @@index([workspaceId])
+  @@index([status])
+}
+
+model JoinRequest {
+  id          String            @id @default(uuid())
+  workspaceId String
+  userId      String
+  message     String?
+  status      JoinRequestStatus @default(PENDING)
+  reviewedBy  String?
+  reviewedAt  DateTime?
+  reviewNote  String?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      User      @relation("JoinRequester", fields: [userId], references: [id], onDelete: Cascade)
+  reviewer  User?     @relation("ReviewedBy", fields: [reviewedBy], references: [id])
+
+  @@unique([workspaceId, userId])
+  @@index([userId])
+  @@index([workspaceId, status])
+}

@@ -1,12 +1,13 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, Suspense } from 'react'
 import Sidebar from '@/components/layout/Sidebar'
 import Header from '@/components/layout/Header'
 import ChatNotifications from '@/components/chat/ChatNotifications'
-import AIAssistant from '@/components/ai/AIAssistant'
+import { LazyAIAssistant } from '@/components/lazy'
 import { useNavigation } from '@/hooks/useNavigation'
 import DockNavigation from '@/components/layout/DockNavigation'
+import { ErrorBoundary } from '@/components/error'
 import { cn } from '@/lib/utils'
 
 // ===========================================
@@ -54,7 +55,9 @@ export default function DashboardLayout({
               mode === 'dock' && "pb-32"
             )}>
               <div className="w-full min-h-full">
-                {children}
+                <ErrorBoundary>
+                  {children}
+                </ErrorBoundary>
               </div>
             </main>
           </div>
@@ -76,10 +79,15 @@ export default function DashboardLayout({
         </svg>
       </button>
 
-      <AIAssistant
-        isOpen={isAIAssistantOpen}
-        onClose={() => setIsAIAssistantOpen(false)}
-      />
+      {/* AI Assistant - 동적 로딩 (클릭 시 로드) */}
+      {isAIAssistantOpen && (
+        <Suspense fallback={null}>
+          <LazyAIAssistant
+            isOpen={isAIAssistantOpen}
+            onClose={() => setIsAIAssistantOpen(false)}
+          />
+        </Suspense>
+      )}
     </>
   )
 }

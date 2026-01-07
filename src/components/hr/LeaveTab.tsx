@@ -11,7 +11,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import {
   CalendarDays, Calendar, Plus, Loader2, CheckCircle,
-  XCircle, Clock, Umbrella, Heart, Baby, Briefcase
+  XCircle, Clock, Umbrella, Heart, Baby, Briefcase, X
 } from 'lucide-react'
 import { toast } from 'react-hot-toast'
 import { LeaveRequest, LeaveBalance } from '@/types/hr'
@@ -132,6 +132,44 @@ export default function LeaveTab({ userId, workspaceId, isAdmin }: LeaveTabProps
 
   const getLeaveTypeLabel = (type: string) => {
     return leaveTypes.find(t => t.value === type)?.label || type
+  }
+
+  const canCancelLeave = (request: LeaveRequest) => {
+    // 대기중인 휴가는 항상 취소 가능
+    if (request.status === 'pending') return true
+    // 승인된 휴가는 시작일 전에만 취소 가능
+    if (request.status === 'approved') {
+      const today = new Date()
+      today.setHours(0, 0, 0, 0)
+      const startDate = new Date(request.startDate)
+      startDate.setHours(0, 0, 0, 0)
+      return startDate > today
+    }
+    return false
+  }
+
+  const handleCancelLeave = async (requestId: string) => {
+    if (!confirm('휴가 신청을 취소하시겠습니까?')) return
+
+    try {
+      const res = await fetch(`/api/leave/${requestId}`, {
+        method: 'DELETE',
+        headers: {
+          'x-user-id': userId,
+          'x-workspace-id': workspaceId
+        }
+      })
+
+      if (res.ok) {
+        toast.success('휴가 신청이 취소되었습니다')
+        loadLeaveData()
+      } else {
+        const err = await res.json()
+        toast.error(err.error || '휴가 취소 실패')
+      }
+    } catch (e) {
+      toast.error('휴가 취소 중 오류가 발생했습니다')
+    }
   }
 
   if (loading) {
@@ -272,6 +310,17 @@ export default function LeaveTab({ userId, workspaceId, isAdmin }: LeaveTabProps
                       <span className="text-slate-500 text-sm max-w-xs truncate">{request.reason}</span>
                     )}
                     {getStatusBadge(request.status)}
+                    {canCancelLeave(request) && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleCancelLeave(request.id)}
+                        className="text-red-500 hover:text-red-700 hover:bg-red-50 px-2"
+                        title={request.status === 'approved' ? '승인된 휴가 취소 (시작일 전까지만 가능)' : '휴가 신청 취소'}
+                      >
+                        <X className="w-4 h-4" />
+                      </Button>
+                    )}
                   </div>
                 </div>
               ))}

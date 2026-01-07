@@ -1,0 +1,56 @@
+// ============================================
+// Domain: HRIS - Payroll Records
+// ============================================
+
+model PayrollRecord {
+  id          String   @id @default(uuid())
+  workspaceId String
+  employeeId  String
+  periodStart DateTime
+  periodEnd   DateTime
+
+  // 근무 시간 집계
+  normalHours    Float @default(0)
+  overtimeHours  Float @default(0)
+  nightHours     Float @default(0)
+  holidayHours   Float @default(0)
+  paidLeaveHours Float @default(0)
+  unpaidHours    Float @default(0)
+
+  // 급여 계산 (원)
+  basePay         Int @default(0)
+  overtimePay     Int @default(0)
+  nightPay        Int @default(0)
+  holidayPay      Int @default(0)
+  weeklyAllowance Int @default(0)
+  bonusPay        Int @default(0)
+  otherAllowance  Int @default(0)
+  grossPay        Int @default(0)
+
+  // 공제 항목
+  incomeTax           Int @default(0)
+  localTax            Int @default(0)
+  nationalPension     Int @default(0)
+  healthInsurance     Int @default(0)
+  longTermCare        Int @default(0)
+  employmentInsurance Int @default(0)
+  otherDeduction      Int @default(0)
+  totalDeduction      Int @default(0)
+
+  netPay Int @default(0)
+
+  status    String    @default("DRAFT")
+  paidAt    DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  employee  Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, employeeId, periodStart, periodEnd])
+  @@index([workspaceId, periodStart])
+  @@index([employeeId, periodStart])
+  // 100K CCU 인덱스
+  @@index([workspaceId, status])
+  @@index([workspaceId, periodEnd])
+}

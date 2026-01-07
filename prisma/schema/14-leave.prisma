@@ -1,0 +1,57 @@
+// ============================================
+// Domain: HRIS - Leave Management
+// ============================================
+
+model LeaveRequest {
+  id          String      @id @default(uuid())
+  workspaceId String
+  employeeId  String
+
+  type        LeaveType   @default(ANNUAL)
+  startDate   DateTime
+  endDate     DateTime
+  days        Float       @default(1)
+  reason      String?
+
+  status       LeaveStatus @default(PENDING)
+  approvedBy   String?
+  approvedAt   DateTime?
+  rejectReason String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  employee  Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, status])
+  @@index([employeeId, status])
+  @@index([workspaceId, startDate])
+}
+
+model LeaveBalance {
+  id          String @id @default(uuid())
+  workspaceId String
+  employeeId  String
+  year        Int
+
+  annualTotal     Float @default(15)
+  annualUsed      Float @default(0)
+  annualCarryOver Float @default(0)
+
+  sickTotal Float @default(3)
+  sickUsed  Float @default(0)
+
+  specialTotal Float @default(0)
+  specialUsed  Float @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  employee  Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, employeeId, year])
+  @@index([workspaceId, year])
+  @@index([employeeId, year])
+}

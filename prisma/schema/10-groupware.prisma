@@ -1,0 +1,89 @@
+// ============================================
+// Domain: Groupware (Announcements, Board, Calendar)
+// ============================================
+
+model Announcement {
+  id          String   @id @default(uuid())
+  workspaceId String?
+  title       String
+  content     String
+  authorId    String
+  isPinned    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  author    User       @relation("AnnouncementAuthor", fields: [authorId], references: [id])
+
+  @@index([workspaceId, isPinned, createdAt])
+}
+
+model Board {
+  id          String   @id @default(uuid())
+  workspaceId String
+  title       String
+  content     String
+  authorId    String
+  category    String   @default("")
+  viewCount   Int      @default(0)
+  isPinned    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  author    User           @relation("BoardAuthor", fields: [authorId], references: [id])
+  comments  BoardComment[]
+
+  @@index([workspaceId, isPinned, createdAt])
+  @@index([workspaceId, category])
+}
+
+model BoardComment {
+  id        String   @id @default(uuid())
+  boardId   String
+  authorId  String
+  content   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  board  Board @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  author User  @relation("BoardCommentAuthor", fields: [authorId], references: [id])
+
+  @@index([boardId, createdAt])
+}
+
+model CalendarEvent {
+  id          String   @id @default(uuid())
+  workspaceId String
+  title       String
+  description String?
+  startDate   DateTime
+  endDate     DateTime
+  location    String?
+  color       String   @default("#3B82F6")
+  isAllDay    Boolean  @default(false)
+  createdBy   String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace               @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  creator   User                    @relation("EventCreator", fields: [createdBy], references: [id])
+  attendees CalendarEventAttendee[]
+
+  @@index([workspaceId, startDate])
+  @@index([workspaceId, endDate])
+}
+
+model CalendarEventAttendee {
+  id      String @id @default(uuid())
+  eventId String
+  userId  String
+  status  String @default("pending")
+
+  event CalendarEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user  User          @relation("EventAttendee", fields: [userId], references: [id])
+
+  @@unique([eventId, userId])
+  @@index([eventId])
+  @@index([userId])
+}

@@ -1,0 +1,84 @@
+// ============================================
+// Domain: User & Authentication
+// ============================================
+
+model User {
+  id          String    @id @default(uuid())
+  email       String    @unique
+  name        String
+  role        Role      @default(member) // Kept for backward compatibility
+  department  String?   // @deprecated - 레거시: 프로필용. TeamMember 사용
+  avatar      String?
+  phoneNumber String?
+  companyName String?
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  lastLogin   DateTime?
+
+  // Workspace Relations
+  workspaces      WorkspaceMember[]
+
+  // Project Relations
+  projects        ProjectMember[]
+  createdProjects Project[]         @relation("CreatedProjects")
+
+  // Task Relations
+  assignedTasks   Task[]            @relation("AssignedTasks")
+  createdTasks    Task[]            @relation("CreatedTasks")
+  comments        TaskComment[]
+  activities      Activity[]
+
+  // HR & Finance Relations
+  attendances      Attendance[]
+  approvalRequests ApprovalDocument[] @relation("ApprovalRequester")
+  approvalSteps    ApprovalStep[]     @relation("ApprovalApprover")
+  transactions     Transaction[]      @relation("TransactionCreator")
+  announcements    Announcement[]     @relation("AnnouncementAuthor")
+
+  // Team Relations
+  teamMemberships   TeamMember[]
+  presenceCheckLogs PresenceCheckLog[]
+
+  // Invitation Relations
+  sentInvitations  Invitation[]  @relation("InvitedBy")
+  joinRequests     JoinRequest[] @relation("JoinRequester")
+  reviewedRequests JoinRequest[] @relation("ReviewedBy")
+
+  // Board and Calendar Relations
+  boardPosts       Board[]                 @relation("BoardAuthor")
+  boardComments    BoardComment[]          @relation("BoardCommentAuthor")
+  createdEvents    CalendarEvent[]         @relation("EventCreator")
+  eventAttendances CalendarEventAttendee[] @relation("EventAttendee")
+
+  // Project Invitation Relations
+  sentProjectInvitations ProjectInvitation[] @relation("ProjectInvitedBy")
+
+  // HRIS: Employee Relations
+  employeeProfiles Employee[]
+
+  // Flexible Work Relations
+  workSessions        WorkSession[]
+  createdWifiNetworks OfficeWifiNetwork[]
+  weeklyWorkSummaries WeeklyWorkSummary[]
+
+  // Performance Evaluation Relations
+  evaluatorRoles Evaluator[] @relation("EvaluatorUser")
+
+  // QA Board Relations
+  qaIssuesReported      QAIssue[]             @relation("QAIssueReporter")
+  qaIssuesAssigned      QAIssue[]             @relation("QAIssueAssignee")
+  qaIssueComments       QAIssueComment[]      @relation("QAIssueCommentAuthor")
+  qaIssueHistory        QAIssueHistory[]      @relation("QAIssueHistoryUser")
+  qaIssueAttachments    QAIssueAttachment[]   @relation("QAIssueAttachmentUploader")
+  qaChecklistTemplates  QAChecklistTemplate[] @relation("QAChecklistTemplateCreator")
+
+  // Attendance Change Request Relations
+  attendanceChangeRequests  AttendanceChangeRequest[] @relation("AttendanceChangeRequestUser")
+  reviewedAttendanceChanges AttendanceChangeRequest[] @relation("AttendanceChangeRequestReviewer")
+
+  // 100K CCU 인덱스
+  @@index([isActive])
+  @@index([createdAt])
+  @@index([lastLogin])
+}

@@ -1,0 +1,49 @@
+// ============================================
+// Domain: HRIS - Work Schedule (SMB/Part-time)
+// ============================================
+
+model WorkSchedule {
+  id          String   @id @default(uuid())
+  workspaceId String
+  date        DateTime @db.Date
+
+  shiftOpen   Boolean @default(false)
+  shiftMiddle Boolean @default(false)
+  shiftClose  Boolean @default(false)
+
+  openStartTime   String?
+  openEndTime     String?
+  middleStartTime String?
+  middleEndTime   String?
+  closeStartTime  String?
+  closeEndTime    String?
+
+  note      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workspace Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  entries   WorkScheduleEntry[]
+
+  @@unique([workspaceId, date])
+  @@index([workspaceId, date])
+}
+
+model WorkScheduleEntry {
+  id             String @id @default(uuid())
+  workScheduleId String
+  employeeId     String
+  shiftType      String
+
+  customStartTime String?
+  customEndTime   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  schedule WorkSchedule @relation(fields: [workScheduleId], references: [id], onDelete: Cascade)
+  employee Employee     @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@unique([workScheduleId, employeeId])
+  @@index([employeeId])
+}

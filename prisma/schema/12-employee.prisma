@@ -1,0 +1,140 @@
+// ============================================
+// Domain: HRIS - Employee Management
+// ============================================
+
+model Employee {
+  id          String  @id @default(uuid())
+  workspaceId String
+  userId      String?
+
+  // 기본 정보
+  nameKor      String
+  nameEng      String?
+  email        String
+  mobile       String?
+  profileImage String?
+  birthDate    DateTime?
+  gender       String?
+
+  // 주소
+  address       String?
+  addressDetail String?
+  zipCode       String?
+
+  // 고용 정보
+  employeeNumber String?
+  employmentType EmploymentType @default(FULL_TIME)
+  status         EmployeeStatus @default(ONBOARDING)
+  department     String?
+  position       String?
+  jobTitle       String?
+  hireDate       DateTime?
+  resignDate     DateTime?
+
+  // 급여 정보
+  payrollType       PayrollType @default(MONTHLY)
+  baseSalaryMonthly Int?
+  hourlyWage        Int?
+  dailyWage         Int?
+  bankName          String?
+  bankAccount       String?
+  accountHolder     String?
+
+  // 세금/보험 정보
+  residentNumber   String?
+  dependentCount   Int     @default(0)
+  taxExemptionRate Float   @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workspace    Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user         User?      @relation(fields: [userId], references: [id], onDelete: SetNull)
+  onboarding   EmployeeOnboarding?
+  workScheduleEntries WorkScheduleEntry[]
+  payrollRecords      PayrollRecord[]
+  experiences         EmployeeExperience[]
+  educations          EmployeeEducation[]
+  certificates        EmployeeCertificate[]
+  leaveRequests       LeaveRequest[]
+  leaveBalances       LeaveBalance[]
+
+  // Performance Evaluation relations
+  weeklyEvaluations          WeeklyEvaluation[]          @relation("EvaluatedEmployee")
+  monthlyEvaluationSummaries MonthlyEvaluationSummary[]  @relation("MonthlyEvaluated")
+  yearlyEvaluationSummaries  YearlyEvaluationSummary[]   @relation("YearlyEvaluated")
+  evaluationFeedbacks        EvaluationFeedback[]        @relation("EmployeeFeedback")
+
+  @@unique([workspaceId, email])
+  @@unique([workspaceId, employeeNumber])
+  @@index([workspaceId, status])
+  @@index([workspaceId, hireDate])
+}
+
+model EmployeeOnboarding {
+  id         String           @id @default(uuid())
+  employeeId String           @unique
+  status     OnboardingStatus @default(NOT_STARTED)
+
+  basicInfoCompleted     Boolean @default(false)
+  bankInfoCompleted      Boolean @default(false)
+  taxInfoCompleted       Boolean @default(false)
+  emergencyInfoCompleted Boolean @default(false)
+  documentsCompleted     Boolean @default(false)
+
+  emergencyName     String?
+  emergencyRelation String?
+  emergencyPhone    String?
+
+  invitedAt   DateTime?
+  startedAt   DateTime?
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+}
+
+model EmployeeExperience {
+  id         String    @id @default(uuid())
+  employeeId String
+  company    String
+  position   String?
+  startDate  DateTime
+  endDate    DateTime?
+  isCurrent  Boolean   @default(false)
+  duties     String?
+
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([employeeId])
+}
+
+model EmployeeEducation {
+  id          String    @id @default(uuid())
+  employeeId  String
+  school      String
+  major       String?
+  degree      String?
+  startDate   DateTime?
+  endDate     DateTime?
+  isGraduated Boolean   @default(false)
+
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([employeeId])
+}
+
+model EmployeeCertificate {
+  id            String    @id @default(uuid())
+  employeeId    String
+  name          String
+  issuer        String?
+  issueDate     DateTime?
+  expiryDate    DateTime?
+  certificateNo String?
+
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([employeeId])
+}

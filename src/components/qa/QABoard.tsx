@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '@/lib/auth-context'
 import { toast } from 'react-hot-toast'
@@ -129,7 +129,8 @@ export default function QABoard({ workspaceId, projectId }: QABoardProps) {
     loadIssues()
   }, [loadIssues])
 
-  const handleStatusChange = async (issueId: string, newStatus: string) => {
+  // Memoized handlers to prevent unnecessary re-renders
+  const handleStatusChange = useCallback(async (issueId: string, newStatus: string) => {
     try {
       const res = await fetch(`/api/qa/${issueId}`, {
         method: 'PATCH',
@@ -145,23 +146,26 @@ export default function QABoard({ workspaceId, projectId }: QABoardProps) {
     } catch (error) {
       toast.error('상태 변경에 실패했습니다')
     }
-  }
+  }, [])
 
-  const handleIssueCreated = (newIssue: QAIssue) => {
+  const handleIssueCreated = useCallback((newIssue: QAIssue) => {
     setIssues(prev => [newIssue, ...prev])
     setShowCreateModal(false)
     toast.success('이슈가 생성되었습니다')
-  }
+  }, [])
 
-  const handleIssueUpdated = (updatedIssue: QAIssue) => {
+  const handleIssueUpdated = useCallback((updatedIssue: QAIssue) => {
     setIssues(prev => prev.map(i => i.id === updatedIssue.id ? updatedIssue : i))
     setSelectedIssue(null)
-  }
+  }, [])
 
-  const issuesByStatus = statusColumns.reduce((acc, col) => {
-    acc[col.id] = issues.filter(i => i.status === col.id || (col.id === 'OPEN' && i.status === 'REOPENED'))
-    return acc
-  }, {} as Record<string, QAIssue[]>)
+  // Memoized issuesByStatus to prevent recalculation on every render
+  const issuesByStatus = useMemo(() => {
+    return statusColumns.reduce((acc, col) => {
+      acc[col.id] = issues.filter(i => i.status === col.id || (col.id === 'OPEN' && i.status === 'REOPENED'))
+      return acc
+    }, {} as Record<string, QAIssue[]>)
+  }, [issues])
 
   if (loading) {
     return (

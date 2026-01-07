@@ -6,7 +6,7 @@ import {
   Droppable,
   Draggable,
   DropResult,
-} from "react-beautiful-dnd";
+} from "@hello-pangea/dnd";
 import { motion, AnimatePresence } from "framer-motion";
 import { KanbanCard } from "@/types/project";
 import { format } from "date-fns";

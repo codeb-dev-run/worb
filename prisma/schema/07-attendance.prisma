@@ -1,0 +1,193 @@
+// ============================================
+// Domain: Attendance & Work Sessions
+// ============================================
+
+model Attendance {
+  id          String           @id @default(uuid())
+  userId      String
+  workspaceId String?
+  date        DateTime
+  checkIn     DateTime?
+  checkOut    DateTime?
+  status      AttendanceStatus @default(PRESENT)
+  note        String?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  // 유연근무 확장 필드
+  totalWorkedMinutes  Int     @default(0)
+  officeWorkedMinutes Int     @default(0)
+  remoteWorkedMinutes Int     @default(0)
+  weeklyTargetMinutes Int     @default(2400)
+  isFlexibleDay       Boolean @default(false)
+
+  user           User                        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace      Workspace?                  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workSessions   WorkSession[]
+  changeRequests AttendanceChangeRequest[]
+
+  @@index([userId, date])
+  // 100K CCU 인덱스
+  @@index([workspaceId, date])
+  @@index([workspaceId, status])
+  @@index([date, status])
+}
+
+model WorkSession {
+  id           String          @id @default(uuid())
+  attendanceId String
+  userId       String
+  workspaceId  String?
+
+  sessionType WorkSessionType @default(OFFICE_WORK)
+  startTime   DateTime
+  endTime     DateTime?
+
+  // 위치 검증 정보
+  wifiSSID   String?
+  wifiBSSID  String?
+  ipAddress  String?
+  isVerified Boolean @default(false)
+
+  durationMinutes Int?
+  note            String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  attendance Attendance @relation(fields: [attendanceId], references: [id], onDelete: Cascade)
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace  Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([attendanceId])
+  @@index([userId, startTime])
+  @@index([workspaceId, startTime])
+}
+
+model AttendanceChangeRequest {
+  id           String @id @default(uuid())
+  attendanceId String
+  userId       String
+  workspaceId  String?
+
+  requestType   AttendanceChangeType   @default(CHECK_IN)
+  originalTime  DateTime?
+  requestedTime DateTime
+  reason        String
+
+  status       AttendanceChangeStatus @default(PENDING)
+  reviewedBy   String?
+  reviewedAt   DateTime?
+  rejectReason String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  attendance Attendance @relation(fields: [attendanceId], references: [id], onDelete: Cascade)
+  user       User       @relation("AttendanceChangeRequestUser", fields: [userId], references: [id], onDelete: Cascade)
+  reviewer   User?      @relation("AttendanceChangeRequestReviewer", fields: [reviewedBy], references: [id])
+  workspace  Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status])
+  @@index([workspaceId, status])
+  @@index([attendanceId])
+}
+
+model OfficeWifiNetwork {
+  id          String @id @default(uuid())
+  workspaceId String
+
+  name     String
+  ssid     String
+  bssid    String?
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  createdBy String
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  creator   User      @relation(fields: [createdBy], references: [id])
+
+  @@unique([workspaceId, ssid])
+  @@index([workspaceId, isActive])
+}
+
+model WeeklyWorkSummary {
+  id          String @id @default(uuid())
+  userId      String
+  workspaceId String?
+
+  weekStart DateTime
+  weekEnd   DateTime
+
+  targetMinutes      Int     @default(2400)
+  totalWorkedMinutes Int     @default(0)
+  officeMinutes      Int     @default(0)
+  remoteMinutes      Int     @default(0)
+  remainingMinutes   Int     @default(2400)
+
+  isCompleted Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, workspaceId, weekStart])
+  @@index([userId, weekStart])
+  @@index([workspaceId, weekStart])
+}
+
+model WorkPolicy {
+  id          String   @id @default(uuid())
+  workspaceId String?  @unique
+  type        WorkType @default(FIXED)
+
+  dailyRequiredMinutes  Int @default(480)
+  weeklyRequiredMinutes Int @default(2400)
+
+  workStartTime String? @default("09:00")
+  workEndTime   String? @default("18:00")
+
+  coreTimeStart String? @default("11:00")
+  coreTimeEnd   String? @default("16:00")
+
+  allowRemoteCheckIn Boolean @default(true)
+
+  autoClockOutEnabled          Boolean @default(true)
+  autoClockOutTime             String? @default("19:30")
+  missingClockOutPenaltyPoints Int     @default(5)
+
+  presenceCheckEnabled          Boolean @default(true)
+  presenceIntervalMinutes       Int     @default(90)
+  presenceResponseWindowMinutes Int     @default(10)
+  presenceMissPenaltyPoints     Int     @default(3)
+  presenceCheckOnlyRemote       Boolean @default(true)
+
+  officeIpWhitelist String[] @default([])
+
+  // WiFi 기반 출퇴근 검증
+  wifiVerificationEnabled  Boolean @default(false)
+  wifiVerificationRequired Boolean @default(false)
+  allowFlexibleWork        Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workspace Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+}
+
+model PresenceCheckLog {
+  id           String    @id @default(uuid())
+  userId       String
+  attendanceId String
+  triggeredAt  DateTime  @default(now())
+  respondedAt  DateTime?
+  status       String    @default("pending")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, triggeredAt])
+}

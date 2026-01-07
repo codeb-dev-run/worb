@@ -1,0 +1,87 @@
+// ============================================
+// Domain: Task Management
+// ============================================
+
+model Task {
+  id          String       @id @default(uuid())
+  projectId   String?
+  title       String
+  description String?
+  status      TaskStatus   @default(todo)
+  priority    TaskPriority @default(medium)
+
+  startDate DateTime?
+  dueDate   DateTime?
+
+  assigneeId String?
+  assignee   User?   @relation("AssignedTasks", fields: [assigneeId], references: [id])
+
+  createdBy String
+  creator   User   @relation("CreatedTasks", fields: [createdBy], references: [id])
+
+  // 부서(팀) 연결
+  teamId String?
+  team   Team?   @relation(fields: [teamId], references: [id], onDelete: SetNull)
+
+  labels String[]
+
+  // Kanban specific
+  columnId String?
+  order    Int     @default(0)
+
+  // Gantt specific
+  progress     Int      @default(0)
+  color        String?
+  dependencies String[]
+
+  // Mindmap specific
+  mindmapNodeId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  project Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  // Relations
+  attachments TaskAttachment[]
+  checklist   ChecklistItem[]
+  comments    TaskComment[]
+
+  @@index([projectId, status])
+  @@index([assigneeId, status])
+  @@index([dueDate])
+}
+
+model TaskAttachment {
+  id         String   @id @default(uuid())
+  taskId     String
+  name       String
+  url        String
+  size       Int
+  type       String
+  uploadedBy String
+  uploadedAt DateTime @default(now())
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+}
+
+model ChecklistItem {
+  id        String  @id @default(uuid())
+  taskId    String
+  text      String
+  completed Boolean @default(false)
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+}
+
+model TaskComment {
+  id        String   @id @default(uuid())
+  taskId    String
+  userId    String
+  text      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}

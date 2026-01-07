@@ -1,0 +1,43 @@
+// ============================================
+// Domain: Finance & Contracts
+// ============================================
+
+model Contract {
+  id          String         @id @default(uuid())
+  workspaceId String?
+  projectId   String?
+  title       String
+  clientName  String
+  amount      Float
+  startDate   DateTime
+  endDate     DateTime
+  status      ContractStatus @default(DRAFT)
+  documents   String[]
+  description String?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  workspace Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project   Project?   @relation(fields: [projectId], references: [id], onDelete: SetNull)
+}
+
+model Transaction {
+  id          String          @id @default(uuid())
+  workspaceId String?
+  projectId   String?
+  type        TransactionType
+  category    String
+  amount      Float
+  date        DateTime
+  description String
+  createdBy   String
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  workspace Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project   Project?   @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  creator   User       @relation("TransactionCreator", fields: [createdBy], references: [id])
+
+  @@index([workspaceId, date])
+  @@index([projectId, date])
+}

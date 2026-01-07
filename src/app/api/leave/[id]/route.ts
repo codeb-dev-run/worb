@@ -204,7 +204,8 @@ export async function PATCH(request: Request, { params }: RouteParams) {
     }
 }
 
-// DELETE - 휴가 신청 취소 (본인만 가능, pending 상태일 때만)
+// DELETE - 휴가 신청 취소 (본인만 가능, pending 또는 approved 상태일 때)
+// 승인된 휴가 취소 시 휴가일이 시작되기 전이어야 함
 export async function DELETE(request: Request, { params }: RouteParams) {
     try {
         const { id } = await params
@@ -237,20 +238,82 @@ export async function DELETE(request: Request, { params }: RouteParams) {
             return createErrorResponse('You can only cancel your own request', 403, 'FORBIDDEN')
         }
 
-        // 대기 상태인지 확인
-        if (leaveRequest.status !== 'PENDING') {
-            return createErrorResponse('Can only cancel pending requests', 400, 'INVALID_STATUS')
+        // 대기 또는 승인 상태인지 확인
+        if (!['PENDING', 'APPROVED'].includes(leaveRequest.status)) {
+            return createErrorResponse('Can only cancel pending or approved requests', 400, 'INVALID_STATUS')
+        }
+
+        // 승인된 휴가의 경우, 휴가 시작일 전에만 취소 가능
+        const today = new Date()
+        today.setHours(0, 0, 0, 0)
+        const startDate = new Date(leaveRequest.startDate)
+        startDate.setHours(0, 0, 0, 0)
+
+        if (leaveRequest.status === 'APPROVED' && startDate <= today) {
+            return createErrorResponse(
+                '휴가 시작일 이후에는 취소할 수 없습니다. 관리자에게 문의하세요.',
+                400,
+                'LEAVE_ALREADY_STARTED'
+            )
+        }
+
+        // 승인된 휴가 취소 시 LeaveBalance 복원
+        if (leaveRequest.status === 'APPROVED') {
+            const currentYear = new Date().getFullYear()
+
+            const existingBalance = await prisma.leaveBalance.findUnique({
+                where: {
+                    workspaceId_employeeId_year: {
+                        workspaceId,
+                        employeeId: leaveRequest.employeeId,
+                        year: currentYear,
+                    },
+                },
+            })
+
+            if (existingBalance) {
+                const updateData: { annualUsed?: number; sickUsed?: number; specialUsed?: number } = {}
+
+                // 사용한 휴가일수 복원 (음수가 되지 않도록 보정)
+                if (['ANNUAL', 'HALF_AM', 'HALF_PM'].includes(leaveRequest.type)) {
+                    updateData.annualUsed = Math.max(0, existingBalance.annualUsed - leaveRequest.days)
+                } else if (leaveRequest.type === 'SICK') {
+                    updateData.sickUsed = Math.max(0, existingBalance.sickUsed - leaveRequest.days)
+                } else if (['SPECIAL', 'MATERNITY', 'CHILDCARE', 'OFFICIAL'].includes(leaveRequest.type)) {
+                    updateData.specialUsed = Math.max(0, existingBalance.specialUsed - leaveRequest.days)
+                }
+
+                await prisma.leaveBalance.update({
+                    where: { id: existingBalance.id },
+                    data: updateData,
+                })
+            }
         }
 
         // 삭제 대신 CANCELLED 상태로 변경
         await prisma.leaveRequest.update({
             where: { id },
-            data: { status: 'CANCELLED' },
+            data: {
+                status: 'CANCELLED',
+                // 취소 사유 기록 (참고용)
+                rejectReason: leaveRequest.status === 'APPROVED'
+                    ? `본인 취소 (승인된 휴가, ${new Date().toLocaleDateString('ko-KR')})`
+                    : null,
+            },
+        })
+
+        secureLogger.info('Leave request cancelled', {
+            operation: 'leave.cancel',
+            leaveId: id,
+            userId,
+            previousStatus: leaveRequest.status,
         })
 
         return NextResponse.json({
             success: true,
-            message: '휴가 신청이 취소되었습니다.',
+            message: leaveRequest.status === 'APPROVED'
+                ? '승인된 휴가가 취소되었습니다. 휴가일수가 복원되었습니다.'
+                : '휴가 신청이 취소되었습니다.',
         })
     } catch (error) {
         secureLogger.error('Failed to delete leave request', error as Error, { operation: 'leave.delete' })

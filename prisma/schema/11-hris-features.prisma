@@ -1,0 +1,85 @@
+// ============================================
+// Domain: HRIS - Workspace Features & Onboarding
+// ============================================
+
+model WorkspaceFeatures {
+  id          String @id @default(uuid())
+  workspaceId String @unique
+
+  // 프로젝트 관리 기능
+  projectEnabled Boolean @default(true)
+  kanbanEnabled  Boolean @default(true)
+  ganttEnabled   Boolean @default(true)
+  mindmapEnabled Boolean @default(true)
+  filesEnabled   Boolean @default(true)
+
+  // HR 기능
+  attendanceEnabled   Boolean @default(true)
+  employeeEnabled     Boolean @default(true)
+  payrollEnabled      Boolean @default(true)
+  payslipEnabled      Boolean @default(true)
+  leaveEnabled        Boolean @default(true)
+  hrEnabled           Boolean @default(true)
+  organizationEnabled Boolean @default(true)
+
+  // 재무 기능
+  financeEnabled       Boolean @default(true)
+  expenseEnabled       Boolean @default(true)
+  invoiceEnabled       Boolean @default(true)
+  corporateCardEnabled Boolean @default(true)
+
+  // 고급 기능
+  resumeParsingEnabled Boolean @default(false)
+  approvalEnabled      Boolean @default(true)
+  marketingEnabled     Boolean @default(true)
+  automationEnabled    Boolean @default(true)
+  logsEnabled          Boolean @default(true)
+
+  // 그룹웨어 기능
+  announcementEnabled Boolean @default(true)
+  boardEnabled        Boolean @default(true)
+  calendarEnabled     Boolean @default(true)
+  messageEnabled      Boolean @default(true)
+  chatEnabled         Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workspace     Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  featureAdmins FeatureAdmin[]
+}
+
+model FeatureAdmin {
+  id         String @id @default(uuid())
+  featuresId String
+  userId     String
+  featureKey String
+
+  createdAt DateTime @default(now())
+
+  features WorkspaceFeatures @relation(fields: [featuresId], references: [id], onDelete: Cascade)
+
+  @@unique([featuresId, userId, featureKey])
+  @@index([featuresId, featureKey])
+}
+
+model WorkspaceOnboarding {
+  id          String           @id @default(uuid())
+  workspaceId String           @unique
+  status      OnboardingStatus @default(NOT_STARTED)
+
+  basicInfoCompleted    Boolean @default(false)
+  typeSelected          Boolean @default(false)
+  businessInfoCompleted Boolean @default(false)
+  policyConfigured      Boolean @default(false)
+  invitationSent        Boolean @default(false)
+
+  quickSetupData Json?
+
+  currentStep Int       @default(1)
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+}

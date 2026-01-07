@@ -1,0 +1,129 @@
+// ============================================
+// Domain: Project Management
+// ============================================
+
+model Project {
+  id          String            @id @default(uuid())
+  workspaceId String?
+  name        String
+  description String?
+  clientId    String?
+  clientName  String?
+  status      ProjectStatus     @default(planning)
+  progress    Int               @default(0)
+  startDate   DateTime?
+  endDate     DateTime?
+  budget      Float?
+  visibility  ProjectVisibility @default(private)
+  priority    ProjectPriority   @default(medium)
+  tags        String[]
+
+  createdBy String
+  creator   User   @relation("CreatedProjects", fields: [createdBy], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workspace Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  // Relations
+  members      ProjectMember[]
+  tasks        Task[]
+  files        File[]
+  activities   Activity[]
+  aiMetrics    AIMetrics?
+  contracts    Contract[]
+  transactions Transaction[]
+  invitations  ProjectInvitation[]
+  qaIssues     QAIssue[]
+
+  @@index([status])
+  @@index([workspaceId])
+  // 100K CCU 인덱스
+  @@index([workspaceId, status])
+  @@index([workspaceId, createdAt])
+  @@index([createdBy])
+  @@index([priority])
+}
+
+model ProjectMember {
+  id        String   @id @default(uuid())
+  projectId String
+  userId    String
+  role      String   // PM, Developer, Designer etc.
+  joinedAt  DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, userId])
+}
+
+model ProjectInvitation {
+  id         String                  @id @default(uuid())
+  projectId  String
+  email      String
+  token      String                  @unique
+  role       String                  @default("Viewer")
+  invitedBy  String
+  status     ProjectInvitationStatus @default(PENDING)
+  expiresAt  DateTime
+  acceptedAt DateTime?
+  createdAt  DateTime                @default(now())
+  updatedAt  DateTime                @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  inviter User    @relation("ProjectInvitedBy", fields: [invitedBy], references: [id])
+
+  @@index([email])
+  @@index([token])
+  @@index([projectId])
+  @@index([status])
+}
+
+model File {
+  id         String   @id @default(uuid())
+  projectId  String
+  name       String
+  size       Int
+  type       String
+  url        String
+  uploadedBy String
+  category   String   @default("other")
+  createdAt  DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+model Activity {
+  id        String   @id @default(uuid())
+  projectId String
+  type      String
+  message   String
+  userId    String
+  userName  String
+  icon      String
+  timestamp DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, timestamp])
+}
+
+model AIMetrics {
+  id        String @id @default(uuid())
+  projectId String @unique
+
+  quality      Int @default(0)
+  budgetUsage  Int @default(0)
+  efficiency   Int @default(0)
+  satisfaction Int @default(0)
+
+  predictions Json?
+  risks       Json?
+
+  updatedAt DateTime @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}

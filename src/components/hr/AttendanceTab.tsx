@@ -1,15 +1,18 @@
 'use client'
 const isDev = process.env.NODE_ENV === 'development'
 
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import {
   Clock, Calendar, Coffee, CheckCircle, XCircle, AlertCircle,
-  MapPin, Loader2, Home, Wifi, Timer, Building2, Play, Square, History, RotateCcw
+  MapPin, Loader2, Home, Wifi, Timer, Building2, Play, Square, History, RotateCcw, Edit3
 } from 'lucide-react'
+import { Textarea } from '@/components/ui/textarea'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { toast } from 'react-hot-toast'
 import { WorkSettings } from '@/types/hr'
 
@@ -41,6 +44,9 @@ interface AttendanceRecord {
   workLocation: 'OFFICE' | 'REMOTE'
   status: string
   totalMinutes: number
+  note?: string | null
+  createdAt?: string
+  updatedAt?: string
 }
 
 export default function AttendanceTab({ userId, workspaceId, isAdmin }: AttendanceTabProps) {
@@ -51,6 +57,14 @@ export default function AttendanceTab({ userId, workspaceId, isAdmin }: Attendan
   const [userIP, setUserIP] = useState('')
   const [isOfficeIP, setIsOfficeIP] = useState(false)
   const [isPresenceCheckOpen, setIsPresenceCheckOpen] = useState(false)
+  const [selectedRecord, setSelectedRecord] = useState<AttendanceRecord | null>(null)
+  const [isChangeRequestOpen, setIsChangeRequestOpen] = useState(false)
+  const [changeRequestForm, setChangeRequestForm] = useState({
+    requestType: 'CHECK_IN' as 'CHECK_IN' | 'CHECK_OUT' | 'BOTH',
+    requestedTime: '',
+    reason: '',
+  })
+  const [changeRequestLoading, setChangeRequestLoading] = useState(false)
   const [settings, setSettings] = useState<WorkSettings>({
     type: 'FIXED',
     dailyRequiredMinutes: 480,
@@ -264,23 +278,88 @@ export default function AttendanceTab({ userId, workspaceId, isAdmin }: Attendan
     }
   }
 
-  const formatTime = (time: string | null) => {
-    if (!time) return '--:--'
-    return new Date(time).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
+  // 시간 변경 요청 모달 열기
+  const openChangeRequestModal = (record: AttendanceRecord) => {
+    // 요청 날짜의 기존 시간으로 초기값 설정
+    const date = record.date
+    const existingTime = record.checkIn
+      ? new Date(record.checkIn).toTimeString().slice(0, 5)
+      : '09:00'
+    setChangeRequestForm({
+      requestType: 'CHECK_IN',
+      requestedTime: `${date}T${existingTime}`,
+      reason: '',
+    })
+    setIsChangeRequestOpen(true)
   }
 
-  const getStatusBadge = (status: string) => {
-    const variants: Record<string, { color: string; text: string }> = {
-      present: { color: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30', text: '출근' },
-      PRESENT: { color: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30', text: '출근' },
-      late: { color: 'bg-amber-500/20 text-amber-400 border-amber-500/30', text: '지각' },
-      LATE: { color: 'bg-amber-500/20 text-amber-400 border-amber-500/30', text: '지각' },
-      absent: { color: 'bg-rose-500/20 text-rose-400 border-rose-500/30', text: '결근' },
-      ABSENT: { color: 'bg-rose-500/20 text-rose-400 border-rose-500/30', text: '결근' }
+  // 시간 변경 요청 제출
+  const handleSubmitChangeRequest = async () => {
+    if (!selectedRecord) return
+    if (!changeRequestForm.reason || changeRequestForm.reason.trim().length < 5) {
+      toast.error('변경 사유를 5자 이상 입력해주세요')
+      return
     }
-    const v = variants[status] || { color: 'bg-slate-500/20 text-slate-400 border-slate-500/30', text: status }
-    return <Badge className={`${v.color} border`}>{v.text}</Badge>
+    if (!changeRequestForm.requestedTime) {
+      toast.error('변경할 시간을 선택해주세요')
+      return
+    }
+
+    setChangeRequestLoading(true)
+    try {
+      const res = await fetch('/api/attendance/change-request', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-id': userId,
+          'x-workspace-id': workspaceId,
+        },
+        body: JSON.stringify({
+          attendanceId: selectedRecord.id,
+          requestType: changeRequestForm.requestType,
+          requestedTime: new Date(changeRequestForm.requestedTime).toISOString(),
+          reason: changeRequestForm.reason.trim(),
+          workspaceId,
+        }),
+      })
+
+      if (res.ok) {
+        toast.success('시간 변경 요청이 제출되었습니다')
+        setIsChangeRequestOpen(false)
+        setSelectedRecord(null)
+        setChangeRequestForm({ requestType: 'CHECK_IN', requestedTime: '', reason: '' })
+      } else {
+        const err = await res.json()
+        toast.error(err.error || '시간 변경 요청 실패')
+      }
+    } catch (e) {
+      if (isDev) console.error('Change request failed:', e)
+      toast.error('시간 변경 요청 중 오류가 발생했습니다')
+    } finally {
+      setChangeRequestLoading(false)
+    }
   }
+
+  // Memoized formatTime function
+  const formatTime = useCallback((time: string | null) => {
+    if (!time) return '--:--'
+    return new Date(time).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
+  }, [])
+
+  // Memoized status variants
+  const statusVariants = useMemo(() => ({
+    present: { color: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30', text: '출근' },
+    PRESENT: { color: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30', text: '출근' },
+    late: { color: 'bg-amber-500/20 text-amber-400 border-amber-500/30', text: '지각' },
+    LATE: { color: 'bg-amber-500/20 text-amber-400 border-amber-500/30', text: '지각' },
+    absent: { color: 'bg-rose-500/20 text-rose-400 border-rose-500/30', text: '결근' },
+    ABSENT: { color: 'bg-rose-500/20 text-rose-400 border-rose-500/30', text: '결근' }
+  }), [])
+
+  const getStatusBadge = useCallback((status: string) => {
+    const v = statusVariants[status as keyof typeof statusVariants] || { color: 'bg-slate-500/20 text-slate-400 border-slate-500/30', text: status }
+    return <Badge className={`${v.color} border`}>{v.text}</Badge>
+  }, [statusVariants])
 
   const isWorking = todayAttendance?.checkIn && !todayAttendance?.checkOut
   const isWorkCompleted = todayAttendance?.checkIn && todayAttendance?.checkOut
@@ -481,7 +560,8 @@ export default function AttendanceTab({ userId, workspaceId, isAdmin }: Attendan
               {attendanceHistory.slice(0, 10).map((record) => (
                 <div
                   key={record.id}
-                  className="flex items-center justify-between p-4 hover:bg-white/50 transition-colors"
+                  onClick={() => setSelectedRecord(record)}
+                  className="flex items-center justify-between p-4 hover:bg-white/50 transition-colors cursor-pointer group"
                 >
                   <div className="flex items-center gap-4">
                     <span className="text-slate-700 font-medium min-w-[100px]">{record.date}</span>
@@ -489,6 +569,11 @@ export default function AttendanceTab({ userId, workspaceId, isAdmin }: Attendan
                     <Badge variant="outline" className="text-xs border-slate-200 text-slate-500">
                       {record.workLocation === 'REMOTE' ? '재택' : '사무실'}
                     </Badge>
+                    {record.note && (
+                      <span className="text-xs text-slate-400 max-w-[200px] truncate hidden sm:inline" title={record.note}>
+                        {record.note}
+                      </span>
+                    )}
                   </div>
                   <div className="flex items-center gap-6 text-sm">
                     <span className="text-slate-500">
@@ -504,6 +589,9 @@ export default function AttendanceTab({ userId, workspaceId, isAdmin }: Attendan
                           : '-'}
                       </span>
                     </span>
+                    <svg className="w-4 h-4 text-slate-300 group-hover:text-slate-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
                   </div>
                 </div>
               ))}
@@ -525,6 +613,173 @@ export default function AttendanceTab({ userId, workspaceId, isAdmin }: Attendan
           <DialogFooter>
             <Button onClick={handlePresenceConfirm} className="w-full bg-black hover:bg-slate-900 text-lime-400 font-bold rounded-xl">
               근무 확인
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Attendance Detail Modal */}
+      <Dialog open={!!selectedRecord} onOpenChange={() => setSelectedRecord(null)}>
+        <DialogContent className="bg-white border-slate-200 rounded-3xl shadow-xl max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-slate-900 flex items-center gap-2">
+              <Calendar className="w-5 h-5 text-lime-500" />
+              출근 기록 상세
+            </DialogTitle>
+          </DialogHeader>
+          {selectedRecord && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between py-2 border-b border-slate-100">
+                <span className="text-slate-500">날짜</span>
+                <span className="text-slate-900 font-medium">{selectedRecord.date}</span>
+              </div>
+              <div className="flex items-center justify-between py-2 border-b border-slate-100">
+                <span className="text-slate-500">상태</span>
+                {getStatusBadge(selectedRecord.status)}
+              </div>
+              <div className="flex items-center justify-between py-2 border-b border-slate-100">
+                <span className="text-slate-500">근무 형태</span>
+                <Badge variant="outline" className="text-xs border-slate-200">
+                  {selectedRecord.workLocation === 'REMOTE' ? '재택근무' : '사무실 근무'}
+                </Badge>
+              </div>
+              <div className="flex items-center justify-between py-2 border-b border-slate-100">
+                <span className="text-slate-500">출근 시간</span>
+                <span className="text-slate-900 font-medium">{formatTime(selectedRecord.checkIn) || '-'}</span>
+              </div>
+              <div className="flex items-center justify-between py-2 border-b border-slate-100">
+                <span className="text-slate-500">퇴근 시간</span>
+                <span className="text-slate-900 font-medium">{formatTime(selectedRecord.checkOut) || '-'}</span>
+              </div>
+              <div className="flex items-center justify-between py-2 border-b border-slate-100">
+                <span className="text-slate-500">총 근무 시간</span>
+                <span className="text-lime-600 font-bold">
+                  {selectedRecord.totalMinutes
+                    ? `${Math.floor(selectedRecord.totalMinutes / 60)}시간 ${selectedRecord.totalMinutes % 60}분`
+                    : '-'}
+                </span>
+              </div>
+              {selectedRecord.note && (
+                <div className="py-2">
+                  <span className="text-slate-500 block mb-2">메모</span>
+                  <div className="bg-slate-50 rounded-xl p-3 text-sm text-slate-700">
+                    {selectedRecord.note}
+                  </div>
+                </div>
+              )}
+              {selectedRecord.createdAt && (
+                <div className="text-xs text-slate-400 text-center pt-2">
+                  기록 생성: {new Date(selectedRecord.createdAt).toLocaleString('ko-KR')}
+                </div>
+              )}
+            </div>
+          )}
+          <DialogFooter className="flex gap-2">
+            <Button
+              onClick={() => openChangeRequestModal(selectedRecord!)}
+              className="flex-1 bg-amber-500 hover:bg-amber-600 text-white rounded-xl"
+            >
+              <Edit3 className="w-4 h-4 mr-2" />
+              시간 변경 요청
+            </Button>
+            <Button
+              onClick={() => setSelectedRecord(null)}
+              variant="outline"
+              className="flex-1 border-slate-200 text-slate-700 rounded-xl"
+            >
+              닫기
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Time Change Request Modal */}
+      <Dialog open={isChangeRequestOpen} onOpenChange={setIsChangeRequestOpen}>
+        <DialogContent className="bg-white border-slate-200 rounded-3xl shadow-xl max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-slate-900 flex items-center gap-2">
+              <Edit3 className="w-5 h-5 text-amber-500" />
+              출퇴근 시간 변경 요청
+            </DialogTitle>
+          </DialogHeader>
+          {selectedRecord && (
+            <div className="space-y-4">
+              <div className="bg-slate-50 rounded-xl p-3 text-sm">
+                <p className="text-slate-500">
+                  {selectedRecord.date} 기록에 대한 시간 변경을 요청합니다.
+                </p>
+              </div>
+
+              <div>
+                <Label className="text-slate-600">변경 유형</Label>
+                <div className="grid grid-cols-3 gap-2 mt-2">
+                  {[
+                    { value: 'CHECK_IN', label: '출근 시간' },
+                    { value: 'CHECK_OUT', label: '퇴근 시간' },
+                    { value: 'BOTH', label: '둘 다' },
+                  ].map((type) => (
+                    <Button
+                      key={type.value}
+                      variant={changeRequestForm.requestType === type.value ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => setChangeRequestForm({ ...changeRequestForm, requestType: type.value as 'CHECK_IN' | 'CHECK_OUT' | 'BOTH' })}
+                      className={changeRequestForm.requestType === type.value
+                        ? 'bg-black text-lime-400'
+                        : 'border-slate-200 text-slate-700'
+                      }
+                    >
+                      {type.label}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <Label className="text-slate-600">변경할 시간</Label>
+                <Input
+                  type="datetime-local"
+                  value={changeRequestForm.requestedTime}
+                  onChange={(e) => setChangeRequestForm({ ...changeRequestForm, requestedTime: e.target.value })}
+                  className="mt-2 bg-slate-50 border-slate-200 text-slate-900 rounded-xl"
+                />
+              </div>
+
+              <div>
+                <Label className="text-slate-600">변경 사유 (필수)</Label>
+                <Textarea
+                  value={changeRequestForm.reason}
+                  onChange={(e) => setChangeRequestForm({ ...changeRequestForm, reason: e.target.value })}
+                  placeholder="변경이 필요한 사유를 입력해주세요 (최소 5자)"
+                  className="mt-2 bg-slate-50 border-slate-200 text-slate-900 rounded-xl"
+                  rows={3}
+                />
+              </div>
+
+              <div className="text-xs text-slate-400">
+                * 변경 요청은 관리자 승인 후 반영됩니다.
+              </div>
+            </div>
+          )}
+          <DialogFooter className="flex gap-2">
+            <Button
+              onClick={() => setIsChangeRequestOpen(false)}
+              variant="outline"
+              className="flex-1 border-slate-200 text-slate-700 rounded-xl"
+              disabled={changeRequestLoading}
+            >
+              취소
+            </Button>
+            <Button
+              onClick={handleSubmitChangeRequest}
+              className="flex-1 bg-amber-500 hover:bg-amber-600 text-white rounded-xl"
+              disabled={changeRequestLoading}
+            >
+              {changeRequestLoading ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <CheckCircle className="w-4 h-4 mr-2" />
+              )}
+              요청 제출
             </Button>
           </DialogFooter>
         </DialogContent>
