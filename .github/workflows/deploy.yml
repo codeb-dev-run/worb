@@ -165,7 +165,7 @@ jobs:
           echo "========================================"
 
           # Deploy to inactive slot via MCP API
-          RESPONSE=$(curl -sf -X POST "${{ env.MCP_API_URL }}/tool" \
+          HTTP_CODE=$(curl -s -o /tmp/response.json -w "%{http_code}" -X POST "${{ env.MCP_API_URL }}/tool" \
             -H "Authorization: Bearer ${{ secrets.CODEB_API_KEY }}" \
             -H "Content-Type: application/json" \
             -d "{
@@ -180,7 +180,14 @@ jobs:
               }
             }")
 
+          RESPONSE=$(cat /tmp/response.json)
+          echo "HTTP Status: $HTTP_CODE"
           echo "API Response: $RESPONSE"
+
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "API request failed with HTTP $HTTP_CODE"
+            exit 1
+          fi
 
           # Extract slot and preview URL from response
           SLOT=$(echo "$RESPONSE" | jq -r '.slot // "unknown"')
