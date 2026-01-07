@@ -77,15 +77,18 @@ export function useProjectData(): UseProjectDataReturn {
     (member) => member.userId === user?.uid && member.role === 'Admin'
   ) ?? false)
 
+  // Extract id once to avoid dependency on params object
+  const projectId = params?.id as string | undefined
+
   const loadProjectData = useCallback(async () => {
-    if (!params?.id || typeof params.id !== 'string') return
+    if (!projectId) return
 
     try {
       setLoading(true)
       const [projectData, tasksData, activitiesData] = await Promise.all([
-        getProject(params.id),
-        getTasks(params.id),
-        getActivities(params.id)
+        getProject(projectId),
+        getTasks(projectId),
+        getActivities(projectId)
       ])
 
       if (projectData) {
@@ -108,7 +111,7 @@ export function useProjectData(): UseProjectDataReturn {
     } finally {
       setLoading(false)
     }
-  }, [params?.id])
+  }, [projectId])
 
   // Initial data load
   useEffect(() => {
@@ -117,11 +120,11 @@ export function useProjectData(): UseProjectDataReturn {
 
   // Centrifugo real-time collaboration
   useEffect(() => {
-    if (!params?.id) return
+    if (!projectId) return
 
     let cancelled = false
 
-    const unsubscribe = subscribe(`project:${params.id}`, (data: { event: string; userId: string }) => {
+    const unsubscribe = subscribe(`project:${projectId}`, (data: { event: string; userId: string }) => {
       if (isDev) console.log('Received Centrifugo event:', data)
 
       // Handle task move events from other users
@@ -134,7 +137,7 @@ export function useProjectData(): UseProjectDataReturn {
       cancelled = true
       unsubscribe()
     }
-  }, [params?.id, subscribe, user?.uid, loadProjectData])
+  }, [projectId, subscribe, user?.uid, loadProjectData])
 
   const handleColumnsChange = useCallback(async (newColumns: KanbanColumnWithTasks[]) => {
     if (isDev) console.log('handleColumnsChange called', { isUpdating: isUpdatingRef.current })

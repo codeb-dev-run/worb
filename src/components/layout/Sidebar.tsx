@@ -168,6 +168,7 @@ export default function Sidebar() {
     }
     if (isFeatureEnabled('boardEnabled')) {
       groupwareItems.push({ href: '/groupware/board', label: '게시판', icon: 'board' })
+      groupwareItems.push({ href: '/groupware/qa', label: 'QA 게시판', icon: 'board' })
     }
     if (isFeatureEnabled('calendarEnabled')) {
       groupwareItems.push({ href: '/calendar', label: '일정 (캘린더)', icon: 'calendar' })
