@@ -66,11 +66,11 @@ jobs:
           IMAGE_TAG="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}"
 
           echo "Building image: $IMAGE_TAG"
-          # Use buildah to avoid podman netavark issue
-          sudo buildah bud --network=host --no-cache -t "$IMAGE_TAG" .
+          # Use buildah without sudo (rootless mode)
+          buildah bud --network=host --no-cache -t "$IMAGE_TAG" .
 
           echo "Pushing image: $IMAGE_TAG"
-          sudo buildah push --authfile=/tmp/podman-auth/config.json "$IMAGE_TAG" docker://"$IMAGE_TAG"
+          buildah push --authfile=/tmp/podman-auth/config.json "$IMAGE_TAG" docker://"$IMAGE_TAG"
 
           echo "image_url=$IMAGE_TAG" >> $GITHUB_OUTPUT
 
@@ -114,7 +114,7 @@ jobs:
       - name: Cleanup old images
         if: always()
         run: |
-          sudo podman image prune -f || true
+          buildah images -q | head -20 | xargs -r buildah rmi -f 2>/dev/null || true
 
       - name: Deployment Summary
         if: always()
