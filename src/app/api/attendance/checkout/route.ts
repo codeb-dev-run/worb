@@ -47,10 +47,20 @@ export async function POST(request: NextRequest) {
       return createErrorResponse('Already checked out', 400, 'ALREADY_CHECKED_OUT')
     }
 
+    // Calculate total worked minutes
+    const checkInTime = attendance.checkIn ? new Date(attendance.checkIn).getTime() : now.getTime()
+    const totalWorkedMinutes = Math.floor((now.getTime() - checkInTime) / 60000)
+
+    // Determine if remote work
+    const isRemote = attendance.status === 'REMOTE' || (attendance.note && attendance.note.includes('재택'))
+
     const updated = await prisma.attendance.update({
       where: { id: attendance.id },
       data: {
         checkOut: now,
+        totalWorkedMinutes,
+        officeWorkedMinutes: isRemote ? 0 : totalWorkedMinutes,
+        remoteWorkedMinutes: isRemote ? totalWorkedMinutes : 0,
       },
     })
 

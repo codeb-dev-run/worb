@@ -161,7 +161,9 @@ export const authOptions: NextAuthOptions = {
                             const foundRole = foundUser.role || 'member';
                             (session.user as any).id = foundId;
                             (session.user as any).uid = foundId;
-                            (session.user as any).role = foundRole
+                            (session.user as any).role = foundRole;
+                            (session.user as any).createdAt = foundUser.createdAt?.toISOString();
+                            (session.user as any).department = foundUser.department
                         } else {
                             // DB에 없으면 토큰 값 사용
                             (session.user as any).id = token.uid as string;

@@ -5,8 +5,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { MapPin, User, Users } from 'lucide-react'
-import { NewEventForm, ProjectOption, CALENDAR_COLORS } from '../../types'
+import { MapPin, User, Users, Repeat } from 'lucide-react'
+import { NewEventForm, ProjectOption, CALENDAR_COLORS, RecurrenceType } from '../../types'
 
 interface EventModalProps {
   isOpen: boolean
@@ -118,6 +118,7 @@ export function EventModal({
                     value={newEvent.startTime}
                     onChange={(e) => onEventChange({ ...newEvent, startTime: e.target.value })}
                     className="rounded-xl h-11 w-32"
+                    step="60"
                   />
                 )}
               </div>
@@ -138,6 +139,7 @@ export function EventModal({
                     value={newEvent.endTime}
                     onChange={(e) => onEventChange({ ...newEvent, endTime: e.target.value })}
                     className="rounded-xl h-11 w-32"
+                    step="60"
                   />
                 )}
               </div>
@@ -156,6 +158,67 @@ export function EventModal({
                 placeholder="장소 추가"
               />
             </div>
+          </div>
+
+          {/* Recurrence */}
+          <div className="space-y-2">
+            <Label className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+              <Repeat className="w-3 h-3" />
+              반복
+            </Label>
+            <div className="flex gap-2 flex-wrap">
+              {([
+                { value: 'none', label: '반복 안함' },
+                { value: 'daily', label: '매일' },
+                { value: 'weekly', label: '매주' },
+                { value: 'monthly', label: '매월' },
+                { value: 'yearly', label: '매년' }
+              ] as const).map(option => (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => onEventChange({ ...newEvent, recurrenceType: option.value })}
+                  className={`px-3 py-1.5 rounded-xl text-sm font-medium transition-all ${
+                    newEvent.recurrenceType === option.value
+                      ? 'bg-lime-400 text-black'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+
+            {/* 반복 설정 상세 (반복 선택 시에만 표시) */}
+            {newEvent.recurrenceType !== 'none' && (
+              <div className="flex gap-3 mt-2 items-center">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-slate-500">간격:</span>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={30}
+                    value={newEvent.recurrenceInterval}
+                    onChange={(e) => onEventChange({ ...newEvent, recurrenceInterval: Math.max(1, parseInt(e.target.value) || 1) })}
+                    className="w-16 h-8 rounded-lg text-center"
+                  />
+                  <span className="text-xs text-slate-500">
+                    {newEvent.recurrenceType === 'daily' ? '일' :
+                     newEvent.recurrenceType === 'weekly' ? '주' :
+                     newEvent.recurrenceType === 'monthly' ? '개월' : '년'}마다
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-slate-500">종료:</span>
+                  <Input
+                    type="date"
+                    value={newEvent.recurrenceEndDate}
+                    onChange={(e) => onEventChange({ ...newEvent, recurrenceEndDate: e.target.value })}
+                    className="h-8 rounded-lg"
+                  />
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Color */}

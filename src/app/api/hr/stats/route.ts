@@ -225,17 +225,54 @@ export async function GET(request: NextRequest) {
           take: 6
         })
 
+        // 상태별 카운트 - PRESENT, LATE, REMOTE 모두 출근으로 간주
         const presentDays = attendanceRecords.filter(r => r.status === 'PRESENT').length
         const lateDays = attendanceRecords.filter(r => r.status === 'LATE').length
         const remoteDays = attendanceRecords.filter(r => r.status === 'REMOTE').length
-        const officeDays = attendanceRecords.filter(r => r.status === 'PRESENT').length
+        const officeDays = attendanceRecords.filter(r => r.status === 'PRESENT' || r.status === 'LATE').length
+        // 출근율 계산: PRESENT + LATE + REMOTE = 모든 출근 기록
+        const totalAttendedDays = presentDays + lateDays + remoteDays
 
         const totalHours = attendanceRecords.reduce((sum, r) => {
+          // totalWorkedMinutes가 있으면 사용, 없으면 checkIn/checkOut으로 계산
+          if (r.totalWorkedMinutes && r.totalWorkedMinutes > 0) {
+            return sum + r.totalWorkedMinutes / 60
+          }
           if (r.checkIn && r.checkOut) {
             return sum + (new Date(r.checkOut).getTime() - new Date(r.checkIn).getTime()) / (1000 * 60 * 60)
           }
           return sum
         }, 0)
+
+        // 요일별 실제 근무시간 계산
+        const dayMap: Record<number, { hours: number; count: number }> = {
+          1: { hours: 0, count: 0 }, // 월
+          2: { hours: 0, count: 0 }, // 화
+          3: { hours: 0, count: 0 }, // 수
+          4: { hours: 0, count: 0 }, // 목
+          5: { hours: 0, count: 0 }  // 금
+        }
+        attendanceRecords.forEach(r => {
+          const dayOfWeek = new Date(r.date).getDay()
+          if (dayOfWeek >= 1 && dayOfWeek <= 5 && dayMap[dayOfWeek]) {
+            let hours = 0
+            if (r.totalWorkedMinutes && r.totalWorkedMinutes > 0) {
+              hours = r.totalWorkedMinutes / 60
+            } else if (r.checkIn && r.checkOut) {
+              hours = (new Date(r.checkOut).getTime() - new Date(r.checkIn).getTime()) / (1000 * 60 * 60)
+            }
+            dayMap[dayOfWeek].hours += hours
+            dayMap[dayOfWeek].count++
+          }
+        })
+
+        const dayLabels = ['월', '화', '수', '목', '금']
+        const weeklyPattern = [1, 2, 3, 4, 5].map((dayNum, idx) => ({
+          day: dayLabels[idx],
+          hours: dayMap[dayNum].count > 0
+            ? Math.round((dayMap[dayNum].hours / dayMap[dayNum].count) * 10) / 10
+            : 0
+        }))
 
         return {
           period: {
@@ -252,7 +289,7 @@ export async function GET(request: NextRequest) {
             remoteDays,
             officeDays,
             attendanceRate: attendanceRecords.length > 0
-              ? Math.round((presentDays / attendanceRecords.length) * 100)
+              ? Math.round((totalAttendedDays / attendanceRecords.length) * 100)
               : 0,
             avgWorkHours: attendanceRecords.length > 0
               ? Math.round((totalHours / attendanceRecords.length) * 10) / 10
@@ -260,15 +297,12 @@ export async function GET(request: NextRequest) {
             totalWorkHours: Math.round(totalHours * 10) / 10
           },
           weekly: {
-            pattern: ['월', '화', '수', '목', '금'].map((day) => ({
-              day,
-              hours: 8
-            }))
+            pattern: weeklyPattern
           },
           yearly: {
             totalDays: attendanceRecords.length,
             attendanceRate: attendanceRecords.length > 0
-              ? Math.round((presentDays / attendanceRecords.length) * 100)
+              ? Math.round((totalAttendedDays / attendanceRecords.length) * 100)
               : 0,
             avgWorkHours: attendanceRecords.length > 0
               ? Math.round((totalHours / attendanceRecords.length) * 10) / 10

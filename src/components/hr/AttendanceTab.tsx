@@ -190,9 +190,13 @@ export default function AttendanceTab({ userId, workspaceId, isAdmin }: Attendan
         setTodayAttendance(data)
       } else {
         toast.error(data.error || '출근 기록 실패')
+        // 에러 시에도 서버 상태와 동기화
+        await loadAttendance()
       }
     } catch (e) {
       toast.error('출근 기록 중 오류가 발생했습니다')
+      // 네트워크 에러 시에도 서버 상태 확인
+      await loadAttendance()
     }
   }
 
@@ -230,9 +234,13 @@ export default function AttendanceTab({ userId, workspaceId, isAdmin }: Attendan
         setTodayAttendance(data)
       } else {
         toast.error(data.error || '근무 재시작 실패')
+        // 에러 시에도 서버 상태와 동기화
+        await loadAttendance()
       }
     } catch (e) {
       toast.error('근무 재시작 중 오류가 발생했습니다')
+      // 네트워크 에러 시에도 서버 상태 확인
+      await loadAttendance()
     }
   }
 
@@ -254,9 +262,13 @@ export default function AttendanceTab({ userId, workspaceId, isAdmin }: Attendan
         setTodayAttendance(data)
       } else {
         toast.error(data.error || '퇴근 기록 실패')
+        // 에러 시에도 서버 상태와 동기화
+        await loadAttendance()
       }
     } catch (e) {
       toast.error('퇴근 기록 중 오류가 발생했습니다')
+      // 네트워크 에러 시에도 서버 상태 확인
+      await loadAttendance()
     }
   }
 

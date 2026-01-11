@@ -91,18 +91,25 @@ export default function ProfilePage() {
       }
 
       // 직원 정보 업데이트 (phone, company, department 등)
-      const employeeResponse = await fetch('/api/employees/me', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          nameKor: profile.displayName,
-          mobile: profile.phone,
-          // company, department는 Employee 테이블에 없을 수 있음
+      if (currentWorkspace?.id) {
+        await fetch('/api/employees/me', {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-workspace-id': currentWorkspace.id
+          },
+          body: JSON.stringify({
+            nameKor: profile.displayName,
+            mobile: profile.phone,
+          })
         })
-      })
+      }
 
-      toast.success('프로필이 저장되었습니다. 변경사항은 다음 로그인 시 반영됩니다.')
+      toast.success('프로필이 저장되었습니다.')
       setHasChanges(false)
+
+      // 페이지 새로고침하여 세션 정보 갱신
+      window.location.reload()
     } catch (error) {
       if (isDev) console.error('Error saving profile:', error)
       toast.error('프로필 저장 중 오류가 발생했습니다.')

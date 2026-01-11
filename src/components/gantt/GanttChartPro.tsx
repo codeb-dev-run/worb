@@ -32,13 +32,20 @@ interface GanttChartProProps {
   onDateChange?: (task: ExtendedTask) => void
 }
 
+// 셀 너비 상수 정의 (헤더와 테이블에서 동일하게 사용)
+const COLUMN_WIDTHS = {
+  taskName: '155px',
+  startDate: '100px',
+  endDate: '100px',
+}
+
 // 커스텀 TaskListHeader 컴포넌트
 const TaskListHeader: React.FC<{
   headerHeight: number
   rowWidth: string
   fontFamily: string
   fontSize: string
-}> = ({ headerHeight, rowWidth, fontFamily, fontSize }) => {
+}> = ({ headerHeight, fontFamily, fontSize }) => {
   return (
     <div
       className={styles.taskListHeader}
@@ -48,13 +55,13 @@ const TaskListHeader: React.FC<{
         fontSize: fontSize,
       }}
     >
-      <div className={styles.taskListHeaderCell} style={{ minWidth: rowWidth }}>
+      <div className={styles.taskListHeaderCell} style={{ width: COLUMN_WIDTHS.taskName, minWidth: COLUMN_WIDTHS.taskName }}>
         작업명
       </div>
-      <div className={styles.taskListHeaderCell} style={{ minWidth: '100px' }}>
+      <div className={styles.taskListHeaderCell} style={{ width: COLUMN_WIDTHS.startDate, minWidth: COLUMN_WIDTHS.startDate }}>
         시작일
       </div>
-      <div className={styles.taskListHeaderCell} style={{ minWidth: '100px' }}>
+      <div className={styles.taskListHeaderCell} style={{ width: COLUMN_WIDTHS.endDate, minWidth: COLUMN_WIDTHS.endDate }}>
         종료일
       </div>
     </div>
@@ -101,7 +108,7 @@ const TaskListTable: React.FC<{
           >
             <div
               className={styles.taskListCell}
-              style={{ minWidth: rowWidth }}
+              style={{ width: COLUMN_WIDTHS.taskName, minWidth: COLUMN_WIDTHS.taskName }}
               title={task.name}
             >
               <div className={styles.taskNameWrapper}>
@@ -131,10 +138,10 @@ const TaskListTable: React.FC<{
                 </span>
               </div>
             </div>
-            <div className={styles.taskListCell} style={{ minWidth: '100px' }}>
+            <div className={styles.taskListCell} style={{ width: COLUMN_WIDTHS.startDate, minWidth: COLUMN_WIDTHS.startDate }}>
               {formatDate(task.start)}
             </div>
-            <div className={styles.taskListCell} style={{ minWidth: '100px' }}>
+            <div className={styles.taskListCell} style={{ width: COLUMN_WIDTHS.endDate, minWidth: COLUMN_WIDTHS.endDate }}>
               {formatDate(task.end)}
             </div>
           </div>
@@ -363,10 +370,79 @@ export default function GanttChartPro({
   const [editModalOpen, setEditModalOpen] = useState(false)
   const [editingTask, setEditingTask] = useState<ExtendedTask | null>(null)
   const [localTasks, setLocalTasks] = useState<ExtendedTask[]>(tasks)
+  const ganttWrapperRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     setLocalTasks(tasks)
   }, [tasks])
+
+  // 드래그 중 뷰포트 자동 스크롤
+  useEffect(() => {
+    const ganttWrapper = ganttWrapperRef.current
+    if (!ganttWrapper) return
+
+    let isDragging = false
+    let scrollInterval: NodeJS.Timeout | null = null
+    const scrollSpeed = 10
+    const edgeThreshold = 50 // 가장자리에서 얼마나 가까워야 스크롤할지
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isDragging) return
+
+      const rect = ganttWrapper.getBoundingClientRect()
+      const mouseX = e.clientX - rect.left
+      const mouseY = e.clientY - rect.top
+
+      // 가로 스크롤
+      if (mouseX < edgeThreshold) {
+        // 왼쪽 가장자리에 가까움 - 왼쪽으로 스크롤
+        ganttWrapper.scrollLeft -= scrollSpeed
+      } else if (mouseX > rect.width - edgeThreshold) {
+        // 오른쪽 가장자리에 가까움 - 오른쪽으로 스크롤
+        ganttWrapper.scrollLeft += scrollSpeed
+      }
+
+      // 세로 스크롤
+      if (mouseY < edgeThreshold) {
+        ganttWrapper.scrollTop -= scrollSpeed
+      } else if (mouseY > rect.height - edgeThreshold) {
+        ganttWrapper.scrollTop += scrollSpeed
+      }
+    }
+
+    const handleMouseDown = (e: MouseEvent) => {
+      // 간트 바에서 드래그 시작 감지
+      const target = e.target as HTMLElement
+      if (target.closest('[class*="bar"]') || target.closest('[class*="handle"]')) {
+        isDragging = true
+        // 부드러운 스크롤을 위한 interval 시작
+        scrollInterval = setInterval(() => {
+          // interval 내에서는 마지막 마우스 위치로 체크
+        }, 16) // ~60fps
+      }
+    }
+
+    const handleMouseUp = () => {
+      isDragging = false
+      if (scrollInterval) {
+        clearInterval(scrollInterval)
+        scrollInterval = null
+      }
+    }
+
+    ganttWrapper.addEventListener('mousedown', handleMouseDown)
+    document.addEventListener('mousemove', handleMouseMove)
+    document.addEventListener('mouseup', handleMouseUp)
+
+    return () => {
+      ganttWrapper.removeEventListener('mousedown', handleMouseDown)
+      document.removeEventListener('mousemove', handleMouseMove)
+      document.removeEventListener('mouseup', handleMouseUp)
+      if (scrollInterval) {
+        clearInterval(scrollInterval)
+      }
+    }
+  }, [])
 
   const handleTaskClick = (task: ExtendedTask) => {
     setSelectedTask(task)
@@ -482,7 +558,7 @@ export default function GanttChartPro({
       </div>
 
       {/* 간트차트 */}
-      <div className={styles.ganttWrapper}>
+      <div ref={ganttWrapperRef} className={styles.ganttWrapper}>
         {visibleTasks.length > 0 ? (
           <Gantt
             tasks={visibleTasks}

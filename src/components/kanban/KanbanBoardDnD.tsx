@@ -331,7 +331,7 @@ function DroppableColumn({
     })
 
     return (
-        <div className="flex-shrink-0 w-80">
+        <div className="flex-shrink-0 w-80 min-w-[280px] max-w-[360px] flex-1">
             <Card className={`bg-muted/30 p-4 h-full flex flex-col max-h-full transition-colors rounded-lg ${isOverColumn ? 'bg-lime-50/50 ring-2 ring-lime-400/30' : ''}`}>
                 <div className="flex items-center justify-between mb-4 flex-shrink-0">
                     <div className="flex items-center gap-2">

@@ -2,6 +2,16 @@
 // Calendar Types
 // ===========================================
 
+export type RecurrenceType = 'none' | 'daily' | 'weekly' | 'monthly' | 'yearly'
+
+export interface RecurrenceRule {
+  type: RecurrenceType
+  interval: number // every N days/weeks/months/years
+  endDate?: string // 반복 종료일
+  endCount?: number // 반복 횟수
+  weekDays?: number[] // 주간 반복 시 요일 (0=일, 1=월, ..., 6=토)
+}
+
 export interface CalendarEvent {
   id: string
   title: string
@@ -18,6 +28,8 @@ export interface CalendarEvent {
     name: string
     avatar: string
   }
+  recurrence?: RecurrenceRule
+  recurringEventId?: string // 반복 이벤트의 원본 ID (수정/삭제 시 사용)
 }
 
 export interface CalendarAttendee {
@@ -41,6 +53,9 @@ export interface NewEventForm {
   isAllDay: boolean
   type: 'personal' | 'team' | 'meeting'
   projectId: string
+  recurrenceType: RecurrenceType
+  recurrenceInterval: number
+  recurrenceEndDate: string
 }
 
 export interface NewMeetingForm {
@@ -82,7 +97,10 @@ export const INITIAL_EVENT_FORM: NewEventForm = {
   color: '#a3e635',
   isAllDay: false,
   type: 'personal',
-  projectId: ''
+  projectId: '',
+  recurrenceType: 'none',
+  recurrenceInterval: 1,
+  recurrenceEndDate: ''
 }
 
 export const INITIAL_MEETING_FORM: NewMeetingForm = {

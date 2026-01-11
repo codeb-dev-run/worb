@@ -8,7 +8,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '@/lib/auth-context'
 import { useWorkspace } from '@/lib/workspace-context'
 import { Task as TaskType, TaskStatus, TaskPriority, KanbanTask } from '@/types/task'
-import { getAllTasks, updateTask, deleteTask, createTask } from '@/actions/task'
+import { getAllTasks, updateTask, deleteTask, createTask, getTrashedTasks, restoreTask, permanentDeleteTask, emptyTrash } from '@/actions/task'
 import { getProjects } from '@/actions/project'
 import { customToast as toast } from '@/components/notification/NotificationToast'
 import { ProjectOption, DEFAULT_COLUMNS, TrashedTask, KanbanColumnWithTasks } from '../types'
@@ -47,43 +47,36 @@ export function useTasksData(): UseTasksDataReturn {
   const [loading, setLoading] = useState(true)
   const [trashedTasks, setTrashedTasks] = useState<TrashedTask[]>([])
 
-  // Load trash data from localStorage
-  useEffect(() => {
-    if (!currentWorkspace?.id) return
+  // Load trash data from server
+  const loadTrashedTasks = useCallback(async () => {
+    if (!userProfile || !currentWorkspace) return
 
-    const stored = localStorage.getItem(`trash_tasks_${currentWorkspace.id}`)
-    if (stored) {
-      try {
-        setTrashedTasks(JSON.parse(stored))
-      } catch (e) {
-        if (isDev) console.error('Failed to parse trash data:', e)
-      }
+    try {
+      const trashed = await getTrashedTasks(userProfile.uid, currentWorkspace.id)
+      setTrashedTasks(trashed as unknown as TrashedTask[])
+    } catch (e) {
+      if (isDev) console.error('Failed to load trashed tasks:', e)
     }
-  }, [currentWorkspace?.id])
-
-  // Save trash data to localStorage
-  const saveTrashedTasks = useCallback((newTrashedTasks: TrashedTask[]) => {
-    if (currentWorkspace?.id) {
-      localStorage.setItem(`trash_tasks_${currentWorkspace.id}`, JSON.stringify(newTrashedTasks))
-      setTrashedTasks(newTrashedTasks)
-    }
-  }, [currentWorkspace?.id])
+  }, [userProfile, currentWorkspace])
 
   const loadData = useCallback(async () => {
     if (!userProfile || !currentWorkspace) return
 
     try {
       if (isDev) console.log('[TasksPage] Loading data for workspace:', currentWorkspace.id)
-      const [tasksData, projectsData] = await Promise.all([
+      const [tasksData, projectsData, trashedData] = await Promise.all([
         getAllTasks(userProfile.uid, currentWorkspace.id),
-        getProjects(userProfile.uid, currentWorkspace.id)
+        getProjects(userProfile.uid, currentWorkspace.id),
+        getTrashedTasks(userProfile.uid, currentWorkspace.id)
       ])
 
       if (isDev) console.log('[TasksPage] Loaded tasks:', tasksData.length)
       if (isDev) console.log('[TasksPage] Loaded projects:', projectsData.length)
+      if (isDev) console.log('[TasksPage] Loaded trashed:', trashedData.length)
 
       setTasks(tasksData as unknown as TaskType[])
       setProjects(projectsData as ProjectOption[])
+      setTrashedTasks(trashedData as unknown as TrashedTask[])
     } catch (error) {
       if (isDev) console.error('Error loading tasks data:', error)
       toast.error('데이터를 불러오는데 실패했습니다.')
@@ -194,36 +187,45 @@ export function useTasksData(): UseTasksDataReturn {
     }
   }, [tasks, loadData])
 
-  // Trash handlers
-  const handleMoveToTrash = useCallback((taskId: string) => {
-    const taskToTrash = tasks.find(t => t.id === taskId)
-    if (!taskToTrash) return
-
-    const trashedTask: TrashedTask = {
-      ...taskToTrash,
-      deletedAt: new Date().toISOString()
-    }
-    saveTrashedTasks([trashedTask, ...trashedTasks])
-    setTasks(prev => prev.filter(t => t.id !== taskId))
-    toast.success('휴지통으로 이동되었습니다.')
-  }, [tasks, trashedTasks, saveTrashedTasks])
-
-  const handleRestoreTask = useCallback((taskId: string) => {
-    const taskToRestore = trashedTasks.find(t => t.id === taskId)
-    if (!taskToRestore) return
-
-    saveTrashedTasks(trashedTasks.filter(t => t.id !== taskId))
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { deletedAt, ...restoredTask } = taskToRestore
-    setTasks(prev => [restoredTask as TaskType, ...prev])
-    toast.success('작업이 복원되었습니다.')
-  }, [trashedTasks, saveTrashedTasks])
-
-  const handlePermanentDelete = useCallback(async (taskId: string) => {
+  // Trash handlers - Server-side soft delete
+  const handleMoveToTrash = useCallback(async (taskId: string) => {
     try {
       const result = await deleteTask(taskId)
       if (result.success) {
-        saveTrashedTasks(trashedTasks.filter(t => t.id !== taskId))
+        // Refresh data from server
+        loadData()
+        toast.success('휴지통으로 이동되었습니다.')
+      } else {
+        throw new Error('Delete failed')
+      }
+    } catch (error) {
+      if (isDev) console.error('Error moving to trash:', error)
+      toast.error('휴지통 이동 실패')
+    }
+  }, [loadData])
+
+  const handleRestoreTask = useCallback(async (taskId: string) => {
+    try {
+      const result = await restoreTask(taskId)
+      if (result.success) {
+        // Refresh data from server
+        loadData()
+        toast.success('작업이 복원되었습니다.')
+      } else {
+        throw new Error('Restore failed')
+      }
+    } catch (error) {
+      if (isDev) console.error('Error restoring task:', error)
+      toast.error('복원 실패')
+    }
+  }, [loadData])
+
+  const handlePermanentDelete = useCallback(async (taskId: string) => {
+    try {
+      const result = await permanentDeleteTask(taskId)
+      if (result.success) {
+        // Refresh data from server
+        loadData()
         toast.success('영구 삭제되었습니다.')
       } else {
         throw new Error('Delete failed')
@@ -232,20 +234,25 @@ export function useTasksData(): UseTasksDataReturn {
       if (isDev) console.error('Error deleting task:', error)
       toast.error('삭제 실패')
     }
-  }, [trashedTasks, saveTrashedTasks])
+  }, [loadData])
 
   const handleEmptyTrash = useCallback(async () => {
     if (trashedTasks.length === 0) return
+    if (!userProfile || !currentWorkspace) return
 
     try {
-      await Promise.all(trashedTasks.map(task => deleteTask(task.id)))
-      saveTrashedTasks([])
-      toast.success('휴지통을 비웠습니다.')
+      const result = await emptyTrash(userProfile.uid, currentWorkspace.id)
+      if (result.success) {
+        setTrashedTasks([])
+        toast.success('휴지통을 비웠습니다.')
+      } else {
+        throw new Error('Empty trash failed')
+      }
     } catch (error) {
       if (isDev) console.error('Error emptying trash:', error)
       toast.error('휴지통 비우기 실패')
     }
-  }, [trashedTasks, saveTrashedTasks])
+  }, [trashedTasks.length, userProfile, currentWorkspace])
 
   const getFilteredTasks = useCallback((filterStatus: string, filterProject: string): TaskType[] => {
     return tasks

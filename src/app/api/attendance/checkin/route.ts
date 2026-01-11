@@ -32,10 +32,12 @@ export async function POST(request: NextRequest) {
       where: { workspaceId: workspaceId || null }
     })
 
-    if (policy && policy.officeIpWhitelist && (policy.officeIpWhitelist as string[]).length > 0) {
-      const officeIps = policy.officeIpWhitelist as string[]
-      const isOfficeIP = ipAddress && officeIps.includes(ipAddress)
+    const officeIps = (policy?.officeIpWhitelist as string[]) || []
+    const hasIpWhitelist = officeIps.length > 0
+    const isOfficeIP = ipAddress && officeIps.includes(ipAddress)
 
+    // IP 화이트리스트가 설정된 경우에만 검증
+    if (hasIpWhitelist) {
       // Block: Trying to check-in as OFFICE from non-office IP
       if (workLocation === 'OFFICE' && !isOfficeIP) {
         secureLogger.warn('Office check-in attempted from non-office IP', {
@@ -66,6 +68,7 @@ export async function POST(request: NextRequest) {
         )
       }
     }
+    // IP 화이트리스트가 없으면 사무실 출근 제한 없음 (워크스페이스 설정에 따라 동작)
 
     const now = new Date()
     const today = new Date()

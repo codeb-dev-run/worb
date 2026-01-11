@@ -71,7 +71,7 @@ function AuthProviderContent({ children }: { children: React.ReactNode }) {
           email: sessionUser.email || '',
           displayName: sessionUser.name || '',
           role: sessionUser.role || 'member',
-          createdAt: new Date().toISOString(),
+          createdAt: sessionUser.createdAt || new Date().toISOString(),
           lastLogin: new Date().toISOString(),
           isOnline: true,
           avatar: sessionUser.image || '',

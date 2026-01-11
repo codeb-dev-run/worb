@@ -81,6 +81,17 @@
   display: flex;
   align-items: center;
   height: 100%;
+  box-sizing: border-box;
+}
+
+.taskListHeaderCell:first-child {
+  min-width: 155px !important;
+}
+
+.taskListHeaderCell:nth-child(2),
+.taskListHeaderCell:nth-child(3) {
+  min-width: 100px !important;
+  max-width: 100px !important;
 }
 
 .taskListHeaderCell:last-child {
@@ -98,6 +109,8 @@
   border-bottom: 1px solid #f3f4f6;
   cursor: pointer;
   transition: background-color 0.15s ease;
+  width: fit-content;
+  min-width: 100%;
 }
 
 .taskListRow:hover {

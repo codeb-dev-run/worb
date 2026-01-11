@@ -13,7 +13,7 @@ import { secureLogger } from '@/lib/security'
 export async function getTasks(projectId: string) {
     try {
         const tasks = await prisma.task.findMany({
-            where: { projectId },
+            where: { projectId, deletedAt: null },
             include: {
                 assignee: true,
                 attachments: true,
@@ -71,14 +71,20 @@ export async function getAllTasks(
         const userProjectIds = userProjects.map(p => p.projectId)
 
         const whereClause: any = {
+            deletedAt: null, // 삭제된 작업 제외
             OR: [
-                // 1. 내가 만든 개인 작업 (projectId가 null)
-                { createdBy: userId, projectId: null },
+                // 1. 내가 만든 개인 작업 (projectId가 null이고 assignee가 없거나 나인 경우)
+                {
+                    createdBy: userId,
+                    projectId: null,
+                    OR: [
+                        { assigneeId: null },
+                        { assigneeId: userId }
+                    ]
+                },
                 // 2. 나에게 할당된 작업
                 { assigneeId: userId },
-                // 3. 내가 만든 작업
-                { createdBy: userId },
-                // 4. 내가 멤버인 프로젝트의 모든 작업 (프로젝트 협업)
+                // 3. 내가 멤버인 프로젝트의 모든 작업 (프로젝트 협업)
                 { projectId: { in: userProjectIds } }
             ]
         }
@@ -240,10 +246,12 @@ export async function updateTask(taskId: string, data: Partial<Task>) {
     }
 }
 
+// Soft delete - 휴지통으로 이동
 export async function deleteTask(taskId: string) {
     try {
-        const task = await prisma.task.delete({
-            where: { id: taskId }
+        const task = await prisma.task.update({
+            where: { id: taskId },
+            data: { deletedAt: new Date() }
         })
 
         revalidatePath(`/projects/${task.projectId}`)
@@ -260,6 +268,155 @@ export async function deleteTask(taskId: string) {
         return { success: true }
     } catch (error) {
         secureLogger.error('Failed to delete task', error as Error, { operation: 'task.delete' })
+        return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
+    }
+}
+
+// 휴지통에서 복원
+export async function restoreTask(taskId: string) {
+    try {
+        const task = await prisma.task.update({
+            where: { id: taskId },
+            data: { deletedAt: null }
+        })
+
+        revalidatePath(`/projects/${task.projectId}`)
+        if (task.projectId) {
+            await updateProjectProgress(task.projectId)
+            emitToProject(task.projectId, 'task-restored', task)
+        }
+
+        await invalidateCache('dashboard:stats:*')
+
+        return {
+            success: true,
+            task: {
+                ...task,
+                startDate: task.startDate?.toISOString() || null,
+                dueDate: task.dueDate?.toISOString() || null,
+                createdAt: task.createdAt.toISOString(),
+                updatedAt: task.updatedAt.toISOString(),
+            }
+        }
+    } catch (error) {
+        secureLogger.error('Failed to restore task', error as Error, { operation: 'task.restore' })
+        return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
+    }
+}
+
+// 영구 삭제
+export async function permanentDeleteTask(taskId: string) {
+    try {
+        const task = await prisma.task.delete({
+            where: { id: taskId }
+        })
+
+        revalidatePath(`/projects/${task.projectId}`)
+        if (task.projectId) {
+            await updateProjectProgress(task.projectId)
+        }
+
+        await invalidateCache('dashboard:stats:*')
+
+        return { success: true }
+    } catch (error) {
+        secureLogger.error('Failed to permanently delete task', error as Error, { operation: 'task.permanentDelete' })
+        return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
+    }
+}
+
+// 휴지통 조회
+export async function getTrashedTasks(userId: string, workspaceId?: string) {
+    try {
+        const userProjects = await prisma.projectMember.findMany({
+            where: { userId },
+            select: { projectId: true }
+        })
+        const userProjectIds = userProjects.map(p => p.projectId)
+
+        const whereClause: any = {
+            deletedAt: { not: null },
+            OR: [
+                { createdBy: userId, projectId: null },
+                { assigneeId: userId },
+                { createdBy: userId },
+                { projectId: { in: userProjectIds } }
+            ]
+        }
+
+        if (workspaceId) {
+            whereClause.AND = [
+                {
+                    OR: [
+                        { project: { workspaceId: workspaceId } },
+                        { projectId: null, createdBy: userId }
+                    ]
+                }
+            ]
+        }
+
+        const tasks = await prisma.task.findMany({
+            where: whereClause,
+            include: {
+                project: { select: { name: true, workspaceId: true } },
+                assignee: true
+            },
+            orderBy: { deletedAt: 'desc' }
+        })
+
+        const uniqueTasks = Array.from(new Map(tasks.map(t => [t.id, t])).values())
+
+        return uniqueTasks.map(t => ({
+            ...t,
+            projectName: t.project?.name || 'Personal',
+            assigneeName: t.assignee?.name,
+            startDate: t.startDate?.toISOString() || null,
+            dueDate: t.dueDate?.toISOString() || null,
+            createdAt: t.createdAt.toISOString(),
+            updatedAt: t.updatedAt.toISOString(),
+            deletedAt: t.deletedAt?.toISOString() || null,
+        }))
+    } catch (error) {
+        secureLogger.error('Failed to fetch trashed tasks', error as Error, { operation: 'task.listTrashed' })
+        return []
+    }
+}
+
+// 휴지통 비우기
+export async function emptyTrash(userId: string, workspaceId?: string) {
+    try {
+        const userProjects = await prisma.projectMember.findMany({
+            where: { userId },
+            select: { projectId: true }
+        })
+        const userProjectIds = userProjects.map(p => p.projectId)
+
+        const whereClause: any = {
+            deletedAt: { not: null },
+            OR: [
+                { createdBy: userId, projectId: null },
+                { createdBy: userId },
+                { projectId: { in: userProjectIds } }
+            ]
+        }
+
+        if (workspaceId) {
+            whereClause.AND = [
+                {
+                    OR: [
+                        { project: { workspaceId: workspaceId } },
+                        { projectId: null, createdBy: userId }
+                    ]
+                }
+            ]
+        }
+
+        await prisma.task.deleteMany({ where: whereClause })
+        await invalidateCache('dashboard:stats:*')
+
+        return { success: true }
+    } catch (error) {
+        secureLogger.error('Failed to empty trash', error as Error, { operation: 'task.emptyTrash' })
         return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
     }
 }
