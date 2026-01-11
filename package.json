@@ -34,8 +34,6 @@
     "analyze:browser": "ANALYZE=true BUNDLE_ANALYZE=browser npm run build"
   },
   "dependencies": {
-    "@codeblabdev-max/mcp-server": "^6.0.0",
-    "@codeblabdev-max/we-cli": "^7.0.9",
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
