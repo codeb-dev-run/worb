@@ -73,10 +73,12 @@ jobs:
 
       - name: Deploy via CodeB MCP API v7.0
         id: deploy
+        timeout-minutes: 5
         run: |
           echo "Deploying to ${{ steps.env.outputs.environment }}..."
 
-          RESPONSE=$(curl -sf -X POST "https://api.codeb.kr/api/tool" \
+          # API 호출 (최대 3분 대기 - 이미지 pull + health check 시간 포함)
+          RESPONSE=$(curl -sf --max-time 180 -X POST "https://api.codeb.kr/api/tool" \
             -H "X-API-Key: ${{ secrets.CODEB_API_KEY }}" \
             -H "Content-Type: application/json" \
             -d '{
