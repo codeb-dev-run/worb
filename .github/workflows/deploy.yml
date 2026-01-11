@@ -116,11 +116,11 @@ jobs:
             REVISION=${{ github.sha }}
 
   # ============================================
-  # Deploy via SSH
-  # Requires: DEPLOY_SSH_KEY, DEPLOY_HOST secrets
+  # Deploy via MCP API (Developer)
+  # Requires: CODEB_API_KEY secret
   # ============================================
   deploy:
-    name: Deploy via SSH
+    name: Deploy via API
     runs-on: ubuntu-latest
     needs: build
     if: |
@@ -146,61 +146,37 @@ jobs:
             echo "url=worb-staging.codeb.kr" >> $GITHUB_OUTPUT
           fi
 
-      - name: Setup SSH
+      - name: Deploy via CodeB API
         run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -H ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts 2>/dev/null
+          # Call CodeB API for deployment
+          response=$(curl -sf -X POST "https://app.codeb.kr/api/deploy" \
+            -H "Authorization: Bearer ${{ secrets.CODEB_API_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "project": "worb",
+              "environment": "'${{ env.ENVIRONMENT }}'",
+              "image": "'${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}'",
+              "port": '${{ steps.vars.outputs.port }}'
+            }' 2>&1) || true
 
-      - name: Deploy to Server
-        run: |
-          IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}"
-          CONTAINER="${{ steps.vars.outputs.container_name }}"
-          PORT="${{ steps.vars.outputs.port }}"
+          echo "API Response: $response"
 
-          ssh -o StrictHostKeyChecking=no root@${{ secrets.DEPLOY_HOST }} << EOF
-            set -e
-            echo "🚀 Deploying $CONTAINER..."
+          # Check if deployment was successful
+          success=$(echo "$response" | jq -r '.success // false')
+          if [ "$success" != "true" ]; then
+            echo "Deployment failed!"
+            error=$(echo "$response" | jq -r '.error // "Unknown error"')
+            echo "Error: $error"
+            exit 1
+          fi
 
-            # Login to GHCR
-            echo "${{ secrets.GHCR_PAT }}" | podman login ghcr.io -u ${{ github.actor }} --password-stdin
-
-            # Pull new image
-            podman pull $IMAGE
-
-            # Stop and remove old container
-            podman stop $CONTAINER 2>/dev/null || true
-            podman rm $CONTAINER 2>/dev/null || true
-
-            # Load environment file
-            ENV_FILE="/opt/codeb/envs/worb-${{ env.ENVIRONMENT }}.env"
-            if [ ! -f "\$ENV_FILE" ]; then
-              echo "Warning: \$ENV_FILE not found, using defaults"
-              ENV_FILE=""
-            fi
-
-            # Run new container
-            podman run -d \
-              --name $CONTAINER \
-              --network codeb-network \
-              -p $PORT:3000 \
-              \${ENV_FILE:+--env-file \$ENV_FILE} \
-              -e NODE_ENV=production \
-              --restart unless-stopped \
-              $IMAGE
-
-            # Health check
-            sleep 10
-            if podman ps | grep -q $CONTAINER; then
-              echo "✅ Container $CONTAINER is running"
-              podman logs --tail 20 $CONTAINER
-            else
-              echo "❌ Container failed to start"
-              podman logs $CONTAINER
-              exit 1
-            fi
-          EOF
+          echo ""
+          echo "=========================================="
+          echo "Deployment Complete!"
+          echo "=========================================="
+          echo "Project: worb"
+          echo "Environment: ${{ env.ENVIRONMENT }}"
+          echo "URL: https://${{ steps.vars.outputs.url }}"
 
       - name: Deployment summary
         if: always()
@@ -209,7 +185,7 @@ jobs:
           echo "=========================================="
           echo "Deployment Summary"
           echo "=========================================="
-          echo "Method: SSH Direct"
+          echo "Method: API (Developer)"
           echo "Environment: ${{ env.ENVIRONMENT }}"
           echo "Container: ${{ steps.vars.outputs.container_name }}"
           echo "Image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}"
