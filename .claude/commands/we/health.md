@@ -1,12 +1,12 @@
 ---
-allowed-tools: [Read, Bash, TodoWrite, mcp__codeb-deploy__healthcheck, mcp__codeb-deploy__analyze_server, mcp__codeb-deploy__monitoring]
+allowed-tools: [Read, Bash, TodoWrite, mcp__codeb-deploy__health_check, mcp__codeb-deploy__slot_status, mcp__codeb-deploy__slot_list]
 description: "MCP codeb-deploy를 통한 시스템 상태 점검"
 ---
 
-# /we:health - 시스템 상태 점검
+# /we:health - 시스템 상태 점검 (v7.0)
 
 ## 🎯 목적
-MCP codeb-deploy를 통해 컨테이너, 서비스, 리소스, 네트워크 연결 상태를 점검합니다.
+MCP codeb-deploy를 통해 컨테이너, 서비스, Blue-Green 슬롯 상태를 점검합니다.
 
 ## 📌 중요 규칙
 - **모든 응답은 한글로 작성**
@@ -18,17 +18,10 @@ MCP codeb-deploy를 통해 컨테이너, 서비스, 리소스, 네트워크 연�
 /we:health [옵션]
 ```
 
-## 옵션
-- `--verbose`, `-v` - 상세 정보 표시
-- `--json`, `-j` - JSON 형식으로 출력
-- `--watch`, `-w` - 지속적 모니터링
-- `--interval`, `-i` - 모니터링 간격 (초, 기본값: 30)
-
 ## 점검 항목
+- Blue-Green 슬롯 상태
 - 컨테이너 상태 (Podman/Quadlet)
 - 서비스 상태 (systemd)
-- 리소스 사용량 (CPU, 메모리, 디스크)
-- 네트워크 연결
 - 데이터베이스 연결 (PostgreSQL, Redis)
 - SSL 인증서 유효성
 
@@ -40,17 +33,21 @@ MCP codeb-deploy를 통해 컨테이너, 서비스, 리소스, 네트워크 연�
 🚨 심각: 긴급 대응 필요
 ```
 
-## MCP 연동
-- `mcp__codeb-deploy__healthcheck` - 헬스체크 실행
-- `mcp__codeb-deploy__analyze_server` - 서버 전체 분석
-- `mcp__codeb-deploy__monitoring` - 메트릭 및 알림 조회
+## MCP 도구
+- `mcp__codeb-deploy__health_check` - 전체 헬스체크
+- `mcp__codeb-deploy__slot_status` - 특정 프로젝트 슬롯 상태
+- `mcp__codeb-deploy__slot_list` - 전체 슬롯 목록
 
 ## 예제
 ```
-/we:health
-/we:health --verbose
-/we:health --watch --interval 10
-/we:health --json
+mcp__codeb-deploy__health_check
+{}
+
+mcp__codeb-deploy__slot_status
+{
+  "projectName": "myapp",
+  "environment": "production"
+}
 ```
 
 ## 관련 명령어

@@ -1,9 +1,9 @@
 ---
-allowed-tools: [Read, Write, Bash, TodoWrite, mcp__codeb-deploy__setup_domain, mcp__codeb-deploy__remove_domain, mcp__codeb-deploy__check_domain_status, mcp__codeb-deploy__setup_project_domains]
+allowed-tools: [Read, Write, Bash, TodoWrite, mcp__codeb-deploy__domain_setup, mcp__codeb-deploy__domain_delete, mcp__codeb-deploy__domain_list, mcp__codeb-deploy__domain_verify, mcp__codeb-deploy__ssl_status]
 description: "MCP codeb-deploy를 통한 도메인 관리 (설정/삭제/확인/목록)"
 ---
 
-# /we:domain - 도메인 관리
+# /we:domain - 도메인 관리 (v7.0)
 
 ## 🎯 목적
 MCP codeb-deploy를 통해 DNS 설정, SSL 인증서, Caddy 리버스 프록시 설정을 포함한 도메인을 관리합니다.
@@ -20,39 +20,30 @@ MCP codeb-deploy를 통해 DNS 설정, SSL 인증서, Caddy 리버스 프록시 
 
 ## 액션
 - `setup` - DNS 및 SSL로 새 도메인 설정
-- `remove` - 도메인 설정 삭제
-- `check` - 도메인 상태 및 SSL 확인
+- `delete` - 도메인 설정 삭제
+- `verify` - 도메인 DNS 및 SSL 상태 확인
 - `list` - 설정된 모든 도메인 목록
 
-## 옵션
-- `--project`, `-p` - 프로젝트 이름
-- `--ssl` - SSL/TLS 활성화 (Let's Encrypt 자동)
-- `--www` - www 서브도메인 리다이렉트 포함
-- `--force` - 확인 없이 실행
-- `--port` - 리버스 프록시 대상 포트
-
-## 도메인 구조
-```
-기본 도메인: one-q.xyz
-서브도메인 형식:
-  - myapp.one-q.xyz (production)
-  - myapp-staging.one-q.xyz (staging)
-  - myapp-pr-123.one-q.xyz (preview)
-```
-
-## MCP 연동
-- `mcp__codeb-deploy__setup_domain` - 단일 도메인 설정
-- `mcp__codeb-deploy__setup_project_domains` - staging + production 도메인 설정
-- `mcp__codeb-deploy__remove_domain` - 도메인 삭제
-- `mcp__codeb-deploy__check_domain_status` - DNS 및 SSL 상태 확인
+## MCP 도구
+- `mcp__codeb-deploy__domain_setup` - 도메인 설정
+- `mcp__codeb-deploy__domain_delete` - 도메인 삭제
+- `mcp__codeb-deploy__domain_list` - 도메인 목록
+- `mcp__codeb-deploy__domain_verify` - DNS/SSL 검증
+- `mcp__codeb-deploy__ssl_status` - SSL 인증서 상태
 
 ## 예제
 ```
-/we:domain setup myapp.one-q.xyz --ssl --project myapp
-/we:domain setup example.com --ssl --www
-/we:domain check myapp.one-q.xyz
-/we:domain list
-/we:domain remove myapp.one-q.xyz --force
+mcp__codeb-deploy__domain_setup
+{
+  "projectName": "myapp",
+  "domain": "myapp.codeb.kr",
+  "environment": "production"
+}
+
+mcp__codeb-deploy__domain_list
+{
+  "projectName": "myapp"
+}
 ```
 
 ## 관련 명령어

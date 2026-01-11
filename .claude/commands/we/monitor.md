@@ -1,12 +1,12 @@
 ---
-allowed-tools: [Read, Bash, TodoWrite, mcp__codeb-deploy__monitoring, mcp__codeb-deploy__analyze_server]
+allowed-tools: [Read, Bash, TodoWrite, mcp__codeb-deploy__health_check, mcp__codeb-deploy__slot_list, mcp__codeb-deploy__analytics_realtime]
 description: "MCP codeb-deploy를 통한 실시간 시스템 모니터링"
 ---
 
-# /we:monitor - 실시간 모니터링
+# /we:monitor - 실시간 모니터링 (v7.0)
 
 ## 🎯 목적
-MCP codeb-deploy를 통해 알림 및 임계치 설정과 함께 실시간 시스템 모니터링을 수행합니다.
+MCP codeb-deploy를 통해 실시간 시스템 모니터링을 수행합니다.
 
 ## 📌 중요 규칙
 - **모든 응답은 한글로 작성**
@@ -18,35 +18,33 @@ MCP codeb-deploy를 통해 알림 및 임계치 설정과 함께 실시간 시�
 /we:monitor [옵션]
 ```
 
-## 옵션
-- `--metrics`, `-m` - 모니터링할 메트릭: cpu,memory,network,disk (기본값: cpu,memory)
-- `--interval`, `-i` - 업데이트 간격 (초, 기본값: 5)
-- `--duration`, `-d` - 모니터링 시간 (분, 0 = 무한, 기본값: 0)
-- `--threshold`, `-t` - 알림 임계치 (%, 기본값: 80)
-
-## 모니터링 메트릭
-- **CPU**: 사용률, 로드 평균
-- **메모리**: 사용/가용량, 스왑 사용량
-- **디스크**: 마운트 포인트별 사용량
-- **네트워크**: 대역폭, 연결 수
+## 모니터링 항목
+- Blue-Green 슬롯 상태
+- 배포 이력
+- 실시간 트래픽 (Analytics)
+- Web Vitals (LCP, FID, CLS)
 
 ## 상태 표시
 ```
 📊 실시간 모니터링:
-CPU:    ████████░░ 80% ⚠️
-메모리: ██████░░░░ 60% ✅
-디스크: ███████░░░ 70% ✅
+Blue Slot:  ✅ active (v1.2.3)
+Green Slot: ⚠️ deployed (v1.2.4) - 테스트 대기중
 ```
 
-## MCP 연동
-- `mcp__codeb-deploy__monitoring` - 메트릭 조회 및 알림 설정
-- `mcp__codeb-deploy__analyze_server` - 서버 전체 분석
+## MCP 도구
+- `mcp__codeb-deploy__health_check` - 전체 헬스체크
+- `mcp__codeb-deploy__slot_list` - 전체 슬롯 목록
+- `mcp__codeb-deploy__analytics_realtime` - 실시간 메트릭
 
 ## 예제
 ```
-/we:monitor --metrics cpu,memory
-/we:monitor --metrics cpu,memory,disk,network --threshold 90
-/we:monitor --duration 10 --interval 2
+mcp__codeb-deploy__slot_list
+{}
+
+mcp__codeb-deploy__analytics_realtime
+{
+  "projectName": "myapp"
+}
 ```
 
 ## 관련 명령어

@@ -23,6 +23,7 @@ on:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
+  NODE_VERSION: '20'
 
 # Cancel in-progress runs for the same branch
 concurrency:
@@ -31,7 +32,8 @@ concurrency:
 
 jobs:
   # ============================================
-  # Build & Deploy (Self-hosted Runner)
+  # Build & Deploy Job (Self-hosted runner)
+  # App Server에서 직접 빌드 및 배포
   # ============================================
   build-and-deploy:
     name: Build & Deploy
@@ -51,19 +53,7 @@ jobs:
           else
             echo "environment=staging" >> $GITHUB_OUTPUT
           fi
-
-      - name: Set deployment variables
-        id: vars
-        run: |
-          if [ "${{ steps.env.outputs.environment }}" = "production" ]; then
-            echo "container_name=worb" >> $GITHUB_OUTPUT
-            echo "port=4003" >> $GITHUB_OUTPUT
-            echo "url=worb.codeb.kr" >> $GITHUB_OUTPUT
-          else
-            echo "container_name=worb-staging" >> $GITHUB_OUTPUT
-            echo "port=3002" >> $GITHUB_OUTPUT
-            echo "url=worb-staging.codeb.kr" >> $GITHUB_OUTPUT
-          fi
+          echo "image_tag=${{ github.sha }}" >> $GITHUB_OUTPUT
 
       - name: Login to GHCR (Podman)
         run: |
@@ -72,72 +62,64 @@ jobs:
       - name: Build and Push with Podman
         run: |
           IMAGE_TAG="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}"
-          IMAGE_LATEST="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.env.outputs.environment }}"
 
           echo "Building image: $IMAGE_TAG"
-          sudo podman build -t "$IMAGE_TAG" -t "$IMAGE_LATEST" .
+          sudo podman build --no-cache -t "$IMAGE_TAG" .
 
-          echo "Pushing images..."
+          echo "Pushing image: $IMAGE_TAG"
           sudo podman push "$IMAGE_TAG"
-          sudo podman push "$IMAGE_LATEST"
+
+          echo "image_url=$IMAGE_TAG" >> $GITHUB_OUTPUT
 
       - name: Deploy via CodeB MCP API v7.0
-        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop' || github.event_name == 'workflow_dispatch'
+        id: deploy
         run: |
-          IMAGE_TAG="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}"
+          echo "Deploying to ${{ steps.env.outputs.environment }}..."
 
-          # Call CodeB MCP API v7.0 for deployment
-          response=$(curl -sf -X POST "https://api.codeb.kr/api/tool" \
+          RESPONSE=$(curl -sf -X POST "https://api.codeb.kr/api/tool" \
             -H "X-API-Key: ${{ secrets.CODEB_API_KEY }}" \
             -H "Content-Type: application/json" \
             -d '{
               "tool": "deploy",
               "params": {
                 "projectName": "worb",
-                "environment": "${{ steps.env.outputs.environment }}",
-                "image": "'"$IMAGE_TAG"'",
-                "version": "${{ github.sha }}"
+                "environment": "'${{ steps.env.outputs.environment }}'",
+                "version": "'${{ github.sha }}'",
+                "image": "'${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}'"
               }
             }' 2>&1) || true
 
-          echo "API Response: $response"
+          echo "API Response: $RESPONSE"
 
-          # Check if deployment was successful
-          success=$(echo "$response" | jq -r '.success // false')
-          if [ "$success" != "true" ]; then
-            echo "Deployment failed!"
-            error=$(echo "$response" | jq -r '.error // "Unknown error"')
-            echo "Error: $error"
+          # Check success
+          SUCCESS=$(echo "$RESPONSE" | jq -r '.success // false')
+          if [ "$SUCCESS" = "true" ]; then
+            PREVIEW_URL=$(echo "$RESPONSE" | jq -r '.result.previewUrl // "N/A"')
+            SLOT=$(echo "$RESPONSE" | jq -r '.result.slot // "unknown"')
+            echo "preview_url=$PREVIEW_URL" >> $GITHUB_OUTPUT
+            echo "slot=$SLOT" >> $GITHUB_OUTPUT
+            echo "✅ Deploy success! Slot: $SLOT"
+          else
+            ERROR=$(echo "$RESPONSE" | jq -r '.error // "Unknown error"')
+            echo "❌ Deploy failed: $ERROR"
             exit 1
           fi
 
-          # Extract preview URL
-          previewUrl=$(echo "$response" | jq -r '.previewUrl // "N/A"')
-          slot=$(echo "$response" | jq -r '.slot // "N/A"')
-          port=$(echo "$response" | jq -r '.port // "N/A"')
+      - name: Cleanup old images
+        if: always()
+        run: |
+          sudo podman image prune -f || true
 
-          echo ""
-          echo "=========================================="
-          echo "Deployment Complete!"
-          echo "=========================================="
-          echo "Project: worb"
-          echo "Environment: ${{ steps.env.outputs.environment }}"
-          echo "Slot: $slot"
-          echo "Port: $port"
-          echo "Preview URL: $previewUrl"
-          echo "URL: https://${{ steps.vars.outputs.url }}"
-
-      - name: Deployment summary
+      - name: Deployment Summary
         if: always()
         run: |
           echo ""
           echo "=========================================="
           echo "Deployment Summary"
           echo "=========================================="
-          echo "Method: Self-hosted Runner + MCP API v7.0"
+          echo "Project: worb"
           echo "Environment: ${{ steps.env.outputs.environment }}"
-          echo "Container: ${{ steps.vars.outputs.container_name }}"
+          echo "Slot: ${{ steps.deploy.outputs.slot }}"
           echo "Image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}"
-          echo "Port: ${{ steps.vars.outputs.port }}"
-          echo "URL: https://${{ steps.vars.outputs.url }}"
+          echo "Preview URL: ${{ steps.deploy.outputs.preview_url }}"
           echo "Commit: ${{ github.sha }}"
