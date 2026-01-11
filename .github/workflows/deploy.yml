@@ -55,27 +55,21 @@ jobs:
           fi
           echo "image_tag=${{ github.sha }}" >> $GITHUB_OUTPUT
 
-      - name: Setup GHCR Authentication
+      - name: Login to GHCR
         run: |
-          # Create auth config for GHCR (서버에 이미 설정된 인증 사용)
-          mkdir -p /tmp/podman-auth
-          echo '{"auths":{"ghcr.io":{"auth":"'$(echo -n "${{ github.actor }}:${{ secrets.GHCR_PAT }}" | base64)'"}}}' > /tmp/podman-auth/config.json
+          echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
-      - name: Build and Push with Buildah
+      - name: Build and Push with Docker
         run: |
           IMAGE_TAG="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}"
 
           echo "Building image: $IMAGE_TAG"
-          # Use buildah without sudo (rootless mode)
-          buildah bud --network=host --no-cache -t "$IMAGE_TAG" .
+          docker build --no-cache -t "$IMAGE_TAG" .
 
           echo "Pushing image: $IMAGE_TAG"
-          buildah push --authfile=/tmp/podman-auth/config.json "$IMAGE_TAG" docker://"$IMAGE_TAG"
+          docker push "$IMAGE_TAG"
 
           echo "image_url=$IMAGE_TAG" >> $GITHUB_OUTPUT
-
-          # Cleanup auth file
-          rm -f /tmp/podman-auth/config.json
 
       - name: Deploy via CodeB MCP API v7.0
         id: deploy
@@ -114,7 +108,7 @@ jobs:
       - name: Cleanup old images
         if: always()
         run: |
-          buildah images -q | head -20 | xargs -r buildah rmi -f 2>/dev/null || true
+          docker image prune -f 2>/dev/null || true
 
       - name: Deployment Summary
         if: always()
