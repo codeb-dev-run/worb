@@ -55,9 +55,11 @@ jobs:
           fi
           echo "image_tag=${{ github.sha }}" >> $GITHUB_OUTPUT
 
-      - name: Login to GHCR (Podman)
+      - name: Setup GHCR Authentication
         run: |
-          echo "${{ secrets.GHCR_PAT }}" | sudo podman login ghcr.io -u ${{ github.actor }} --password-stdin
+          # Create auth config for GHCR (서버에 이미 설정된 인증 사용)
+          mkdir -p /tmp/podman-auth
+          echo '{"auths":{"ghcr.io":{"auth":"'$(echo -n "${{ github.actor }}:${{ secrets.GHCR_PAT }}" | base64)'"}}}' > /tmp/podman-auth/config.json
 
       - name: Build and Push with Podman
         run: |
@@ -67,9 +69,12 @@ jobs:
           sudo podman build --network=host --no-cache -t "$IMAGE_TAG" .
 
           echo "Pushing image: $IMAGE_TAG"
-          sudo podman push "$IMAGE_TAG"
+          sudo podman push --authfile=/tmp/podman-auth/config.json "$IMAGE_TAG"
 
           echo "image_url=$IMAGE_TAG" >> $GITHUB_OUTPUT
+
+          # Cleanup auth file
+          rm -f /tmp/podman-auth/config.json
 
       - name: Deploy via CodeB MCP API v7.0
         id: deploy
