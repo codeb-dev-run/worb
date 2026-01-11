@@ -78,7 +78,8 @@ jobs:
           echo "Deploying to ${{ steps.env.outputs.environment }}..."
 
           # API 호출 (최대 3분 대기 - 이미지 pull + health check 시간 포함)
-          RESPONSE=$(curl -sf --max-time 180 -X POST "https://api.codeb.kr/api/tool" \
+          # -s: silent, -S: show errors, -w: write out http code
+          HTTP_CODE=$(curl -sS --max-time 180 -w "%{http_code}" -o /tmp/response.json -X POST "https://api.codeb.kr/api/tool" \
             -H "X-API-Key: ${{ secrets.CODEB_API_KEY }}" \
             -H "Content-Type: application/json" \
             -d '{
@@ -89,7 +90,10 @@ jobs:
                 "version": "'${{ github.sha }}'",
                 "image": "'${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}'"
               }
-            }' 2>&1) || true
+            }') || true
+
+          RESPONSE=$(cat /tmp/response.json 2>/dev/null || echo "{}")
+          echo "HTTP Code: $HTTP_CODE"
 
           echo "API Response: $RESPONSE"
 
