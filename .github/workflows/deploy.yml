@@ -146,17 +146,20 @@ jobs:
             echo "url=worb-staging.codeb.kr" >> $GITHUB_OUTPUT
           fi
 
-      - name: Deploy via CodeB API
+      - name: Deploy via CodeB MCP API v7.0
         run: |
-          # Call CodeB API for deployment
-          response=$(curl -sf -X POST "https://app.codeb.kr/api/deploy" \
-            -H "Authorization: Bearer ${{ secrets.CODEB_API_KEY }}" \
+          # Call CodeB MCP API v7.0 for deployment
+          response=$(curl -sf -X POST "https://api.codeb.kr/api/tool" \
+            -H "X-API-Key: ${{ secrets.CODEB_API_KEY }}" \
             -H "Content-Type: application/json" \
             -d '{
-              "project": "worb",
-              "environment": "'${{ env.ENVIRONMENT }}'",
-              "image": "'${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}'",
-              "port": '${{ steps.vars.outputs.port }}'
+              "tool": "deploy",
+              "params": {
+                "projectName": "worb",
+                "environment": "${{ env.ENVIRONMENT }}",
+                "image": "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}",
+                "version": "${{ github.sha }}"
+              }
             }' 2>&1) || true
 
           echo "API Response: $response"
@@ -170,12 +173,20 @@ jobs:
             exit 1
           fi
 
+          # Extract preview URL
+          previewUrl=$(echo "$response" | jq -r '.previewUrl // "N/A"')
+          slot=$(echo "$response" | jq -r '.slot // "N/A"')
+          port=$(echo "$response" | jq -r '.port // "N/A"')
+
           echo ""
           echo "=========================================="
           echo "Deployment Complete!"
           echo "=========================================="
           echo "Project: worb"
           echo "Environment: ${{ env.ENVIRONMENT }}"
+          echo "Slot: $slot"
+          echo "Port: $port"
+          echo "Preview URL: $previewUrl"
           echo "URL: https://${{ steps.vars.outputs.url }}"
 
       - name: Deployment summary
