@@ -37,7 +37,7 @@ jobs:
   # ============================================
   build-and-deploy:
     name: Build & Deploy
-    runs-on: self-hosted  # App 서버의 Self-hosted runner 사용
+    runs-on: [self-hosted, docker]  # App 서버의 Self-hosted runner 사용
 
     steps:
       - name: Checkout repository
