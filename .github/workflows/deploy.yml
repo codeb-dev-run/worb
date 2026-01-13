@@ -61,6 +61,7 @@ jobs:
               "tool": "deploy",
               "params": {
                 "projectName": "worb",
+                "environment": "production",
                 "image": "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}"
               }
             }')
@@ -91,7 +92,7 @@ jobs:
           curl -sf -X POST "https://api.codeb.kr/api/tool" \
             -H "X-API-Key: ${{ secrets.CODEB_API_KEY }}" \
             -H "Content-Type: application/json" \
-            -d '{"tool": "slot_promote", "params": {"projectName": "worb"}}'
+            -d '{"tool": "slot_promote", "params": {"projectName": "worb", "environment": "production"}}'
           echo "✅ Traffic switched!"
 
   rollback:
@@ -103,5 +104,5 @@ jobs:
           curl -sf -X POST "https://api.codeb.kr/api/tool" \
             -H "X-API-Key: ${{ secrets.CODEB_API_KEY }}" \
             -H "Content-Type: application/json" \
-            -d '{"tool": "rollback", "params": {"projectName": "worb"}}'
+            -d '{"tool": "rollback", "params": {"projectName": "worb", "environment": "production"}}'
           echo "✅ Rolled back!"
