@@ -33,15 +33,10 @@ export default function QACreateModal({
     stepsToReproduce: '',
     expectedBehavior: '',
     actualBehavior: '',
-    environment: '',
-    affectedFiles: [] as string[],
-    labels: [] as string[],
     syncToGitHub: false,
   })
   const [checklist, setChecklist] = useState<ChecklistItem[]>([])
   const [newChecklistItem, setNewChecklistItem] = useState('')
-  const [newFile, setNewFile] = useState('')
-  const [newLabel, setNewLabel] = useState('')
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -94,38 +89,6 @@ export default function QACreateModal({
 
   const removeChecklistItem = (id: string) => {
     setChecklist(prev => prev.filter(item => item.id !== id))
-  }
-
-  const addFile = () => {
-    if (!newFile.trim()) return
-    setFormData(prev => ({
-      ...prev,
-      affectedFiles: [...prev.affectedFiles, newFile.trim()],
-    }))
-    setNewFile('')
-  }
-
-  const removeFile = (file: string) => {
-    setFormData(prev => ({
-      ...prev,
-      affectedFiles: prev.affectedFiles.filter(f => f !== file),
-    }))
-  }
-
-  const addLabel = () => {
-    if (!newLabel.trim()) return
-    setFormData(prev => ({
-      ...prev,
-      labels: [...prev.labels, newLabel.trim()],
-    }))
-    setNewLabel('')
-  }
-
-  const removeLabel = (label: string) => {
-    setFormData(prev => ({
-      ...prev,
-      labels: prev.labels.filter(l => l !== label),
-    }))
   }
 
   const typeOptions = [
@@ -274,98 +237,8 @@ export default function QACreateModal({
                     />
                   </div>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">환경</label>
-                  <input
-                    type="text"
-                    value={formData.environment}
-                    onChange={(e) => setFormData(prev => ({ ...prev, environment: e.target.value }))}
-                    placeholder="예: Chrome 120, macOS 14.2, Windows 11"
-                    className="w-full px-3 py-2 border rounded-lg"
-                  />
-                </div>
               </>
             )}
-
-            {/* Affected Files */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">영향받는 파일</label>
-              <div className="flex gap-2 mb-2">
-                <input
-                  type="text"
-                  value={newFile}
-                  onChange={(e) => setNewFile(e.target.value)}
-                  placeholder="src/components/Example.tsx"
-                  className="flex-1 px-3 py-2 border rounded-lg text-sm"
-                  onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addFile())}
-                />
-                <button
-                  type="button"
-                  onClick={addFile}
-                  className="px-3 py-2 bg-gray-100 rounded-lg text-sm hover:bg-gray-200"
-                >
-                  추가
-                </button>
-              </div>
-              {formData.affectedFiles.length > 0 && (
-                <div className="space-y-1">
-                  {formData.affectedFiles.map((file, idx) => (
-                    <div key={idx} className="flex items-center gap-2 text-sm bg-gray-50 px-2 py-1 rounded">
-                      <code className="flex-1">{file}</code>
-                      <button
-                        type="button"
-                        onClick={() => removeFile(file)}
-                        className="text-red-500 hover:text-red-700"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Labels */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">라벨</label>
-              <div className="flex gap-2 mb-2">
-                <input
-                  type="text"
-                  value={newLabel}
-                  onChange={(e) => setNewLabel(e.target.value)}
-                  placeholder="예: frontend, api, urgent"
-                  className="flex-1 px-3 py-2 border rounded-lg text-sm"
-                  onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addLabel())}
-                />
-                <button
-                  type="button"
-                  onClick={addLabel}
-                  className="px-3 py-2 bg-gray-100 rounded-lg text-sm hover:bg-gray-200"
-                >
-                  추가
-                </button>
-              </div>
-              {formData.labels.length > 0 && (
-                <div className="flex flex-wrap gap-2">
-                  {formData.labels.map((label, idx) => (
-                    <span key={idx} className="flex items-center gap-1 px-2 py-1 bg-blue-50 text-blue-700 rounded text-sm">
-                      {label}
-                      <button
-                        type="button"
-                        onClick={() => removeLabel(label)}
-                        className="hover:text-blue-900"
-                      >
-                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                      </button>
-                    </span>
-                  ))}
-                </div>
-              )}
-            </div>
 
             {/* Checklist */}
             <div>
