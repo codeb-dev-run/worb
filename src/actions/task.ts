@@ -14,16 +14,47 @@ export async function getTasks(projectId: string) {
     try {
         const tasks = await prisma.task.findMany({
             where: { projectId, deletedAt: null },
-            include: {
-                assignee: true,
-                attachments: true,
-                checklist: true,
-                comments: {
-                    include: {
-                        user: true
-                    }
+            select: {
+                id: true,
+                title: true,
+                description: true,
+                status: true,
+                priority: true,
+                startDate: true,
+                dueDate: true,
+                order: true,
+                columnId: true,
+                labels: true,
+                color: true,
+                projectId: true,
+                assigneeId: true,
+                teamId: true,
+                createdBy: true,
+                createdAt: true,
+                updatedAt: true,
+                deletedAt: true,
+                assignee: {
+                    select: { id: true, name: true, email: true, avatar: true }
                 },
-                team: true  // Team 정보 포함
+                attachments: {
+                    select: { id: true, name: true, url: true, type: true, size: true }
+                },
+                checklist: {
+                    select: { id: true, text: true, completed: true }
+                },
+                comments: {
+                    select: {
+                        id: true,
+                        text: true,
+                        createdAt: true,
+                        user: { select: { id: true, name: true, avatar: true } }
+                    },
+                    orderBy: { createdAt: 'desc' },
+                    take: 10  // 최신 10개만 조회 (N+1 방지)
+                },
+                team: {
+                    select: { id: true, name: true, color: true }
+                }
             },
             orderBy: {
                 order: 'asc'
@@ -103,14 +134,31 @@ export async function getAllTasks(
 
         const tasks = await prisma.task.findMany({
             where: whereClause,
-            include: {
+            select: {
+                id: true,
+                title: true,
+                description: true,
+                status: true,
+                priority: true,
+                startDate: true,
+                dueDate: true,
+                order: true,
+                columnId: true,
+                labels: true,
+                color: true,
+                projectId: true,
+                assigneeId: true,
+                teamId: true,
+                createdBy: true,
+                createdAt: true,
+                updatedAt: true,
+                deletedAt: true,
                 project: {
-                    select: {
-                        name: true,
-                        workspaceId: true
-                    }
+                    select: { name: true, workspaceId: true }
                 },
-                assignee: true
+                assignee: {
+                    select: { id: true, name: true, avatar: true }
+                }
             },
             orderBy: {
                 dueDate: 'asc'
@@ -482,20 +530,17 @@ export async function updateTasksOrder(projectId: string, tasks: { id: string; c
 
 async function updateProjectProgress(projectId: string) {
     try {
-        const tasks = await prisma.task.findMany({
-            where: { projectId }
-        })
-
-        if (tasks.length === 0) {
-            await prisma.project.update({
-                where: { id: projectId },
-                data: { progress: 0 }
+        // count 쿼리로 최적화 (전체 데이터 로드 방지)
+        const [totalCount, completedCount] = await Promise.all([
+            prisma.task.count({
+                where: { projectId, deletedAt: null }
+            }),
+            prisma.task.count({
+                where: { projectId, deletedAt: null, status: TaskStatus.done }
             })
-            return
-        }
+        ])
 
-        const completedTasks = tasks.filter(t => t.status === TaskStatus.done).length
-        const progress = Math.round((completedTasks / tasks.length) * 100)
+        const progress = totalCount === 0 ? 0 : Math.round((completedCount / totalCount) * 100)
 
         await prisma.project.update({
             where: { id: projectId },

@@ -1,10 +1,12 @@
 // =============================================================================
 // Dashboard HR Stats API - 대시보드용 간소화된 HR 통계
+// Redis 캐싱 적용: TTL 1분 (실시간성 보장)
 // =============================================================================
 
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { authenticateRequest, secureLogger, createErrorResponse } from '@/lib/security'
+import { cachedApiResponse, CacheKeys, CacheTTL } from '@/lib/redis'
 import { startOfDay, endOfDay } from 'date-fns'
 
 export async function GET(request: NextRequest) {
@@ -16,6 +18,7 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url)
     const workspaceId = searchParams.get('workspaceId')
+    const forceRefresh = searchParams.get('refresh') === 'true'
 
     if (!workspaceId) {
       return createErrorResponse('Workspace ID required', 400, 'MISSING_WORKSPACE_ID')
@@ -35,54 +38,63 @@ export async function GET(request: NextRequest) {
       return createErrorResponse('Forbidden', 403, 'NOT_A_MEMBER')
     }
 
-    const today = new Date()
-    const todayStart = startOfDay(today)
-    const todayEnd = endOfDay(today)
+    // 캐싱된 응답 반환 (TTL: 1분)
+    const stats = await cachedApiResponse(
+      CacheKeys.hrStats(workspaceId),
+      async () => {
+        const today = new Date()
+        const todayStart = startOfDay(today)
+        const todayEnd = endOfDay(today)
 
-    // 병렬로 통계 조회
-    const [
-      totalMembers,
-      todayAttendance,
-    ] = await Promise.all([
-      // 전체 멤버 수
-      prisma.workspaceMember.count({
-        where: { workspaceId },
-      }),
-      // 오늘 출근 기록
-      prisma.attendance.findMany({
-        where: {
-          workspaceId,
-          date: {
-            gte: todayStart,
-            lte: todayEnd,
-          },
-        },
-      }),
-    ])
+        // 병렬로 통계 조회
+        const [totalMembers, todayAttendance] = await Promise.all([
+          prisma.workspaceMember.count({
+            where: { workspaceId },
+          }),
+          prisma.attendance.findMany({
+            where: {
+              workspaceId,
+              date: {
+                gte: todayStart,
+                lte: todayEnd,
+              },
+            },
+            select: {
+              checkIn: true,
+              status: true,
+            },
+          }),
+        ])
 
-    // 오늘 출근한 인원 계산
-    const presentToday = todayAttendance.filter(
-      (a) => a.checkIn && (a.status === 'PRESENT' || a.status === 'LATE' || a.status === 'REMOTE')
-    ).length
+        // 오늘 출근한 인원 계산
+        const presentToday = todayAttendance.filter(
+          (a) => a.checkIn && (a.status === 'PRESENT' || a.status === 'LATE' || a.status === 'REMOTE')
+        ).length
 
-    // 지각자 수
-    const lateArrivals = todayAttendance.filter((a) => a.status === 'LATE').length
+        // 지각자 수
+        const lateArrivals = todayAttendance.filter((a) => a.status === 'LATE').length
 
-    // 휴가 중인 인원 (현재 AttendanceStatus에 LEAVE가 없어 0으로 설정)
-    // 추후 휴가 기능 구현 시 업데이트 필요
-    const onLeave = 0
+        // 휴가 중인 인원 (현재 AttendanceStatus에 LEAVE가 없어 0으로 설정)
+        const onLeave = 0
 
-    // 결근자 = 전체 - 출근자 - 휴가자 (대략적 계산)
-    const absentToday = Math.max(0, totalMembers - presentToday - onLeave)
+        // 결근자 = 전체 - 출근자 - 휴가자 (대략적 계산)
+        const absentToday = Math.max(0, totalMembers - presentToday - onLeave)
 
-    const stats = {
-      totalEmployees: totalMembers,
-      presentToday,
-      absentToday,
-      onLeave,
-      lateArrivals,
-      pendingApprovals: 0, // 휴가 요청 기능이 구현되면 추가
-    }
+        return {
+          totalEmployees: totalMembers,
+          presentToday,
+          absentToday,
+          onLeave,
+          lateArrivals,
+          pendingApprovals: 0,
+        }
+      },
+      {
+        ttl: CacheTTL.SHORT, // 1분 (실시간성 보장)
+        tags: [`workspace:${workspaceId}`, 'hr-stats'],
+        forceRefresh,
+      }
+    )
 
     return NextResponse.json(stats)
   } catch (error) {

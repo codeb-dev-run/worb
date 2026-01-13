@@ -507,3 +507,102 @@ export async function getRedisHealth(): Promise<{
 
 // Legacy function for backward compatibility
 export { invalidateCachePattern as invalidateCache_legacy }
+
+// =============================================================================
+// API Response Caching Helpers
+// =============================================================================
+
+/**
+ * Cache API response with automatic JSON serialization
+ * Perfect for GET endpoints that return lists or objects
+ */
+export async function cachedApiResponse<T>(
+    cacheKey: string,
+    fetcher: () => Promise<T>,
+    options: {
+        ttl?: number
+        tags?: string[]
+        forceRefresh?: boolean
+    } = {}
+): Promise<T> {
+    const { ttl = CacheTTL.MEDIUM, tags, forceRefresh = false } = options
+
+    // Force refresh bypasses cache
+    if (forceRefresh) {
+        const data = await fetcher()
+        if (tags && tags.length > 0) {
+            await setWithTags(cacheKey, data, tags, ttl)
+        } else {
+            await redis.setex(cacheKey, ttl, JSON.stringify(data)).catch(() => {})
+        }
+        return data
+    }
+
+    // Use getOrSet for normal flow
+    if (tags && tags.length > 0) {
+        try {
+            const cached = await redis.get(cacheKey)
+            if (cached) {
+                return JSON.parse(cached)
+            }
+
+            const data = await fetcher()
+            await setWithTags(cacheKey, data, tags, ttl)
+            return data
+        } catch {
+            return fetcher()
+        }
+    }
+
+    return getOrSet(cacheKey, fetcher, ttl)
+}
+
+/**
+ * Workspace-scoped cache invalidation
+ * Invalidates all cache keys related to a workspace
+ */
+export async function invalidateWorkspaceCache(
+    workspaceId: string,
+    modules: ('dashboard' | 'hr' | 'attendance' | 'payroll' | 'project' | 'all')[] = ['all']
+): Promise<void> {
+    const keysToInvalidate: string[] = []
+
+    if (modules.includes('all') || modules.includes('dashboard')) {
+        keysToInvalidate.push(CacheKeys.dashboardStats(workspaceId))
+    }
+    if (modules.includes('all') || modules.includes('hr')) {
+        keysToInvalidate.push(CacheKeys.hrStats(workspaceId))
+        keysToInvalidate.push(CacheKeys.employees(workspaceId))
+    }
+    if (modules.includes('all') || modules.includes('attendance')) {
+        keysToInvalidate.push(CacheKeys.attendanceStats(workspaceId))
+    }
+    if (modules.includes('all') || modules.includes('payroll')) {
+        keysToInvalidate.push(CacheKeys.payroll(workspaceId))
+    }
+
+    if (keysToInvalidate.length > 0) {
+        await invalidateMultipleKeys(keysToInvalidate)
+    }
+}
+
+/**
+ * Project-scoped cache invalidation
+ */
+export async function invalidateProjectCache(projectId: string): Promise<void> {
+    await invalidateMultipleKeys([
+        CacheKeys.projectStats(projectId),
+        CacheKeys.projectTasks(projectId)
+    ])
+}
+
+/**
+ * User-scoped cache invalidation
+ */
+export async function invalidateUserCache(userId: string): Promise<void> {
+    await invalidateMultipleKeys([
+        CacheKeys.attendance(userId),
+        CacheKeys.attendanceHistory(userId),
+        CacheKeys.userSession(userId)
+    ])
+}

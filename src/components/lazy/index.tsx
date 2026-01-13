@@ -75,6 +75,48 @@ export const LazyAIAssistant = dynamic(
   }
 )
 
+// Dashboard Charts - Recharts (heavy ~450KB)
+export const LazyTaskBarChart = dynamic(
+  () => import('@/components/dashboard/DashboardCharts').then(mod => mod.TaskBarChart),
+  {
+    loading: () => <LoadingFallback message="차트 로딩 중..." />,
+    ssr: false
+  }
+)
+
+export const LazyTaskDonutChart = dynamic(
+  () => import('@/components/dashboard/DashboardCharts').then(mod => mod.TaskDonutChart),
+  {
+    loading: () => <LoadingFallback message="차트 로딩 중..." />,
+    ssr: false
+  }
+)
+
+export const LazyTaskLineChart = dynamic(
+  () => import('@/components/dashboard/DashboardCharts').then(mod => mod.TaskLineChart),
+  {
+    loading: () => <LoadingFallback message="차트 로딩 중..." />,
+    ssr: false
+  }
+)
+
+export const LazyOverdueAreaChart = dynamic(
+  () => import('@/components/dashboard/DashboardCharts').then(mod => mod.OverdueAreaChart),
+  {
+    loading: () => <LoadingFallback message="차트 로딩 중..." />,
+    ssr: false
+  }
+)
+
+// Workflow Builder - Complex automation component
+export const LazyWorkflowBuilder = dynamic(
+  () => import('@/components/automation/WorkflowBuilder').then(mod => mod.default),
+  {
+    loading: () => <LoadingFallback message="워크플로우 빌더 로딩 중..." />,
+    ssr: false
+  }
+)
+
 // Helper: Wrap component with Suspense
 export function withSuspense<P extends object>(
   Component: ComponentType<P>,

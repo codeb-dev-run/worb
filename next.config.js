@@ -60,14 +60,6 @@ const nextConfig = {
     remotePatterns: [
       {
         protocol: 'https',
-        hostname: 'firebasestorage.googleapis.com',
-      },
-      {
-        protocol: 'https',
-        hostname: 'codeb-web.firebasestorage.app',
-      },
-      {
-        protocol: 'https',
         hostname: 'lh3.googleusercontent.com',
       },
       {
@@ -77,6 +69,10 @@ const nextConfig = {
       {
         protocol: 'https',
         hostname: 'images.codeb.app',
+      },
+      {
+        protocol: 'https',
+        hostname: '*.googleusercontent.com',
       },
     ],
     formats: ['image/webp', 'image/avif'],

@@ -1,6 +1,6 @@
 'use client'
 
-import React from 'react'
+import { memo, useMemo } from 'react'
 import {
     BarChart,
     Bar,
@@ -19,9 +19,24 @@ import {
 } from 'recharts'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 
-const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8']
+const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8'] as const
 
-export function TaskBarChart({ data }: { data: any[] }) {
+interface ChartData {
+    name: string
+    value: number
+    [key: string]: string | number
+}
+
+// React.memo로 불필요한 리렌더링 방지
+export const TaskBarChart = memo(function TaskBarChart({ data }: { data: ChartData[] }) {
+    // data가 변경되지 않으면 Cell 배열 재생성 방지
+    const cells = useMemo(() =>
+        data.map((_, index) => (
+            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+        )),
+        [data.length]
+    )
+
     return (
         <Card>
             <CardHeader>
@@ -36,9 +51,7 @@ export function TaskBarChart({ data }: { data: any[] }) {
                             <YAxis dataKey="name" type="category" width={100} tick={{ fontSize: 12 }} />
                             <Tooltip />
                             <Bar dataKey="value" fill="#8884d8" radius={[0, 4, 4, 0]} barSize={20}>
-                                {data.map((entry, index) => (
-                                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                                ))}
+                                {cells}
                             </Bar>
                         </BarChart>
                     </ResponsiveContainer>
@@ -46,9 +59,31 @@ export function TaskBarChart({ data }: { data: any[] }) {
             </CardContent>
         </Card>
     )
-}
+})
 
-export function TaskDonutChart({ data }: { data: any[] }) {
+export const TaskDonutChart = memo(function TaskDonutChart({ data }: { data: ChartData[] }) {
+    const cells = useMemo(() =>
+        data.map((_, index) => (
+            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+        )),
+        [data.length]
+    )
+
+    const total = useMemo(() =>
+        data.reduce((acc, cur) => acc + cur.value, 0),
+        [data]
+    )
+
+    const legend = useMemo(() =>
+        data.map((entry, index) => (
+            <div key={index} className="flex items-center gap-2 text-xs">
+                <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: COLORS[index % COLORS.length] }} />
+                <span>{entry.name}</span>
+            </div>
+        )),
+        [data]
+    )
+
     return (
         <Card>
             <CardHeader>
@@ -68,32 +103,30 @@ export function TaskDonutChart({ data }: { data: any[] }) {
                                 paddingAngle={5}
                                 dataKey="value"
                             >
-                                {data.map((entry, index) => (
-                                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                                ))}
+                                {cells}
                             </Pie>
                             <Tooltip />
                             <text x="50%" y="50%" textAnchor="middle" dominantBaseline="middle">
-                                <tspan x="50%" dy="-1em" fontSize="24" fontWeight="bold">{data.reduce((acc, cur) => acc + cur.value, 0)}</tspan>
+                                <tspan x="50%" dy="-1em" fontSize="24" fontWeight="bold">{total}</tspan>
                                 <tspan x="50%" dy="1.5em" fontSize="12" fill="#999">실제 합계</tspan>
                             </text>
                         </PieChart>
                     </ResponsiveContainer>
                     <div className="absolute right-10 top-1/2 transform -translate-y-1/2 space-y-2">
-                        {data.map((entry, index) => (
-                            <div key={index} className="flex items-center gap-2 text-xs">
-                                <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: COLORS[index % COLORS.length] }} />
-                                <span>{entry.name}</span>
-                            </div>
-                        ))}
+                        {legend}
                     </div>
                 </div>
             </CardContent>
         </Card>
     )
+})
+
+interface LineChartData {
+    date: string
+    completed: number
 }
 
-export function TaskLineChart({ data }: { data: any[] }) {
+export const TaskLineChart = memo(function TaskLineChart({ data }: { data: LineChartData[] }) {
     return (
         <Card>
             <CardHeader>
@@ -114,9 +147,9 @@ export function TaskLineChart({ data }: { data: any[] }) {
             </CardContent>
         </Card>
     )
-}
+})
 
-export function OverdueAreaChart({ data }: { data: any[] }) {
+export const OverdueAreaChart = memo(function OverdueAreaChart({ data }: { data: ChartData[] }) {
     return (
         <Card>
             <CardHeader>
@@ -137,4 +170,4 @@ export function OverdueAreaChart({ data }: { data: any[] }) {
             </CardContent>
         </Card>
     )
-}
+})

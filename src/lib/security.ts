@@ -708,3 +708,124 @@ export function createValidationErrorResponse(error: ValidationError): NextRespo
     { status: 400 }
   )
 }
+
+// =============================================================================
+// CVE-CB-016: Workspace Context Verification (Enhanced Data Isolation)
+// =============================================================================
+
+/**
+ * Extract workspace ID from request (query param or header)
+ * Query parameter takes precedence over header
+ */
+export function extractWorkspaceId(request: Request): string | null {
+  const { searchParams } = new URL(request.url)
+  return searchParams.get('workspaceId') ||
+         (request.headers.get('x-workspace-id'))
+}
+
+/**
+ * Verify user is a member of workspace and return membership details
+ * Use this at the start of every workspace-scoped API endpoint
+ */
+export async function verifyWorkspaceMembership(
+  userId: string,
+  workspaceId: string
+): Promise<{
+  success: true;
+  membership: { id: string; role: string; workspaceId: string }
+} | {
+  success: false;
+  error: NextResponse
+}> {
+  if (!workspaceId) {
+    return {
+      success: false,
+      error: createErrorResponse('Workspace ID required', 400, 'WORKSPACE_ID_REQUIRED')
+    }
+  }
+
+  const membership = await prisma.workspaceMember.findUnique({
+    where: {
+      workspaceId_userId: { workspaceId, userId }
+    },
+    select: { id: true, role: true, workspaceId: true }
+  })
+
+  if (!membership) {
+    return {
+      success: false,
+      error: createErrorResponse('Not a member of this workspace', 403, 'NOT_A_MEMBER')
+    }
+  }
+
+  return { success: true, membership }
+}
+
+/**
+ * Combined auth + workspace verification (most common pattern)
+ * Use this for most workspace-scoped API endpoints
+ */
+export async function requireWorkspaceAuth(
+  request: Request
+): Promise<{
+  user: AuthenticatedUser;
+  membership: { id: string; role: string; workspaceId: string };
+  workspaceId: string;
+} | NextResponse> {
+  // 1. Authenticate user
+  const user = await authenticateRequest()
+  if (!user) {
+    return createErrorResponse('Unauthorized', 401, 'AUTH_REQUIRED')
+  }
+
+  // 2. Extract workspace ID
+  const workspaceId = extractWorkspaceId(request)
+  if (!workspaceId) {
+    return createErrorResponse('Workspace ID required', 400, 'WORKSPACE_ID_REQUIRED')
+  }
+
+  // 3. Verify membership
+  const result = await verifyWorkspaceMembership(user.id, workspaceId)
+  if (!result.success) {
+    return result.error
+  }
+
+  return {
+    user,
+    membership: result.membership,
+    workspaceId
+  }
+}
+
+/**
+ * Verify resource belongs to workspace (data isolation check)
+ * Call this before returning any resource to ensure it belongs to the user's workspace
+ */
+export function verifyResourceOwnership<T extends { workspaceId?: string | null }>(
+  resource: T | null,
+  expectedWorkspaceId: string,
+  resourceName: string = 'Resource'
+): { success: true; resource: T } | { success: false; error: NextResponse } {
+  if (!resource) {
+    return {
+      success: false,
+      error: createErrorResponse(`${resourceName} not found`, 404, 'NOT_FOUND')
+    }
+  }
+
+  // Resources with no workspaceId are global (e.g., personal tasks)
+  if (resource.workspaceId && resource.workspaceId !== expectedWorkspaceId) {
+    // Log potential data isolation violation
+    secureLogger.warn('Data isolation violation attempt', {
+      operation: 'resource.access',
+      resourceWorkspaceId: resource.workspaceId,
+      requestedWorkspaceId: expectedWorkspaceId
+    })
+    return {
+      success: false,
+      error: createErrorResponse(`${resourceName} not found`, 404, 'NOT_FOUND')
+    }
+  }
+
+  return { success: true, resource }
+}

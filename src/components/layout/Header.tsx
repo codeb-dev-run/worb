@@ -1,7 +1,7 @@
 'use client'
 const isDev = process.env.NODE_ENV === 'development'
 
-import React, { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { useAuth } from '@/lib/auth-context'
 import { useRouter, usePathname } from 'next/navigation'
 import Link from 'next/link'
@@ -60,7 +60,8 @@ export default function Header({ showSidebarToggle = true, onSidebarToggle }: He
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
-  const handleLogout = async () => {
+  // useCallback으로 함수 메모이제이션
+  const handleLogout = useCallback(async () => {
     try {
       await logout()
       router.push('/login')
@@ -69,22 +70,22 @@ export default function Header({ showSidebarToggle = true, onSidebarToggle }: He
       if (isDev) console.error('Logout error:', error)
       toast.error('로그아웃 중 오류가 발생했습니다.')
     }
-  }
+  }, [logout, router])
 
-  const handleNotificationClick = async (notification: Notification) => {
+  const handleNotificationClick = useCallback(async (notification: Notification) => {
     if (notification.link) {
       router.push(notification.link)
       setShowNotifications(false)
     }
-  }
+  }, [router])
 
-  const markAllAsRead = async () => {
+  const markAllAsRead = useCallback(async () => {
     if (!user) return
     toast.success('모든 알림을 읽음으로 표시했습니다.')
-  }
+  }, [user])
 
-  // 페이지 경로 가져오기
-  const getBreadcrumbs = () => {
+  // useMemo로 breadcrumbs 캐싱 (pathname 변경시에만 재계산)
+  const breadcrumbs = useMemo(() => {
     const path = (pathname || '').split('/').filter(Boolean)
     if (path.length === 0) return { parent: 'groupware', current: 'Dashboard' }
 
@@ -110,20 +111,18 @@ export default function Header({ showSidebarToggle = true, onSidebarToggle }: He
       parent: 'groupware',
       current: titleMap[path[path.length - 1]] || path[path.length - 1]
     }
-  }
+  }, [pathname])
 
-  const breadcrumbs = getBreadcrumbs()
-
-  const getNotificationIcon = (type: Notification['type']) => {
+  const getNotificationIcon = useCallback((type: Notification['type']) => {
     switch (type) {
       case 'success': return '✓'
       case 'warning': return '!'
       case 'error': return '×'
       default: return 'i'
     }
-  }
+  }, [])
 
-  const getRelativeTime = (time: string) => {
+  const getRelativeTime = useCallback((time: string) => {
     const now = new Date()
     const notificationTime = new Date(time)
     const diffMs = now.getTime() - notificationTime.getTime()
@@ -136,7 +135,7 @@ export default function Header({ showSidebarToggle = true, onSidebarToggle }: He
     if (diffHours > 0) return `${diffHours}시간 전`
     if (diffMins > 0) return `${diffMins}분 전`
     return '방금 전'
-  }
+  }, [])
 
   return (
     <header className="flex h-16 shrink-0 items-center gap-2 bg-white/50 backdrop-blur-md border-b border-white/40 sticky top-0 z-10 transition-all duration-300">
