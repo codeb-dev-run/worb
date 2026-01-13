@@ -1,4 +1,4 @@
-# CLAUDE.md v7.0 - CodeB Unified Deployment System
+# CLAUDE.md v7.0.31 - CodeB Unified Deployment System
 
 > **Claude Code 2.1 100% Integration + Blue-Green Deployment + Skills System + Advanced Hooks**
 
@@ -153,14 +153,14 @@ Skills 파일 수정 시 Claude Code 재시작 없이 즉시 반영됩니다.
   "permissions": {
     "allow": [
       "Bash(we *)",
-      "Bash(podman ps *)",
+      "Bash(docker *)",
       "Bash(git *)",
       "Bash(npm *)",
       "mcp__codeb-deploy__*"
     ],
     "deny": [
-      "Bash(podman rm -f *)",
-      "Bash(podman volume rm *)",
+      "Bash(docker system prune -a *)",
+      "Bash(docker volume prune -a *)",
       "Bash(rm -rf /opt/codeb *)"
     ]
   },
@@ -281,7 +281,7 @@ Skills 파일 수정 시 Claude Code 재시작 없이 즉시 반영됩니다.
 │  │             │     │             │     │             │       │
 │  │ • MCP API   │     │ • Centri-   │     │ • Postgres  │       │
 │  │ • Caddy     │     │   fugo      │     │ • Redis     │       │
-│  │ • Podman    │     │ • WebSocket │     │             │       │
+│  │ • Docker    │     │ • WebSocket │     │             │       │
 │  │ • Edge RT   │     │             │     │             │       │
 │  └─────────────┘     └─────────────┘     └─────────────┘       │
 │         │                   │                   │               │
@@ -300,7 +300,7 @@ Skills 파일 수정 시 Claude Code 재시작 없이 즉시 반영됩니다.
 
 | 역할 | IP | 도메인 | 서비스 |
 |------|-----|--------|--------|
-| **App** | 158.247.203.55 | api.codeb.kr | MCP API v7.0, Caddy, Podman |
+| **App** | 158.247.203.55 | api.codeb.kr | MCP API v7.0, Caddy, Docker |
 | **Streaming** | 141.164.42.213 | ws.codeb.kr | Centrifugo (WebSocket) |
 | **Storage** | 64.176.226.119 | db.codeb.kr | PostgreSQL, Redis |
 | **Backup** | 141.164.37.63 | backup.codeb.kr | Prometheus, Grafana |
@@ -329,16 +329,17 @@ member - 배포, promote, rollback
 viewer - 조회만
 ```
 
-### Tool 목록 (30개)
+### Tool 목록 (22개)
 
 | 카테고리 | Tool | 설명 |
 |---------|------|------|
-| **Team** | team_create, team_list, team_get, team_delete | 팀 관리 |
-| **Deploy** | deploy_project, slot_promote, rollback | Blue-Green 배포 |
+| **Team** | team_create, team_list, team_get, team_delete, team_settings | 팀 관리 |
+| **Member** | member_invite, member_remove, member_list | 멤버 관리 |
+| **Token** | token_create, token_revoke, token_list | API 토큰 관리 |
+| **Deploy** | deploy, deploy_project, promote, slot_promote, rollback | Blue-Green 배포 |
 | **Slot** | slot_status, slot_cleanup, slot_list | Slot 관리 |
-| **Edge** | edge_deploy, edge_list, edge_logs | Edge Functions |
-| **Analytics** | analytics_overview, analytics_webvitals | 분석 |
-| **Domain** | domain_setup, domain_list, domain_delete | 도메인 |
+| **Domain** | domain_setup, domain_verify, domain_list, domain_delete, ssl_status | 도메인 |
+| **Workflow** | workflow_init, workflow_scan | CI/CD 워크플로우 |
 
 ---
 
@@ -348,10 +349,10 @@ viewer - 조회만
 
 ```bash
 # Hooks가 자동 차단
-podman rm -f <container>       # 직접 컨테이너 삭제
-podman volume rm <volume>      # 직접 볼륨 삭제
+docker system prune -a         # Docker 전체 정리
+docker volume prune -a         # Docker 볼륨 전체 삭제
 rm -rf /opt/codeb/*            # 프로젝트 폴더 삭제
-ssh root@*                     # 직접 SSH 접속 (Admin 제외)
+rm -rf /var/lib/docker/*       # Docker 데이터 삭제
 ```
 
 ### 올바른 CLI 명령어
@@ -373,57 +374,49 @@ ssh root@*                     # 직접 SSH 접속 (Admin 제외)
 ### 단일 버전 소스 (Single Source of Truth)
 
 ```
-v7.0/VERSION              # 서버 버전이 기준 (현재: 7.0.0)
+VERSION              # 루트의 VERSION 파일이 기준 (현재: 7.0.31)
 ```
 
 ### 패키지 버전
 
 | 패키지 | 버전 | 경로 |
 |--------|------|------|
-| @codeblabdev-max/mcp-server | 7.0.0 | v7.0/mcp-server |
-| @codeblabdev-max/we-cli | 7.0.0 | v7.0/cli |
-| @codeblabdev-max/mcp-proxy | 7.0.0 | v7.0/mcp-proxy |
-| @codeblabdev-max/analytics | 7.0.0 | v7.0/analytics-sdk |
-| @codeblabdev-max/edge-runtime | 7.0.0 | v7.0/edge-runtime |
+| @codeblabdev-max/mcp-server | 7.0.31 | mcp-server |
+| @codeblabdev-max/we-cli | 7.0.31 | cli |
+| @codeblabdev-max/mcp-proxy | 7.0.31 | cli/mcp-proxy |
 
 ---
 
 ## Version
 
-- **CLAUDE.md**: v7.0.0
+- **CLAUDE.md**: v7.0.31
 - **Claude Code**: 2.1.x (Skills + Advanced Hooks)
-- **CLI**: @codeblabdev-max/we-cli@7.0.0
-- **MCP Server**: @codeblabdev-max/mcp-server@7.0.0
-- **API Endpoint**: https://api.codeb.kr/api (30 tools)
+- **CLI**: @codeblabdev-max/we-cli@7.0.31
+- **MCP Server**: @codeblabdev-max/mcp-server@7.0.31
+- **MCP Proxy**: @codeblabdev-max/mcp-proxy@7.0.31
+- **API Endpoint**: https://api.codeb.kr/api (22 tools)
+- **Container Runtime**: Docker
 
-### v7.0 신규 파일
+### 프로젝트 구조
 
 ```
-v7.0/
-├── VERSION                    # 7.0.0
-├── mcp-server/                # TypeScript MCP API
-├── cli/                       # Ink React CLI
-├── mcp-proxy/                 # MCP Proxy
-├── analytics-sdk/             # Web Vitals SDK
-├── edge-runtime/              # Deno Runtime
-└── scripts/                   # 유틸리티 스크립트
+codeb-server/
+├── VERSION                    # 7.0.31 (SSOT)
+├── mcp-server/                # TypeScript MCP API Server
+├── cli/                       # we CLI
+│   └── mcp-proxy/             # MCP Proxy for Claude Code
+├── scripts/                   # 유틸리티 스크립트
+└── .github/workflows/         # CI/CD 파이프라인
 
 .claude/
-├── settings.local.json        # v7.0 설정 (2.1 Hooks)
-├── skills/                    # NEW: Skills 시스템
+├── settings.local.json        # v7.0 설정 (Docker 기반)
+├── skills/                    # Skills 시스템
 │   ├── deploy/
 │   ├── monitoring/
 │   ├── infrastructure/
 │   └── analysis/
-├── hooks/                     # NEW: Advanced Hooks
-│   ├── pre-bash.py
-│   ├── pre-deploy.py
-│   ├── post-deploy.py
-│   ├── post-promote.py
-│   ├── post-rollback.py
-│   ├── session-summary.py
-│   └── agent-audit.py
-└── commands/                  # Legacy (호환성 유지)
+└── hooks/                     # Hook 시스템
+    └── pre-bash.py            # 보안 검증
 ```
 
 > 이 파일은 CLI 설치/업데이트 시 자동으로 최신 버전으로 교체됩니다.

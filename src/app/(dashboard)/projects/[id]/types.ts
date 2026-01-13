@@ -169,11 +169,17 @@ export const ROLE_COLORS: Record<string, RoleColorConfig> = {
  */
 export function getColumnIdFromStatus(status: string): string {
   const statusMap: Record<string, string> = {
+    // 대문자 (legacy)
     'TODO': 'todo',
     'IN_PROGRESS': 'in_progress',
     'REVIEW': 'review',
     'DONE': 'done',
-    'COMPLETED': 'done'
+    'COMPLETED': 'done',
+    // 소문자 (Prisma enum)
+    'todo': 'todo',
+    'in_progress': 'in_progress',
+    'review': 'review',
+    'done': 'done',
   }
   return statusMap[status] || 'todo'
 }

@@ -588,8 +588,6 @@ export const qaIssueCreateSchema = z.object({
   stepsToReproduce: richTextSchema.optional(),
   expectedBehavior: richTextSchema.optional(),
   actualBehavior: richTextSchema.optional(),
-  environment: z.string().max(500).optional(),
-  affectedFiles: z.array(z.string().max(500)).max(50).optional(),
   codeChanges: z.any().optional(), // JSON with diff information
   assigneeId: uuidSchema.optional(),
   dueDate: z.coerce.date().optional(),
@@ -598,7 +596,6 @@ export const qaIssueCreateSchema = z.object({
     text: z.string().max(500),
     completed: z.boolean().default(false),
   })).optional(),
-  labels: z.array(z.string().max(50)).max(20).optional(),
   // GitHub integration
   syncToGitHub: z.boolean().optional(),
   githubRepoOwner: z.string().max(100).optional(),
@@ -618,7 +615,6 @@ export const qaIssueSearchSchema = z.object({
   assigneeId: uuidSchema.optional(),
   reporterId: uuidSchema.optional(),
   search: searchSchema,
-  labels: z.string().optional(), // comma-separated labels
   ...paginationSchema.shape,
 })
 

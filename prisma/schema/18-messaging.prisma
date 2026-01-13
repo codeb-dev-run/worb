@@ -1,0 +1,113 @@
+// ============================================
+// Domain: Messaging (Slack/Discord Hybrid)
+// ============================================
+
+model Channel {
+  id          String      @id @default(uuid())
+  workspaceId String
+  projectId   String?     // Optional linkage to a project
+  name        String
+  topic       String?
+  type        ChannelType @default(PUBLIC)
+  isArchived  Boolean     @default(false)
+  
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  workspace   Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project     Project?    @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  
+  members     ChannelMember[]
+  messages    Message[]
+  
+  @@index([workspaceId, type])
+  @@index([projectId])
+}
+
+model ChannelMember {
+  id        String   @id @default(uuid())
+  channelId String
+  userId    String
+  
+  // For unread tracking
+  lastReadMessageId String?
+  unreadCount       Int     @default(0)
+  
+  joinedAt  DateTime @default(now())
+  
+  channel   Channel  @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([channelId, userId])
+  @@index([userId])
+}
+
+model Message {
+  id        String      @id @default(uuid())
+  channelId String
+  userId    String
+  content   String      @db.Text
+  type      MessageType @default(TEXT)
+  
+  // Thread support
+  parentId  String?
+  replyCount Int        @default(0)
+  
+  isEdited  Boolean     @default(false)
+  isDeleted Boolean     @default(false)
+  
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+  
+  channel   Channel     @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parent    Message?    @relation("Thread", fields: [parentId], references: [id], onDelete: Cascade)
+  replies   Message[]   @relation("Thread")
+  
+  reactions Reaction[]
+  mentions  Mention[]
+  attachments MessageAttachment[]
+  
+  @@index([channelId, createdAt]) // For cursor-based pagination
+  @@index([parentId])             // For thread lookups
+}
+
+model Reaction {
+  id        String   @id @default(uuid())
+  messageId String
+  userId    String
+  emoji     String   // The emoji char or code
+  
+  createdAt DateTime @default(now())
+  
+  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([messageId, userId, emoji])
+}
+
+model Mention {
+  id        String   @id @default(uuid())
+  messageId String
+  userId    String   // The user being mentioned
+  
+  createdAt DateTime @default(now())
+  
+  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId, messageId])
+}
+
+model MessageAttachment {
+  id        String   @id @default(uuid())
+  messageId String
+  name      String
+  url       String
+  size      Int
+  type      String   // MIME type
+  
+  createdAt DateTime @default(now())
+  
+  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+}

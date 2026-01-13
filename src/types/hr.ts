@@ -173,7 +173,7 @@ export interface LeaveBalance {
   sickRemaining: number
 }
 
-export type HRTab = 'attendance' | 'flexible' | 'profile' | 'payroll' | 'leave' | 'stats' | 'evaluation' | 'export' | 'settings'
+export type HRTab = 'attendance' | 'flexible' | 'profile' | 'payroll' | 'leave' | 'stats' | 'evaluation' | 'export' | 'settings-quick' | 'settings-advanced'
 
 // ============================================
 // 성과 평가 관련 타입 정의

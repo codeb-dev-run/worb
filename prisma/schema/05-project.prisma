@@ -37,6 +37,8 @@ model Project {
   invitations  ProjectInvitation[]
   qaIssues     QAIssue[]
 
+  channels     Channel[]
+
   @@index([status])
   @@index([workspaceId])
   // 100K CCU 인덱스

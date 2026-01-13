@@ -73,6 +73,9 @@ model Workspace {
 
   // Attendance Change Request Relations
   attendanceChangeRequests AttendanceChangeRequest[]
+
+  // Messaging Relations
+  channels    Channel[]
 }
 
 model WorkspaceMember {

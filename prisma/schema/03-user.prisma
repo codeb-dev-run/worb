@@ -77,6 +77,15 @@ model User {
   attendanceChangeRequests  AttendanceChangeRequest[] @relation("AttendanceChangeRequestUser")
   reviewedAttendanceChanges AttendanceChangeRequest[] @relation("AttendanceChangeRequestReviewer")
 
+  // Messaging Relations
+  channels    ChannelMember[]
+  messages    Message[]
+  reactions   Reaction[]
+  mentions    Mention[]
+
+  // User Preferences
+  preference  UserPreference?
+
   // 100K CCU 인덱스
   @@index([isActive])
   @@index([createdAt])

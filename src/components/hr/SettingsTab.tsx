@@ -6,7 +6,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import {
-  Settings, Zap, Sliders, Clock, DollarSign, CalendarDays,
+  Settings, Clock, DollarSign, CalendarDays,
   Shield, RotateCcw, Save
 } from 'lucide-react'
 import {
@@ -22,6 +22,7 @@ interface SettingsTabProps {
   userId: string
   workspaceId: string
   isAdmin: boolean
+  mode: 'quick' | 'advanced'
 }
 
 // 기본 설정값 (2025 한국 근로기준법 기준)
@@ -157,8 +158,7 @@ const DEFAULT_SETTINGS: HRSystemSettings = {
   updatedAt: new Date().toISOString()
 }
 
-export default function SettingsTab({ userId, workspaceId, isAdmin }: SettingsTabProps) {
-  const [settingsMode, setSettingsMode] = useState<'quick' | 'advanced'>('quick')
+export default function SettingsTab({ workspaceId, isAdmin, mode }: SettingsTabProps) {
   const [settings, setSettings] = useState<HRSystemSettings>({ ...DEFAULT_SETTINGS, workspaceId })
   const [quickStep, setQuickStep] = useState(1)
   const [activeSection, setActiveSection] = useState<'work' | 'payroll' | 'leave' | 'rbac'>('work')
@@ -259,34 +259,11 @@ export default function SettingsTab({ userId, workspaceId, isAdmin }: SettingsTa
             </div>
           </div>
 
-          {/* 모드 토글 */}
-          <div className="mt-6 flex gap-2">
-            <Button
-              variant={settingsMode === 'quick' ? 'default' : 'outline'}
-              onClick={() => setSettingsMode('quick')}
-              className={settingsMode === 'quick'
-                ? 'bg-black text-lime-400 hover:bg-black/90'
-                : 'border-slate-200 text-slate-600'}
-            >
-              <Zap className="w-4 h-4 mr-2" />
-              퀵설정 모드
-            </Button>
-            <Button
-              variant={settingsMode === 'advanced' ? 'default' : 'outline'}
-              onClick={() => setSettingsMode('advanced')}
-              className={settingsMode === 'advanced'
-                ? 'bg-black text-lime-400 hover:bg-black/90'
-                : 'border-slate-200 text-slate-600'}
-            >
-              <Sliders className="w-4 h-4 mr-2" />
-              고급 모드
-            </Button>
-          </div>
         </CardContent>
       </Card>
 
       {/* 퀵설정 모드 */}
-      {settingsMode === 'quick' && (
+      {mode === 'quick' && (
         <QuickSetupWizard
           settings={settings}
           quickStep={quickStep}
@@ -298,7 +275,7 @@ export default function SettingsTab({ userId, workspaceId, isAdmin }: SettingsTa
       )}
 
       {/* 고급 모드 */}
-      {settingsMode === 'advanced' && (
+      {mode === 'advanced' && (
         <AdvancedSettings
           settings={settings}
           activeSection={activeSection}

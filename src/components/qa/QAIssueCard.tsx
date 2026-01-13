@@ -59,21 +59,6 @@ export default function QAIssueCard({
         {issue.title}
       </h4>
 
-      {/* Labels */}
-      {issue.labels.length > 0 && (
-        <div className="flex flex-wrap gap-1 mb-2">
-          {issue.labels.slice(0, 3).map(label => (
-            <span key={label} className="px-1.5 py-0.5 bg-blue-50 text-blue-600 rounded text-xs">
-              {label}
-            </span>
-          ))}
-          {issue.labels.length > 3 && (
-            <span className="px-1.5 py-0.5 bg-gray-100 text-gray-500 rounded text-xs">
-              +{issue.labels.length - 3}
-            </span>
-          )}
-        </div>
-      )}
 
       {/* Checklist Progress */}
       {issue.checklist && issue.checklist.length > 0 && (

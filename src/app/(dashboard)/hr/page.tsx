@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import {
   Clock, Users, FileText, DollarSign, CalendarDays,
-  BarChart3, Loader2, Plane, Settings, Download, Home, Star
+  BarChart3, Loader2, Plane, Download, Home, Star, Zap, Sliders
 } from 'lucide-react'
 
 // Storyboard Design Colors
@@ -45,7 +45,8 @@ const baseTabs = [
 // 관리자 전용 탭
 const adminTabs = [
   { id: 'export' as HRTab, label: '내보내기', icon: Download },
-  { id: 'settings' as HRTab, label: '설정', icon: Settings }
+  { id: 'settings-quick' as HRTab, label: '설정(퀵)', icon: Zap },
+  { id: 'settings-advanced' as HRTab, label: '설정(고급)', icon: Sliders }
 ]
 
 export default function HRPage() {
@@ -249,11 +250,20 @@ export default function HRPage() {
             isAdmin={isAdmin}
           />
         )}
-        {activeTab === 'settings' && (
+        {activeTab === 'settings-quick' && (
           <SettingsTab
             userId={userId}
             workspaceId={workspaceId}
             isAdmin={isAdmin}
+            mode="quick"
+          />
+        )}
+        {activeTab === 'settings-advanced' && (
+          <SettingsTab
+            userId={userId}
+            workspaceId={workspaceId}
+            isAdmin={isAdmin}
+            mode="advanced"
           />
         )}
       </div>

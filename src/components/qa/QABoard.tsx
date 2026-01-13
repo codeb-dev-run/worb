@@ -21,8 +21,6 @@ export interface QAIssue {
   stepsToReproduce?: string | null
   expectedBehavior?: string | null
   actualBehavior?: string | null
-  environment?: string | null
-  affectedFiles: string[]
   codeChanges?: any
   githubIssueUrl?: string | null
   githubIssueNumber?: number | null
@@ -33,7 +31,6 @@ export interface QAIssue {
   closedAt?: string | null
   dueDate?: string | null
   checklist?: { id: string; text: string; completed: boolean }[]
-  labels: string[]
   viewCount: number
   createdAt: string
   updatedAt: string
@@ -320,15 +317,6 @@ export default function QABoard({ workspaceId, projectId }: QABoardProps) {
                   </td>
                   <td className="px-4 py-3">
                     <div className="font-medium text-gray-900">{issue.title}</div>
-                    {issue.labels.length > 0 && (
-                      <div className="flex gap-1 mt-1">
-                        {issue.labels.slice(0, 3).map(label => (
-                          <span key={label} className="px-2 py-0.5 bg-gray-100 rounded text-xs text-gray-600">
-                            {label}
-                          </span>
-                        ))}
-                      </div>
-                    )}
                   </td>
                   <td className="px-4 py-3">
                     <span className={`px-2 py-1 rounded text-xs font-medium ${

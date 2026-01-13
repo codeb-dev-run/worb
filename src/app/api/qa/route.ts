@@ -31,7 +31,6 @@ export async function GET(request: NextRequest) {
       assigneeId,
       reporterId,
       search,
-      labels,
       page,
       limit,
       sortBy,
@@ -52,9 +51,6 @@ export async function GET(request: NextRequest) {
           { title: { contains: search, mode: 'insensitive' } },
           { description: { contains: search, mode: 'insensitive' } },
         ],
-      }),
-      ...(labels && {
-        labels: { hasSome: labels.split(',').map(l => l.trim()) },
       }),
     }
 
@@ -132,8 +128,6 @@ export async function POST(request: NextRequest) {
           completedAt: null,
           completedBy: null,
         })) : undefined,
-        labels: issueData.labels || [],
-        affectedFiles: issueData.affectedFiles || [],
       },
       include: {
         reporter: {
@@ -284,14 +278,6 @@ function buildGitHubIssueBody(issue: any): string {
     }
   }
 
-  if (issue.environment) {
-    body += `## Environment\n${issue.environment}\n\n`
-  }
-
-  if (issue.affectedFiles && issue.affectedFiles.length > 0) {
-    body += `## Affected Files\n${issue.affectedFiles.map((f: string) => `- \`${f}\``).join('\n')}\n\n`
-  }
-
   body += `---\n*Created from QA Board by ${issue.reporter?.name || 'Unknown'}*`
 
   return body
@@ -331,11 +317,6 @@ function buildGitHubLabels(
     labels.push(labelMapping.priority[issue.priority])
   } else if (priorityLabels[issue.priority]) {
     labels.push(priorityLabels[issue.priority])
-  }
-
-  // Add custom labels
-  if (issue.labels && issue.labels.length > 0) {
-    labels.push(...issue.labels)
   }
 
   return labels

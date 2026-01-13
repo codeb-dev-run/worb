@@ -234,3 +234,35 @@ enum QAIssueType {
   TASK        // 작업
   QUESTION    // 질문
 }
+
+// ============================================
+// Messaging & UI
+// ============================================
+
+enum ChannelType {
+  PUBLIC
+  PRIVATE
+  VOICE
+  VIDEO
+  DM
+}
+
+enum MessageType {
+  TEXT
+  IMAGE
+  FILE
+  SYSTEM
+  CALL
+}
+
+enum AppTheme {
+  SYSTEM
+  LIGHT
+  DARK
+}
+
+enum UIMode {
+  SIMPLE  // Kakao style
+  PRO     // Slack style
+}
+
