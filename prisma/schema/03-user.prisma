@@ -90,6 +90,9 @@ model User {
   uploadedFiles     File[]         @relation("FileUploader")
   fileDownloads     FileDownload[] @relation("FileDownloader")
 
+  // Notification Relations
+  notifications     Notification[]
+
   // 100K CCU 인덱스
   @@index([isActive])
   @@index([createdAt])

@@ -3,6 +3,8 @@ const isDev = process.env.NODE_ENV === 'development'
 
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { useAuth } from '@/lib/auth-context'
+import { useWorkspace } from '@/lib/workspace-context'
+import { useCentrifugo } from '@/components/providers/centrifugo-provider'
 import { useRouter, usePathname } from 'next/navigation'
 import Link from 'next/link'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -30,6 +32,8 @@ interface HeaderProps {
 
 export default function Header({ showSidebarToggle = true, onSidebarToggle }: HeaderProps) {
   const { user, userProfile, logout } = useAuth()
+  const { currentWorkspace } = useWorkspace()
+  const { subscribe, isConnected } = useCentrifugo()
   const router = useRouter()
   const pathname = usePathname()
   const [showNotifications, setShowNotifications] = useState(false)
@@ -39,11 +43,89 @@ export default function Header({ showSidebarToggle = true, onSidebarToggle }: He
   const notificationRef = useRef<HTMLDivElement>(null)
   const userMenuRef = useRef<HTMLDivElement>(null)
 
-  // 알림 구독
-  useEffect(() => {
+  // 알림 목록 로드
+  const loadNotifications = useCallback(async () => {
     if (!user) return
-    // TODO: Implement PostgreSQL notifications
-  }, [user])
+    try {
+      const params = new URLSearchParams({ limit: '20' })
+      if (currentWorkspace?.id) {
+        params.append('workspaceId', currentWorkspace.id)
+      }
+      const response = await fetch(`/api/notifications?${params}`)
+      if (response.ok) {
+        const data = await response.json()
+        setNotifications(data.notifications)
+        setUnreadCount(data.unreadCount)
+      }
+    } catch (error) {
+      if (isDev) console.error('Failed to load notifications:', error)
+    }
+  }, [user, currentWorkspace?.id])
+
+  // 초기 알림 로드
+  useEffect(() => {
+    loadNotifications()
+  }, [loadNotifications])
+
+  // Centrifugo 실시간 알림 구독
+  useEffect(() => {
+    if (!user || !isConnected) return
+
+    // 개인 채널 구독 (user:{userId})
+    const unsubscribeUser = subscribe(`user:${user.uid}`, (data) => {
+      if (data.event === 'notification') {
+        // 새 알림 추가
+        const newNotification: Notification = {
+          id: data.id || Date.now().toString(),
+          title: data.title,
+          message: data.message,
+          time: data.timestamp || new Date().toISOString(),
+          read: false,
+          type: data.type || 'info',
+          link: data.actionUrl,
+        }
+        setNotifications(prev => [newNotification, ...prev.slice(0, 19)])
+        setUnreadCount(prev => prev + 1)
+
+        // 토스트 알림
+        toast(data.title, {
+          icon: data.type === 'success' ? '✓' : data.type === 'warning' ? '⚠️' : data.type === 'error' ? '❌' : 'ℹ️',
+          duration: 4000,
+        })
+      }
+    })
+
+    // 워크스페이스 채널 구독 (있는 경우)
+    let unsubscribeWorkspace: (() => void) | undefined
+    if (currentWorkspace?.id) {
+      unsubscribeWorkspace = subscribe(`workspace:${currentWorkspace.id}`, (data) => {
+        if (data.event?.includes('announcement') || data.event?.includes('leave') || data.event?.includes('attendance')) {
+          // 워크스페이스 알림
+          const newNotification: Notification = {
+            id: data.id || Date.now().toString(),
+            title: data.title,
+            message: data.message,
+            time: data.timestamp || new Date().toISOString(),
+            read: false,
+            type: data.type || 'info',
+            link: data.actionUrl,
+          }
+          setNotifications(prev => [newNotification, ...prev.slice(0, 19)])
+          setUnreadCount(prev => prev + 1)
+
+          toast(data.title, {
+            icon: 'ℹ️',
+            duration: 4000,
+          })
+        }
+      })
+    }
+
+    return () => {
+      unsubscribeUser()
+      unsubscribeWorkspace?.()
+    }
+  }, [user, currentWorkspace?.id, isConnected, subscribe])
 
   // 외부 클릭 감지
   useEffect(() => {
@@ -73,6 +155,23 @@ export default function Header({ showSidebarToggle = true, onSidebarToggle }: He
   }, [logout, router])
 
   const handleNotificationClick = useCallback(async (notification: Notification) => {
+    // 읽음 처리
+    if (!notification.read) {
+      try {
+        await fetch('/api/notifications', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ notificationIds: [notification.id] })
+        })
+        setNotifications(prev =>
+          prev.map(n => n.id === notification.id ? { ...n, read: true } : n)
+        )
+        setUnreadCount(prev => Math.max(0, prev - 1))
+      } catch (error) {
+        if (isDev) console.error('Failed to mark notification as read:', error)
+      }
+    }
+
     if (notification.link) {
       router.push(notification.link)
       setShowNotifications(false)
@@ -80,9 +179,23 @@ export default function Header({ showSidebarToggle = true, onSidebarToggle }: He
   }, [router])
 
   const markAllAsRead = useCallback(async () => {
-    if (!user) return
-    toast.success('모든 알림을 읽음으로 표시했습니다.')
-  }, [user])
+    if (!user || unreadCount === 0) return
+    try {
+      const response = await fetch('/api/notifications', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ markAllAsRead: true })
+      })
+      if (response.ok) {
+        setNotifications(prev => prev.map(n => ({ ...n, read: true })))
+        setUnreadCount(0)
+        toast.success('모든 알림을 읽음으로 표시했습니다.')
+      }
+    } catch (error) {
+      if (isDev) console.error('Failed to mark all as read:', error)
+      toast.error('알림 처리에 실패했습니다.')
+    }
+  }, [user, unreadCount])
 
   // useMemo로 breadcrumbs 캐싱 (pathname 변경시에만 재계산)
   const breadcrumbs = useMemo(() => {

@@ -1,0 +1,39 @@
+// =============================================================================
+// Notification Model - 실시간 알림 시스템
+// =============================================================================
+
+model Notification {
+  id          String   @id @default(uuid())
+  userId      String
+  workspaceId String?
+
+  type        NotificationType
+  title       String
+  message     String
+  link        String?
+
+  isRead      Boolean  @default(false)
+  readAt      DateTime?
+
+  // 메타데이터 (알림 종류별 추가 정보)
+  metadata    Json?
+
+  createdAt   DateTime @default(now())
+  expiresAt   DateTime?
+
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead, createdAt])
+  @@index([userId, createdAt])
+  @@index([workspaceId, createdAt])
+}
+
+enum NotificationType {
+  INFO
+  SUCCESS
+  WARNING
+  ERROR
+  ACTION    // 승인/반려 등 액션 필요
+  SYSTEM    // 시스템 알림
+}

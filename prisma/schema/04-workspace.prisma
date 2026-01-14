@@ -79,6 +79,9 @@ model Workspace {
 
   // File Management Relations
   files       File[]
+
+  // Notification Relations
+  notifications Notification[]
 }
 
 model WorkspaceMember {
