@@ -45,20 +45,27 @@ export default function Header({ showSidebarToggle = true, onSidebarToggle }: He
 
   // 알림 목록 로드
   const loadNotifications = useCallback(async () => {
-    if (!user) return
+    if (!user) {
+      console.log('[Header] loadNotifications: No user, skipping')
+      return
+    }
     try {
       const params = new URLSearchParams({ limit: '20' })
       if (currentWorkspace?.id) {
         params.append('workspaceId', currentWorkspace.id)
       }
+      console.log('[Header] Loading notifications...', { userId: user.uid, workspaceId: currentWorkspace?.id })
       const response = await fetch(`/api/notifications?${params}`)
       if (response.ok) {
         const data = await response.json()
+        console.log('[Header] Notifications loaded:', { count: data.notifications?.length, unread: data.unreadCount })
         setNotifications(data.notifications)
         setUnreadCount(data.unreadCount)
+      } else {
+        console.error('[Header] Notifications API error:', response.status, await response.text())
       }
     } catch (error) {
-      if (isDev) console.error('Failed to load notifications:', error)
+      console.error('[Header] Failed to load notifications:', error)
     }
   }, [user, currentWorkspace?.id])
 
@@ -69,8 +76,13 @@ export default function Header({ showSidebarToggle = true, onSidebarToggle }: He
 
   // Centrifugo 실시간 알림 구독
   useEffect(() => {
-    if (!user || !isConnected) return
+    console.log('[Header] Centrifugo effect:', { user: !!user, isConnected, userId: user?.uid })
+    if (!user || !isConnected) {
+      console.log('[Header] Skipping Centrifugo subscription - not ready')
+      return
+    }
 
+    console.log('[Header] Subscribing to Centrifugo channels...')
     // 개인 채널 구독 (user:{userId})
     const unsubscribeUser = subscribe(`user:${user.uid}`, (data) => {
       if (data.event === 'notification') {

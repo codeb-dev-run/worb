@@ -225,6 +225,7 @@ export async function createProject(data: {
 }
 
 export async function getProject(projectId: string) {
+    console.log('[getProject] Called with projectId:', projectId)
     try {
         const project = await prisma.project.findUnique({
             where: { id: projectId },
@@ -242,7 +243,12 @@ export async function getProject(projectId: string) {
             }
         })
 
-        if (!project) return null
+        if (!project) {
+            console.log('[getProject] Project NOT FOUND in DB:', projectId)
+            return null
+        }
+
+        console.log('[getProject] Project found:', project.name, project.id)
 
         // Transform to match frontend expected format
         const team = project.members.map((m: any) => ({
