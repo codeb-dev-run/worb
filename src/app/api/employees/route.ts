@@ -311,10 +311,9 @@ export async function POST(request: NextRequest) {
       }
     })
 
-    // 직원 목록 캐시 무효화
-    await invalidateCache(CacheKeys.employees(workspaceId))
-    // HR 통계 캐시도 무효화
-    await invalidateCache(CacheKeys.hrStats(workspaceId))
+    // 100K CCU: 캐시 무효화를 비동기로 처리 (응답 지연 방지)
+    invalidateCache(CacheKeys.employees(workspaceId))
+    invalidateCache(CacheKeys.hrStats(workspaceId))
 
     return NextResponse.json({ employee }, { status: 201 })
   } catch (error) {

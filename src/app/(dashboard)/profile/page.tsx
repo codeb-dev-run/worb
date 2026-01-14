@@ -34,6 +34,11 @@ interface ProfileData {
   location: string
 }
 
+interface AccountInfo {
+  createdAt: string | null
+  lastLogin: string | null
+}
+
 const defaultProfile: ProfileData = {
   displayName: '',
   email: '',
@@ -47,13 +52,14 @@ const defaultProfile: ProfileData = {
 }
 
 export default function ProfilePage() {
-  const { user, userProfile } = useAuth()
+  const { user, userProfile, updateUserProfile: updateAuthProfile } = useAuth()
   const { currentWorkspace } = useWorkspace()
   const [profile, setProfile] = useState<ProfileData>(defaultProfile)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [hasChanges, setHasChanges] = useState(false)
   const [uploadingAvatar, setUploadingAvatar] = useState(false)
+  const [accountInfo, setAccountInfo] = useState<AccountInfo>({ createdAt: null, lastLogin: null })
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   // 프로필 데이터 로드
@@ -69,6 +75,24 @@ export default function ProfilePage() {
       department: userProfile?.department || '',
       avatar: userProfile?.avatar || ''
     }))
+
+    // 계정 정보 로드 (가입일, 마지막 로그인)
+    const loadAccountInfo = async () => {
+      try {
+        const response = await fetch('/api/user/profile')
+        if (response.ok) {
+          const data = await response.json()
+          setAccountInfo({
+            createdAt: data.user?.createdAt || null,
+            lastLogin: data.user?.lastLogin || null
+          })
+        }
+      } catch (error) {
+        if (isDev) console.error('Failed to load account info:', error)
+      }
+    }
+    loadAccountInfo()
+
     setLoading(false)
   }, [user, userProfile])
 
@@ -105,11 +129,17 @@ export default function ProfilePage() {
         })
       }
 
+      // Auth context 상태 즉시 업데이트 (페이지 새로고침 없이 반영)
+      await updateAuthProfile({
+        displayName: profile.displayName,
+        avatar: profile.avatar,
+        phone: profile.phone,
+        company: profile.company,
+        department: profile.department
+      })
+
       toast.success('프로필이 저장되었습니다.')
       setHasChanges(false)
-
-      // 페이지 새로고침하여 세션 정보 갱신
-      window.location.reload()
     } catch (error) {
       if (isDev) console.error('Error saving profile:', error)
       toast.error('프로필 저장 중 오류가 발생했습니다.')
@@ -436,7 +466,9 @@ export default function ProfilePage() {
               <div>
                 <p className="text-sm text-slate-500">가입일</p>
                 <p className="font-medium text-slate-900">
-                  {userProfile?.createdAt
+                  {accountInfo.createdAt
+                    ? new Date(accountInfo.createdAt).toLocaleDateString('ko-KR')
+                    : userProfile?.createdAt
                     ? new Date(userProfile.createdAt).toLocaleDateString('ko-KR')
                     : '-'
                   }
@@ -451,7 +483,9 @@ export default function ProfilePage() {
               <div>
                 <p className="text-sm text-slate-500">마지막 로그인</p>
                 <p className="font-medium text-slate-900">
-                  {userProfile?.lastLogin
+                  {accountInfo.lastLogin
+                    ? new Date(accountInfo.lastLogin).toLocaleDateString('ko-KR')
+                    : userProfile?.lastLogin
                     ? new Date(userProfile.lastLogin).toLocaleDateString('ko-KR')
                     : '-'
                   }

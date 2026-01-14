@@ -8,7 +8,8 @@ import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import {
   Clock, Calendar, Coffee, CheckCircle, XCircle, AlertCircle,
-  MapPin, Loader2, Home, Wifi, Timer, Building2, Play, Square, History, RotateCcw, Edit3
+  MapPin, Loader2, Home, Wifi, Timer, Building2, Play, Square, History, RotateCcw, Edit3,
+  ClipboardList, UserCheck, Ban
 } from 'lucide-react'
 import { Textarea } from '@/components/ui/textarea'
 import { Input } from '@/components/ui/input'
@@ -41,9 +42,10 @@ interface AttendanceRecord {
   date: string
   checkIn: string | null
   checkOut: string | null
-  workLocation: 'OFFICE' | 'REMOTE'
   status: string
-  totalMinutes: number
+  totalWorkedMinutes: number
+  officeWorkedMinutes?: number
+  remoteWorkedMinutes?: number
   note?: string | null
   createdAt?: string
   updatedAt?: string
@@ -65,6 +67,14 @@ export default function AttendanceTab({ userId, workspaceId, isAdmin }: Attendan
     reason: '',
   })
   const [changeRequestLoading, setChangeRequestLoading] = useState(false)
+  // 관리자용 승인 요청 목록
+  const [pendingRequests, setPendingRequests] = useState<any[]>([])
+  const [pendingRequestsLoading, setPendingRequestsLoading] = useState(false)
+  const [selectedPendingRequest, setSelectedPendingRequest] = useState<any>(null)
+  const [rejectReason, setRejectReason] = useState('')
+  const [processingRequestId, setProcessingRequestId] = useState<string | null>(null)
+  // 내 변경 요청 목록
+  const [myChangeRequests, setMyChangeRequests] = useState<any[]>([])
   const [settings, setSettings] = useState<WorkSettings>({
     type: 'FIXED',
     dailyRequiredMinutes: 480,
@@ -84,7 +94,7 @@ export default function AttendanceTab({ userId, workspaceId, isAdmin }: Attendan
   // Presence Check 타이머
   useEffect(() => {
     if (!settings.presenceCheckEnabled || !todayAttendance?.checkIn || todayAttendance?.checkOut) return
-    if (todayAttendance?.workLocation !== 'remote' && todayAttendance?.workLocation !== 'REMOTE') return
+    if (todayAttendance?.status !== 'REMOTE') return
 
     const intervalMs = settings.presenceIntervalMinutes * 60 * 1000
     const timer = setInterval(() => setIsPresenceCheckOpen(true), intervalMs)
@@ -94,9 +104,110 @@ export default function AttendanceTab({ userId, workspaceId, isAdmin }: Attendan
   const loadData = async () => {
     setLoading(true)
     try {
-      await Promise.all([loadAttendance(), loadSettings(), fetchUserIP()])
+      await Promise.all([
+        loadAttendance(),
+        loadSettings(),
+        fetchUserIP(),
+        loadMyChangeRequests(),
+        isAdmin && loadPendingRequests()
+      ])
     } finally {
       setLoading(false)
+    }
+  }
+
+  // 내 변경 요청 목록 로드
+  const loadMyChangeRequests = async () => {
+    try {
+      const res = await fetch(`/api/attendance/change-request?workspaceId=${workspaceId}`, {
+        headers: { 'x-user-id': userId, 'x-workspace-id': workspaceId }
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setMyChangeRequests(data || [])
+      }
+    } catch (e) {
+      if (isDev) console.error('Failed to load my change requests:', e)
+    }
+  }
+
+  // 관리자용 승인 대기 목록 로드
+  const loadPendingRequests = async () => {
+    if (!isAdmin) return
+    setPendingRequestsLoading(true)
+    try {
+      const res = await fetch(`/api/attendance/change-request/admin?workspaceId=${workspaceId}&status=PENDING`, {
+        headers: { 'x-user-id': userId, 'x-workspace-id': workspaceId }
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setPendingRequests(data || [])
+      }
+    } catch (e) {
+      if (isDev) console.error('Failed to load pending requests:', e)
+    } finally {
+      setPendingRequestsLoading(false)
+    }
+  }
+
+  // 요청 승인
+  const handleApproveRequest = async (requestId: string) => {
+    setProcessingRequestId(requestId)
+    try {
+      const res = await fetch(`/api/attendance/change-request/${requestId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-id': userId,
+          'x-workspace-id': workspaceId
+        },
+        body: JSON.stringify({ action: 'approve' })
+      })
+      if (res.ok) {
+        toast.success('요청이 승인되었습니다')
+        loadPendingRequests()
+        setSelectedPendingRequest(null)
+      } else {
+        const err = await res.json()
+        toast.error(err.error || '승인 처리 실패')
+      }
+    } catch (e) {
+      toast.error('승인 처리 중 오류가 발생했습니다')
+    } finally {
+      setProcessingRequestId(null)
+    }
+  }
+
+  // 요청 반려
+  const handleRejectRequest = async (requestId: string) => {
+    if (!rejectReason || rejectReason.trim().length < 3) {
+      toast.error('반려 사유를 3자 이상 입력해주세요')
+      return
+    }
+    setProcessingRequestId(requestId)
+    try {
+      const res = await fetch(`/api/attendance/change-request/${requestId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-id': userId,
+          'x-workspace-id': workspaceId
+        },
+        body: JSON.stringify({ action: 'reject', rejectReason: rejectReason.trim() })
+      })
+      if (res.ok) {
+        toast.success('요청이 반려되었습니다')
+        loadPendingRequests()
+        setSelectedPendingRequest(null)
+        setRejectReason('')
+      } else {
+        const err = await res.json()
+        toast.error(err.error || '반려 처리 실패')
+      }
+    } catch (e) {
+      toast.error('반려 처리 중 오류가 발생했습니다')
+    } finally {
+      setProcessingRequestId(null)
     }
   }
 
@@ -365,7 +476,9 @@ export default function AttendanceTab({ userId, workspaceId, isAdmin }: Attendan
     late: { color: 'bg-amber-500/20 text-amber-400 border-amber-500/30', text: '지각' },
     LATE: { color: 'bg-amber-500/20 text-amber-400 border-amber-500/30', text: '지각' },
     absent: { color: 'bg-rose-500/20 text-rose-400 border-rose-500/30', text: '결근' },
-    ABSENT: { color: 'bg-rose-500/20 text-rose-400 border-rose-500/30', text: '결근' }
+    ABSENT: { color: 'bg-rose-500/20 text-rose-400 border-rose-500/30', text: '결근' },
+    remote: { color: 'bg-purple-500/20 text-purple-400 border-purple-500/30', text: '재택' },
+    REMOTE: { color: 'bg-purple-500/20 text-purple-400 border-purple-500/30', text: '재택' }
   }), [])
 
   const getStatusBadge = useCallback((status: string) => {
@@ -418,8 +531,8 @@ export default function AttendanceTab({ userId, workspaceId, isAdmin }: Attendan
             </div>
             <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">근무 시간</span>
             <span className="text-2xl font-bold text-slate-900">
-              {todayAttendance?.totalMinutes
-                ? `${Math.floor(todayAttendance.totalMinutes / 60)}h ${todayAttendance.totalMinutes % 60}m`
+              {todayAttendance?.totalWorkedMinutes
+                ? `${Math.floor(todayAttendance.totalWorkedMinutes / 60)}h ${todayAttendance.totalWorkedMinutes % 60}m`
                 : '0h 0m'}
             </span>
           </CardContent>
@@ -433,7 +546,7 @@ export default function AttendanceTab({ userId, workspaceId, isAdmin }: Attendan
             </div>
             <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">근무 위치</span>
             <span className="text-lg font-bold text-slate-900 truncate w-full">
-              {todayAttendance?.workLocation === 'REMOTE' || todayAttendance?.workLocation === 'remote'
+              {todayAttendance?.status === 'REMOTE'
                 ? '재택 근무'
                 : todayAttendance?.checkIn
                   ? '사무실'
@@ -556,6 +669,104 @@ export default function AttendanceTab({ userId, workspaceId, isAdmin }: Attendan
         </CardContent>
       </Card>
 
+      {/* 관리자용 승인 대기 목록 */}
+      {isAdmin && pendingRequests.length > 0 && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between px-1">
+            <h3 className="text-sm font-bold text-amber-600 uppercase tracking-wider flex items-center gap-2">
+              <ClipboardList className="w-4 h-4" />
+              시간 변경 승인 대기 ({pendingRequests.length}건)
+            </h3>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={loadPendingRequests}
+              disabled={pendingRequestsLoading}
+              className="text-slate-500"
+            >
+              {pendingRequestsLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCcw className="w-4 h-4" />}
+            </Button>
+          </div>
+          <Card className="bg-amber-50/50 backdrop-blur-md border-amber-200 shadow-sm rounded-3xl overflow-hidden">
+            <div className="divide-y divide-amber-100">
+              {pendingRequests.map((request) => (
+                <div
+                  key={request.id}
+                  onClick={() => setSelectedPendingRequest(request)}
+                  className="flex items-center justify-between p-4 hover:bg-amber-50 transition-colors cursor-pointer group"
+                >
+                  <div className="flex items-center gap-4">
+                    <div className="w-10 h-10 bg-amber-100 rounded-full flex items-center justify-center text-amber-600 font-bold">
+                      {request.user?.name?.charAt(0) || '?'}
+                    </div>
+                    <div>
+                      <div className="font-medium text-slate-900">{request.user?.name || '알 수 없음'}</div>
+                      <div className="text-xs text-slate-500">{request.user?.email}</div>
+                    </div>
+                    <Badge className="bg-amber-200 text-amber-800 border-amber-300">
+                      {request.requestType === 'CHECK_IN' ? '출근 시간' : request.requestType === 'CHECK_OUT' ? '퇴근 시간' : '출퇴근 시간'}
+                    </Badge>
+                    <span className="text-sm text-slate-600">
+                      {request.attendance?.date}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <div className="text-right text-sm">
+                      <div className="text-slate-500">
+                        기존: {request.originalTime ? new Date(request.originalTime).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }) : '-'}
+                      </div>
+                      <div className="text-amber-600 font-medium">
+                        변경: {new Date(request.requestedTime).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}
+                      </div>
+                    </div>
+                    <svg className="w-4 h-4 text-amber-400 group-hover:text-amber-600 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {/* 내 변경 요청 현황 */}
+      {myChangeRequests.length > 0 && (
+        <div className="space-y-4">
+          <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider px-1 flex items-center gap-2">
+            <Edit3 className="w-4 h-4" />
+            내 시간 변경 요청
+          </h3>
+          <Card className="bg-white/60 backdrop-blur-md border-white/40 shadow-sm rounded-3xl overflow-hidden">
+            <div className="divide-y divide-slate-100">
+              {myChangeRequests.slice(0, 5).map((request) => (
+                <div key={request.id} className="flex items-center justify-between p-4">
+                  <div className="flex items-center gap-4">
+                    <span className="text-slate-700 font-medium">{request.attendance?.date}</span>
+                    <Badge className={
+                      request.status === 'PENDING' ? 'bg-amber-100 text-amber-700 border-amber-200' :
+                      request.status === 'APPROVED' ? 'bg-emerald-100 text-emerald-700 border-emerald-200' :
+                      'bg-rose-100 text-rose-700 border-rose-200'
+                    }>
+                      {request.status === 'PENDING' ? '대기중' : request.status === 'APPROVED' ? '승인됨' : '반려됨'}
+                    </Badge>
+                    <span className="text-sm text-slate-500">
+                      {request.requestType === 'CHECK_IN' ? '출근' : request.requestType === 'CHECK_OUT' ? '퇴근' : '출퇴근'} →{' '}
+                      <span className="text-slate-700 font-medium">
+                        {new Date(request.requestedTime).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </span>
+                  </div>
+                  <div className="text-sm text-slate-400">
+                    {new Date(request.createdAt).toLocaleDateString('ko-KR')}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Card>
+        </div>
+      )}
+
       {/* Recent Records (Storyboard Design) */}
       <div className="space-y-4">
         <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider px-1">최근 출근 기록</h3>
@@ -569,44 +780,66 @@ export default function AttendanceTab({ userId, workspaceId, isAdmin }: Attendan
             </div>
           ) : (
             <div className="divide-y divide-slate-100">
-              {attendanceHistory.slice(0, 10).map((record) => (
-                <div
-                  key={record.id}
-                  onClick={() => setSelectedRecord(record)}
-                  className="flex items-center justify-between p-4 hover:bg-white/50 transition-colors cursor-pointer group"
-                >
-                  <div className="flex items-center gap-4">
-                    <span className="text-slate-700 font-medium min-w-[100px]">{record.date}</span>
-                    {getStatusBadge(record.status)}
-                    <Badge variant="outline" className="text-xs border-slate-200 text-slate-500">
-                      {record.workLocation === 'REMOTE' ? '재택' : '사무실'}
-                    </Badge>
-                    {record.note && (
-                      <span className="text-xs text-slate-400 max-w-[200px] truncate hidden sm:inline" title={record.note}>
-                        {record.note}
+              {attendanceHistory.slice(0, 10).map((record) => {
+                // 해당 기록에 대한 대기 중인 변경 요청이 있는지 확인
+                const hasPendingRequest = myChangeRequests.some(
+                  (req) => req.attendanceId === record.id && req.status === 'PENDING'
+                )
+                return (
+                  <div
+                    key={record.id}
+                    className="flex items-center justify-between p-4 hover:bg-white/50 transition-colors group"
+                  >
+                    <div className="flex items-center gap-4 cursor-pointer flex-1" onClick={() => setSelectedRecord(record)}>
+                      <span className="text-slate-700 font-medium min-w-[100px]">{record.date}</span>
+                      {getStatusBadge(record.status)}
+                      <Badge variant="outline" className="text-xs border-slate-200 text-slate-500">
+                        {record.status === 'REMOTE' ? '재택' : '사무실'}
+                      </Badge>
+                      {record.note && (
+                        <span className="text-xs text-slate-400 max-w-[200px] truncate hidden sm:inline" title={record.note}>
+                          {record.note}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-4 text-sm">
+                      <span className="text-slate-500 hidden md:inline">
+                        출근: <span className="text-slate-700 font-medium">{formatTime(record.checkIn)}</span>
                       </span>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-6 text-sm">
-                    <span className="text-slate-500">
-                      출근: <span className="text-slate-700 font-medium">{formatTime(record.checkIn)}</span>
-                    </span>
-                    <span className="text-slate-500">
-                      퇴근: <span className="text-slate-700 font-medium">{formatTime(record.checkOut)}</span>
-                    </span>
-                    <span className="text-slate-500">
-                      근무: <span className="text-lime-600 font-bold">
-                        {record.totalMinutes
-                          ? `${Math.floor(record.totalMinutes / 60)}h ${record.totalMinutes % 60}m`
-                          : '-'}
+                      <span className="text-slate-500 hidden md:inline">
+                        퇴근: <span className="text-slate-700 font-medium">{formatTime(record.checkOut)}</span>
                       </span>
-                    </span>
-                    <svg className="w-4 h-4 text-slate-300 group-hover:text-slate-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                    </svg>
+                      <span className="text-slate-500">
+                        근무: <span className="text-lime-600 font-bold">
+                          {record.totalWorkedMinutes
+                            ? `${Math.floor(record.totalWorkedMinutes / 60)}h ${record.totalWorkedMinutes % 60}m`
+                            : '-'}
+                        </span>
+                      </span>
+                      {/* 수정 신청 버튼 */}
+                      {hasPendingRequest ? (
+                        <Badge className="bg-amber-100 text-amber-700 border-amber-200 text-xs">
+                          수정 대기중
+                        </Badge>
+                      ) : (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setSelectedRecord(record)
+                            openChangeRequestModal(record)
+                          }}
+                          className="text-xs border-amber-300 text-amber-600 hover:bg-amber-50 hover:text-amber-700 rounded-lg px-3"
+                        >
+                          <Edit3 className="w-3 h-3 mr-1" />
+                          수정신청
+                        </Button>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
           )}
         </Card>
@@ -652,7 +885,7 @@ export default function AttendanceTab({ userId, workspaceId, isAdmin }: Attendan
               <div className="flex items-center justify-between py-2 border-b border-slate-100">
                 <span className="text-slate-500">근무 형태</span>
                 <Badge variant="outline" className="text-xs border-slate-200">
-                  {selectedRecord.workLocation === 'REMOTE' ? '재택근무' : '사무실 근무'}
+                  {selectedRecord.status === 'REMOTE' ? '재택근무' : '사무실 근무'}
                 </Badge>
               </div>
               <div className="flex items-center justify-between py-2 border-b border-slate-100">
@@ -666,8 +899,8 @@ export default function AttendanceTab({ userId, workspaceId, isAdmin }: Attendan
               <div className="flex items-center justify-between py-2 border-b border-slate-100">
                 <span className="text-slate-500">총 근무 시간</span>
                 <span className="text-lime-600 font-bold">
-                  {selectedRecord.totalMinutes
-                    ? `${Math.floor(selectedRecord.totalMinutes / 60)}시간 ${selectedRecord.totalMinutes % 60}분`
+                  {selectedRecord.totalWorkedMinutes
+                    ? `${Math.floor(selectedRecord.totalWorkedMinutes / 60)}시간 ${selectedRecord.totalWorkedMinutes % 60}분`
                     : '-'}
                 </span>
               </div>
@@ -792,6 +1025,106 @@ export default function AttendanceTab({ userId, workspaceId, isAdmin }: Attendan
                 <CheckCircle className="w-4 h-4 mr-2" />
               )}
               요청 제출
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 관리자용 승인/반려 모달 */}
+      <Dialog open={!!selectedPendingRequest} onOpenChange={() => { setSelectedPendingRequest(null); setRejectReason('') }}>
+        <DialogContent className="bg-white border-slate-200 rounded-3xl shadow-xl max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="text-slate-900 flex items-center gap-2">
+              <UserCheck className="w-5 h-5 text-amber-500" />
+              시간 변경 요청 검토
+            </DialogTitle>
+          </DialogHeader>
+          {selectedPendingRequest && (
+            <div className="space-y-4">
+              {/* 신청자 정보 */}
+              <div className="flex items-center gap-4 p-4 bg-slate-50 rounded-xl">
+                <div className="w-12 h-12 bg-amber-100 rounded-full flex items-center justify-center text-amber-600 font-bold text-lg">
+                  {selectedPendingRequest.user?.name?.charAt(0) || '?'}
+                </div>
+                <div>
+                  <div className="font-bold text-slate-900">{selectedPendingRequest.user?.name || '알 수 없음'}</div>
+                  <div className="text-sm text-slate-500">{selectedPendingRequest.user?.email}</div>
+                </div>
+              </div>
+
+              {/* 요청 정보 */}
+              <div className="space-y-3">
+                <div className="flex justify-between py-2 border-b border-slate-100">
+                  <span className="text-slate-500">날짜</span>
+                  <span className="font-medium text-slate-900">{selectedPendingRequest.attendance?.date}</span>
+                </div>
+                <div className="flex justify-between py-2 border-b border-slate-100">
+                  <span className="text-slate-500">변경 유형</span>
+                  <Badge className="bg-amber-100 text-amber-700 border-amber-200">
+                    {selectedPendingRequest.requestType === 'CHECK_IN' ? '출근 시간' :
+                     selectedPendingRequest.requestType === 'CHECK_OUT' ? '퇴근 시간' : '출퇴근 시간'}
+                  </Badge>
+                </div>
+                <div className="flex justify-between py-2 border-b border-slate-100">
+                  <span className="text-slate-500">기존 시간</span>
+                  <span className="text-slate-700">
+                    {selectedPendingRequest.originalTime
+                      ? new Date(selectedPendingRequest.originalTime).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
+                      : '기록 없음'}
+                  </span>
+                </div>
+                <div className="flex justify-between py-2 border-b border-slate-100">
+                  <span className="text-slate-500">변경 요청 시간</span>
+                  <span className="text-amber-600 font-bold">
+                    {new Date(selectedPendingRequest.requestedTime).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                </div>
+                <div className="py-2">
+                  <span className="text-slate-500 block mb-2">변경 사유</span>
+                  <div className="bg-slate-50 rounded-xl p-3 text-sm text-slate-700">
+                    {selectedPendingRequest.reason}
+                  </div>
+                </div>
+              </div>
+
+              {/* 반려 사유 입력 */}
+              <div>
+                <Label className="text-slate-600">반려 시 사유 (반려 시 필수)</Label>
+                <Textarea
+                  value={rejectReason}
+                  onChange={(e) => setRejectReason(e.target.value)}
+                  placeholder="반려 사유를 입력해주세요 (최소 3자)"
+                  className="mt-2 bg-slate-50 border-slate-200 text-slate-900 rounded-xl"
+                  rows={2}
+                />
+              </div>
+            </div>
+          )}
+          <DialogFooter className="flex gap-2">
+            <Button
+              onClick={() => handleRejectRequest(selectedPendingRequest?.id)}
+              variant="outline"
+              className="flex-1 border-rose-300 text-rose-600 hover:bg-rose-50 rounded-xl"
+              disabled={processingRequestId === selectedPendingRequest?.id}
+            >
+              {processingRequestId === selectedPendingRequest?.id ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <Ban className="w-4 h-4 mr-2" />
+              )}
+              반려
+            </Button>
+            <Button
+              onClick={() => handleApproveRequest(selectedPendingRequest?.id)}
+              className="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl"
+              disabled={processingRequestId === selectedPendingRequest?.id}
+            >
+              {processingRequestId === selectedPendingRequest?.id ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <CheckCircle className="w-4 h-4 mr-2" />
+              )}
+              승인
             </Button>
           </DialogFooter>
         </DialogContent>

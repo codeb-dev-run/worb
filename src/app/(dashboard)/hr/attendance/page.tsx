@@ -611,7 +611,7 @@ export default function AttendancePage() {
                 </CardContent>
             </Card>
 
-            {/* 근태 기록 - Glass Style */}
+            {/* 근태 기록 - Glass Style with 상세정보 */}
             <Card variant="glass">
                 <CardHeader>
                     <CardTitle className="flex items-center gap-2 text-slate-900">
@@ -622,22 +622,86 @@ export default function AttendancePage() {
                     </CardTitle>
                 </CardHeader>
                 <CardContent>
-                    <div className="space-y-2">
+                    <div className="space-y-3">
                         {attendanceHistory.length > 0 ? (
-                            attendanceHistory.map((record: any) => (
-                                <div key={record.id} className="flex items-center justify-between p-4 bg-white/60 backdrop-blur-sm rounded-2xl border border-white/40 hover:bg-white/80 transition-colors">
-                                    <div>
-                                        <div className="font-medium text-slate-900">{format(new Date(record.date), 'yyyy-MM-dd')}</div>
-                                        <div className="text-sm text-slate-500">
-                                            {record.checkIn && format(new Date(record.checkIn), 'HH:mm')} ~{' '}
-                                            {record.checkOut && format(new Date(record.checkOut), 'HH:mm')}
+                            attendanceHistory.map((record: any) => {
+                                // 총 근무시간 계산
+                                const totalMinutes = record.totalWorkedMinutes || 0
+                                const hours = Math.floor(totalMinutes / 60)
+                                const mins = totalMinutes % 60
+                                const officeMinutes = record.officeWorkedMinutes || 0
+                                const remoteMinutes = record.remoteWorkedMinutes || 0
+                                const officeHours = Math.floor(officeMinutes / 60)
+                                const officeMins = officeMinutes % 60
+                                const remoteHours = Math.floor(remoteMinutes / 60)
+                                const remoteMins = remoteMinutes % 60
+
+                                return (
+                                    <div key={record.id} className="p-4 bg-white/60 backdrop-blur-sm rounded-2xl border border-white/40 hover:bg-white/80 transition-colors">
+                                        <div className="flex items-center justify-between mb-3">
+                                            <div className="flex items-center gap-3">
+                                                <div className="font-medium text-slate-900">
+                                                    {format(new Date(record.date), 'MM월 dd일 (EEE)', { locale: ko })}
+                                                </div>
+                                                <span className={`px-2 py-0.5 rounded-lg text-xs font-medium ${getStatusBadge(record.status)}`}>
+                                                    {record.status === 'PRESENT' ? '정상' :
+                                                     record.status === 'LATE' ? '지각' :
+                                                     record.status === 'ABSENT' ? '결근' :
+                                                     record.status === 'REMOTE' ? '재택' :
+                                                     record.status === 'HALF_DAY' ? '반차' : record.status}
+                                                </span>
+                                            </div>
+                                            <div className="text-right">
+                                                <div className="font-bold text-slate-900">
+                                                    {hours > 0 ? `${hours}시간 ${mins}분` : mins > 0 ? `${mins}분` : '-'}
+                                                </div>
+                                                <div className="text-xs text-slate-500">총 근무시간</div>
+                                            </div>
                                         </div>
+
+                                        {/* 상세 정보 그리드 */}
+                                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                                            <div className="bg-slate-50/80 rounded-xl p-2 text-center">
+                                                <div className="text-slate-400 text-xs mb-0.5">출근</div>
+                                                <div className="font-medium text-slate-700">
+                                                    {record.checkIn ? format(new Date(record.checkIn), 'HH:mm') : '-'}
+                                                </div>
+                                            </div>
+                                            <div className="bg-slate-50/80 rounded-xl p-2 text-center">
+                                                <div className="text-slate-400 text-xs mb-0.5">퇴근</div>
+                                                <div className="font-medium text-slate-700">
+                                                    {record.checkOut ? format(new Date(record.checkOut), 'HH:mm') : '-'}
+                                                </div>
+                                            </div>
+                                            <div className="bg-lime-50/80 rounded-xl p-2 text-center">
+                                                <div className="text-lime-600 text-xs mb-0.5 flex items-center justify-center gap-1">
+                                                    <Building2 className="w-3 h-3" />
+                                                    사무실
+                                                </div>
+                                                <div className="font-medium text-lime-700">
+                                                    {officeMinutes > 0 ? (officeHours > 0 ? `${officeHours}h ${officeMins}m` : `${officeMins}m`) : '-'}
+                                                </div>
+                                            </div>
+                                            <div className="bg-violet-50/80 rounded-xl p-2 text-center">
+                                                <div className="text-violet-600 text-xs mb-0.5 flex items-center justify-center gap-1">
+                                                    <Home className="w-3 h-3" />
+                                                    재택
+                                                </div>
+                                                <div className="font-medium text-violet-700">
+                                                    {remoteMinutes > 0 ? (remoteHours > 0 ? `${remoteHours}h ${remoteMins}m` : `${remoteMins}m`) : '-'}
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* 메모 표시 (있을 경우) */}
+                                        {record.note && (
+                                            <div className="mt-2 text-xs text-slate-500 bg-slate-50/60 rounded-lg px-3 py-2">
+                                                📝 {record.note}
+                                            </div>
+                                        )}
                                     </div>
-                                    <span className={`px-3 py-1 rounded-xl text-xs font-medium ${getStatusBadge(record.status)}`}>
-                                        {record.status}
-                                    </span>
-                                </div>
-                            ))
+                                )
+                            })
                         ) : (
                             <p className="text-center text-slate-500 py-8">근태 기록이 없습니다</p>
                         )}

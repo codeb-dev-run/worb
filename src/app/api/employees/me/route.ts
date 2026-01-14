@@ -7,8 +7,9 @@ export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth/next'
 import { authOptions } from '@/lib/auth-options'
-import { prisma } from '@/lib/prisma'
+import { prisma, withTransaction } from '@/lib/prisma'
 import { secureLogger, createErrorResponse } from '@/lib/security'
+import { notifyMissingProfile } from '@/lib/centrifugo-client'
 
 // GET: 현재 로그인한 사용자의 직원 프로필 조회
 export async function GET(request: NextRequest) {
@@ -68,6 +69,13 @@ export async function GET(request: NextRequest) {
           }
         })
 
+        // 인사기록 미등록 알림 발송
+        try {
+          await notifyMissingProfile(session.user.id, workspaceId)
+        } catch {
+          // 알림 실패는 무시
+        }
+
         return NextResponse.json({ employee: formatEmployeeResponse(newEmployee) })
       }
 
@@ -124,109 +132,111 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'Employee not found' }, { status: 404 })
     }
 
-    // 직원 정보 업데이트 (birthDate, gender, address, addressDetail은 Employee 모델에 있음)
-    const updatedEmployee = await prisma.employee.update({
-      where: { id: employee.id },
-      data: {
-        nameKor: nameKor || employee.nameKor,
-        nameEng,
-        mobile,
-        birthDate: birthDate ? new Date(birthDate) : undefined,
-        gender,
-        address,
-        addressDetail,
-        bankName,
-        bankAccount
-      }
-    })
-
-    // 온보딩 정보 업데이트 (긴급연락처만)
-    if (emergencyContact) {
-      await prisma.employeeOnboarding.upsert({
-        where: { employeeId: employee.id },
-        create: {
-          employeeId: employee.id,
-          emergencyName: emergencyContact?.name,
-          emergencyRelation: emergencyContact?.relationship,
-          emergencyPhone: emergencyContact?.phone,
-        },
-        update: {
-          emergencyName: emergencyContact?.name,
-          emergencyRelation: emergencyContact?.relationship,
-          emergencyPhone: emergencyContact?.phone
+    // 100K CCU: 트랜잭션으로 데이터 정합성 보장 (다중 테이블 업데이트)
+    const finalEmployee = await withTransaction(async (tx) => {
+      // 직원 정보 업데이트
+      await tx.employee.update({
+        where: { id: employee.id },
+        data: {
+          nameKor: nameKor || employee.nameKor,
+          nameEng,
+          mobile,
+          birthDate: birthDate ? new Date(birthDate) : undefined,
+          gender,
+          address,
+          addressDetail,
+          bankName,
+          bankAccount
         }
       })
-    }
 
-    // 학력 정보 업데이트
-    if (education && Array.isArray(education)) {
-      // 기존 학력 삭제 후 새로 생성
-      await prisma.employeeEducation.deleteMany({
-        where: { employeeId: employee.id }
-      })
-
-      if (education.length > 0) {
-        await prisma.employeeEducation.createMany({
-          data: education.map((edu: any) => ({
+      // 온보딩 정보 업데이트 (긴급연락처만)
+      if (emergencyContact) {
+        await tx.employeeOnboarding.upsert({
+          where: { employeeId: employee.id },
+          create: {
             employeeId: employee.id,
-            school: edu.school,
-            degree: edu.degree,
-            major: edu.major,
-            graduationDate: edu.graduationDate ? new Date(edu.graduationDate) : null,
-            status: edu.status || 'graduated'
-          }))
+            emergencyName: emergencyContact?.name,
+            emergencyRelation: emergencyContact?.relationship,
+            emergencyPhone: emergencyContact?.phone,
+          },
+          update: {
+            emergencyName: emergencyContact?.name,
+            emergencyRelation: emergencyContact?.relationship,
+            emergencyPhone: emergencyContact?.phone
+          }
         })
       }
-    }
 
-    // 경력 정보 업데이트
-    if (experience && Array.isArray(experience)) {
-      await prisma.employeeExperience.deleteMany({
-        where: { employeeId: employee.id }
-      })
-
-      if (experience.length > 0) {
-        await prisma.employeeExperience.createMany({
-          data: experience.map((exp: any) => ({
-            employeeId: employee.id,
-            company: exp.company,
-            position: exp.position,
-            startDate: new Date(exp.startDate),
-            endDate: exp.endDate ? new Date(exp.endDate) : null,
-            description: exp.description
-          }))
+      // 학력 정보 업데이트
+      if (education && Array.isArray(education)) {
+        await tx.employeeEducation.deleteMany({
+          where: { employeeId: employee.id }
         })
+
+        if (education.length > 0) {
+          await tx.employeeEducation.createMany({
+            data: education.map((edu: any) => ({
+              employeeId: employee.id,
+              school: edu.school,
+              degree: edu.degree,
+              major: edu.major,
+              graduationDate: edu.graduationDate ? new Date(edu.graduationDate) : null,
+              status: edu.status || 'graduated'
+            }))
+          })
+        }
       }
-    }
 
-    // 자격증 정보 업데이트
-    if (certificates && Array.isArray(certificates)) {
-      await prisma.employeeCertificate.deleteMany({
-        where: { employeeId: employee.id }
-      })
-
-      if (certificates.length > 0) {
-        await prisma.employeeCertificate.createMany({
-          data: certificates.map((cert: any) => ({
-            employeeId: employee.id,
-            name: cert.name,
-            issuer: cert.issuer,
-            issueDate: new Date(cert.issueDate),
-            expiryDate: cert.expiryDate ? new Date(cert.expiryDate) : null
-          }))
+      // 경력 정보 업데이트
+      if (experience && Array.isArray(experience)) {
+        await tx.employeeExperience.deleteMany({
+          where: { employeeId: employee.id }
         })
-      }
-    }
 
-    // 업데이트된 직원 정보 조회
-    const finalEmployee = await prisma.employee.findUnique({
-      where: { id: employee.id },
-      include: {
-        educations: true,
-        experiences: true,
-        certificates: true,
-        onboarding: true
+        if (experience.length > 0) {
+          await tx.employeeExperience.createMany({
+            data: experience.map((exp: any) => ({
+              employeeId: employee.id,
+              company: exp.company,
+              position: exp.position,
+              startDate: new Date(exp.startDate),
+              endDate: exp.endDate ? new Date(exp.endDate) : null,
+              description: exp.description
+            }))
+          })
+        }
       }
+
+      // 자격증 정보 업데이트
+      if (certificates && Array.isArray(certificates)) {
+        await tx.employeeCertificate.deleteMany({
+          where: { employeeId: employee.id }
+        })
+
+        if (certificates.length > 0) {
+          await tx.employeeCertificate.createMany({
+            data: certificates.map((cert: any) => ({
+              employeeId: employee.id,
+              name: cert.name,
+              issuer: cert.issuer,
+              issueDate: new Date(cert.issueDate),
+              expiryDate: cert.expiryDate ? new Date(cert.expiryDate) : null
+            }))
+          })
+        }
+      }
+
+      // 트랜잭션 내에서 최종 결과 조회
+      return tx.employee.findUnique({
+        where: { id: employee.id },
+        include: {
+          educations: true,
+          experiences: true,
+          certificates: true,
+          onboarding: true
+        }
+      })
     })
 
     return NextResponse.json({ employee: formatEmployeeResponse(finalEmployee) })

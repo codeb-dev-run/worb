@@ -3,7 +3,7 @@
 const isDev = process.env.NODE_ENV === 'development'
 
 import React, { useState, useEffect } from 'react'
-import { DndContext, DragEndEvent, DragOverlay, closestCenter } from '@dnd-kit/core'
+import { DndContext, DragEndEvent, DragOverlay, closestCenter, PointerSensor, useSensor, useSensors } from '@dnd-kit/core'
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -23,6 +23,15 @@ export default function OrganizationPage() {
     const [isDeptManageOpen, setIsDeptManageOpen] = useState(false)
     const [isInviteCodeOpen, setIsInviteCodeOpen] = useState(false)
     const [searchQuery, setSearchQuery] = useState('')
+
+    // 최소 드래그 거리 설정 - 클릭 시 부서 초기화 방지
+    const sensors = useSensors(
+        useSensor(PointerSensor, {
+            activationConstraint: {
+                distance: 10, // 10px 이상 드래그해야 활성화
+            },
+        })
+    )
 
     useEffect(() => {
         if (currentWorkspace) {
@@ -170,6 +179,7 @@ export default function OrganizationPage() {
 
             {/* 전체 드래그앤드롭 컨텍스트 */}
             <DndContext
+                sensors={sensors}
                 collisionDetection={closestCenter}
                 onDragEnd={handleDragEnd}
                 onDragStart={(event) => {

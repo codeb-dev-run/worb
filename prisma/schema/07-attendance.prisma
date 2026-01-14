@@ -31,6 +31,9 @@ model Attendance {
   @@index([workspaceId, date])
   @@index([workspaceId, status])
   @@index([date, status])
+  // 100K CCU 추가 - 가장 빈번한 쿼리 패턴 (출퇴근 조회)
+  @@index([workspaceId, userId, date])
+  @@index([userId, workspaceId, status])
 }
 
 model WorkSession {

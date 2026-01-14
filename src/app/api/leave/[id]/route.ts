@@ -6,6 +6,7 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { secureLogger, createErrorResponse } from '@/lib/security'
 import { LeaveType, LeaveStatus } from '@prisma/client'
+import { notifyLeaveResult } from '@/lib/centrifugo-client'
 
 interface RouteParams {
     params: Promise<{ id: string }>
@@ -183,6 +184,36 @@ export async function PATCH(request: Request, { params }: RouteParams) {
 
                 await prisma.leaveBalance.create({ data: createData })
             }
+        }
+
+        // 휴가 승인/반려 알림 발송
+        try {
+            // 승인자 이름 조회
+            let approverName = '관리자'
+            if (userId) {
+                const approver = await prisma.user.findUnique({
+                    where: { id: userId },
+                    select: { name: true, email: true }
+                })
+                approverName = approver?.name || approver?.email || '관리자'
+            }
+            // 휴가 신청자의 userId 조회
+            const employeeUser = await prisma.employee.findUnique({
+                where: { id: leaveRequest.employeeId },
+                select: { userId: true }
+            })
+            if (employeeUser?.userId) {
+                await notifyLeaveResult(
+                    employeeUser.userId,
+                    id,
+                    newStatus,
+                    leaveRequest.type,
+                    leaveRequest.startDate.toISOString().split('T')[0],
+                    approverName
+                )
+            }
+        } catch {
+            // 알림 실패는 무시
         }
 
         return NextResponse.json({

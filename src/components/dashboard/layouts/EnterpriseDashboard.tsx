@@ -35,6 +35,9 @@ interface EnterpriseDashboardProps {
     recentActivities?: Activity[]
     getGreeting: () => string
     employeeBirthDate?: string | null
+    workspaceId?: string
+    userId?: string
+    onAttendanceUpdate?: () => void
 }
 
 export function EnterpriseDashboard({
@@ -48,7 +51,10 @@ export function EnterpriseDashboard({
     boardPosts,
     recentActivities = [],
     getGreeting,
-    employeeBirthDate
+    employeeBirthDate,
+    workspaceId = '',
+    userId = '',
+    onAttendanceUpdate
 }: EnterpriseDashboardProps) {
     return (
         <div className="max-w-7xl mx-auto w-full space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700 p-6">
@@ -87,7 +93,12 @@ export function EnterpriseDashboard({
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 <TimeWidget />
                 <WeatherWidget weather={weather} />
-                <AttendanceWidget todayAttendance={todayAttendance} />
+                <AttendanceWidget
+                    todayAttendance={todayAttendance}
+                    workspaceId={workspaceId}
+                    userId={userId}
+                    onAttendanceUpdate={onAttendanceUpdate}
+                />
             </div>
 
             {/* Stats & Metrics Area */}

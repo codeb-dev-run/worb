@@ -281,6 +281,9 @@ export default function DashboardPage() {
         boardPosts={boardPosts}
         attendanceList={attendanceList}
         getGreeting={getGreeting}
+        workspaceId={currentWorkspace?.id || ''}
+        userId={userProfile?.uid || ''}
+        onAttendanceUpdate={loadAttendance}
       />
     )
   }
@@ -321,6 +324,9 @@ export default function DashboardPage() {
       recentActivities={recentActivities}
       getGreeting={getGreeting}
       employeeBirthDate={employeeBirthDate}
+      workspaceId={currentWorkspace?.id || ''}
+      userId={userProfile?.uid || ''}
+      onAttendanceUpdate={loadAttendance}
     />
   )
 }

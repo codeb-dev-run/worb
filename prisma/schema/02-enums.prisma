@@ -266,3 +266,22 @@ enum UIMode {
   PRO     // Slack style
 }
 
+// ============================================
+// File Management
+// ============================================
+
+enum FileCategory {
+  DOCUMENT    // 문서 (PDF, DOC, XLS 등)
+  IMAGE       // 이미지 (PNG, JPG, GIF 등)
+  VIDEO       // 동영상 (MP4, MOV 등)
+  AUDIO       // 오디오 (MP3, WAV 등)
+  ARCHIVE     // 압축파일 (ZIP, RAR 등)
+  OTHER       // 기타
+}
+
+enum StorageType {
+  LOCAL       // 로컬 서버 저장
+  S3          // AWS S3
+  GCS         // Google Cloud Storage
+}
+

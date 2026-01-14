@@ -4,9 +4,8 @@ const isDev = process.env.NODE_ENV === 'development'
 import React, { useState } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import {
-  Settings, Clock, DollarSign, CalendarDays,
+  Clock, DollarSign, CalendarDays,
   Shield, RotateCcw, Save
 } from 'lucide-react'
 import {
@@ -234,34 +233,6 @@ export default function SettingsTab({ workspaceId, isAdmin, mode }: SettingsTabP
 
   return (
     <div className="space-y-6">
-      {/* 모드 선택 헤더 */}
-      <Card className="bg-white/60 backdrop-blur-xl border-white/40 rounded-3xl">
-        <CardContent className="p-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="p-3 bg-lime-400/20 rounded-2xl">
-                <Settings className="w-6 h-6 text-lime-600" />
-              </div>
-              <div>
-                <h2 className="text-xl font-bold text-slate-900">HR 시스템 설정</h2>
-                <p className="text-sm text-slate-500">
-                  근태, 급여, 휴가 정책을 설정합니다
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <Badge variant={settings.policyStatus === 'ACTIVE' ? 'default' : 'secondary'}
-                className={settings.policyStatus === 'ACTIVE' ? 'bg-lime-400 text-black' : ''}>
-                {settings.policyStatus === 'ACTIVE' ? '적용중' :
-                  settings.policyStatus === 'PENDING_APPROVAL' ? '승인대기' : '초안'}
-              </Badge>
-              <span className="text-xs text-slate-400">v{settings.policyVersion}</span>
-            </div>
-          </div>
-
-        </CardContent>
-      </Card>
-
       {/* 퀵설정 모드 */}
       {mode === 'quick' && (
         <QuickSetupWizard

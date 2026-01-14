@@ -187,54 +187,92 @@ export function useTasksData(): UseTasksDataReturn {
     }
   }, [tasks, loadData])
 
-  // Trash handlers - Server-side soft delete
+  // Trash handlers - Server-side soft delete with optimistic UI update
   const handleMoveToTrash = useCallback(async (taskId: string) => {
+    // Optimistic UI update
+    const taskToTrash = tasks.find(t => t.id === taskId)
+    if (taskToTrash) {
+      setTasks(prev => prev.filter(t => t.id !== taskId))
+      setTrashedTasks(prev => [{
+        ...taskToTrash,
+        deletedAt: new Date().toISOString()
+      } as TrashedTask, ...prev])
+    }
+
     try {
       const result = await deleteTask(taskId)
       if (result.success) {
-        // Refresh data from server
-        loadData()
         toast.success('휴지통으로 이동되었습니다.')
       } else {
+        // Rollback on failure
+        if (taskToTrash) {
+          setTasks(prev => [...prev, taskToTrash])
+          setTrashedTasks(prev => prev.filter(t => t.id !== taskId))
+        }
         throw new Error('Delete failed')
       }
     } catch (error) {
       if (isDev) console.error('Error moving to trash:', error)
       toast.error('휴지통 이동 실패')
+      // Refresh to ensure consistency
+      loadData()
     }
-  }, [loadData])
+  }, [tasks, loadData])
 
   const handleRestoreTask = useCallback(async (taskId: string) => {
+    // Optimistic UI update
+    const taskToRestore = trashedTasks.find(t => t.id === taskId)
+    if (taskToRestore) {
+      setTrashedTasks(prev => prev.filter(t => t.id !== taskId))
+      setTasks(prev => [{
+        ...taskToRestore,
+        deletedAt: null
+      } as unknown as TaskType, ...prev])
+    }
+
     try {
       const result = await restoreTask(taskId)
       if (result.success) {
-        // Refresh data from server
-        loadData()
         toast.success('작업이 복원되었습니다.')
       } else {
+        // Rollback on failure
+        if (taskToRestore) {
+          setTrashedTasks(prev => [taskToRestore, ...prev])
+          setTasks(prev => prev.filter(t => t.id !== taskId))
+        }
         throw new Error('Restore failed')
       }
     } catch (error) {
       if (isDev) console.error('Error restoring task:', error)
       toast.error('복원 실패')
+      // Refresh to ensure consistency
+      loadData()
     }
-  }, [loadData])
+  }, [trashedTasks, loadData])
 
   const handlePermanentDelete = useCallback(async (taskId: string) => {
+    // Optimistic UI update
+    const taskToDelete = trashedTasks.find(t => t.id === taskId)
+    setTrashedTasks(prev => prev.filter(t => t.id !== taskId))
+
     try {
       const result = await permanentDeleteTask(taskId)
       if (result.success) {
-        // Refresh data from server
-        loadData()
         toast.success('영구 삭제되었습니다.')
       } else {
+        // Rollback on failure
+        if (taskToDelete) {
+          setTrashedTasks(prev => [taskToDelete, ...prev])
+        }
         throw new Error('Delete failed')
       }
     } catch (error) {
       if (isDev) console.error('Error deleting task:', error)
       toast.error('삭제 실패')
+      // Refresh to ensure consistency
+      loadData()
     }
-  }, [loadData])
+  }, [trashedTasks, loadData])
 
   const handleEmptyTrash = useCallback(async () => {
     if (trashedTasks.length === 0) return

@@ -2,19 +2,21 @@
 
 const isDev = process.env.NODE_ENV === 'development'
 
-import React, { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import FileUpload from '@/components/files/FileUpload'
 import FileList, { FileItem } from '@/components/files/FileList'
 import { useAuth } from '@/lib/auth-context'
+import { useWorkspace } from '@/lib/workspace-context'
 import toast from 'react-hot-toast'
-// import fileService from '@/services/file-service'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { File, HardDrive, Clock, Download } from 'lucide-react'
+import { File, HardDrive, Clock, Download, Loader2 } from 'lucide-react'
+import { format } from 'date-fns'
+import { ko } from 'date-fns/locale'
 
 // ===========================================
-// Glass Morphism Files Page
+// Glass Morphism Files Page - Storage Server Integration
 // ===========================================
 
 interface DownloadHistory {
@@ -26,61 +28,168 @@ interface DownloadHistory {
   userAgent?: string
 }
 
+interface ApiFile {
+  id: string
+  name: string
+  originalName: string
+  mimeType: string
+  size: number
+  category: string
+  url: string
+  description: string | null
+  tags: string[]
+  isPublic: boolean
+  uploadedBy: {
+    id: string
+    name: string
+    email: string
+    avatar: string | null
+  }
+  project: {
+    id: string
+    name: string
+  } | null
+  downloadCount: number
+  createdAt: string
+}
+
 export default function FilesPage() {
-  const { user, userProfile } = useAuth()
+  const { userProfile } = useAuth()
+  const { currentWorkspace } = useWorkspace()
   const [activeTab, setActiveTab] = useState<'files' | 'history'>('files')
   const [files, setFiles] = useState<FileItem[]>([])
   const [loading, setLoading] = useState(true)
-  const [downloadHistory, setDownloadHistory] = useState<DownloadHistory[]>([])
+  const [uploading, setUploading] = useState(false)
+  const [downloadHistory] = useState<DownloadHistory[]>([])
 
-  // Firebase에서 파일 목록 로드
-  useEffect(() => {
-    loadFiles()
-  }, [])
+  // API에서 파일 목록 로드
+  const loadFiles = useCallback(async () => {
+    if (!currentWorkspace?.id) return
 
-  const loadFiles = async () => {
     try {
       setLoading(true)
-      // const filesList = await fileService.getFiles()
-      setFiles([])
+      const response = await fetch(`/api/files?workspaceId=${currentWorkspace.id}&limit=100`)
+
+      if (!response.ok) {
+        throw new Error('Failed to load files')
+      }
+
+      const data = await response.json()
+
+      // API 응답을 FileItem 형식으로 변환
+      const fileItems: FileItem[] = data.files.map((file: ApiFile) => ({
+        id: file.id,
+        name: file.originalName,
+        size: file.size,
+        type: file.mimeType,
+        url: file.url,
+        category: file.category.toLowerCase() as 'document' | 'image' | 'video' | 'other',
+        uploadedBy: file.uploadedBy.name || file.uploadedBy.email,
+        createdAt: new Date(file.createdAt),
+      }))
+
+      setFiles(fileItems)
     } catch (error) {
       if (isDev) console.error('Failed to load files:', error)
       toast.error('파일 목록을 불러오는데 실패했습니다.')
     } finally {
       setLoading(false)
     }
-  }
+  }, [currentWorkspace?.id])
+
+  useEffect(() => {
+    loadFiles()
+  }, [loadFiles])
 
   const handleUpload = async (newFiles: File[]) => {
-    toast.error('파일 업로드 기능은 현재 사용할 수 없습니다.')
-  }
+    if (!currentWorkspace?.id) {
+      toast.error('워크스페이스를 선택해주세요.')
+      return
+    }
 
-  const getFileCategory = (type: string): FileItem['category'] => {
-    if (type.startsWith('image/')) return 'image'
-    if (type.startsWith('video/')) return 'video'
-    if (type.includes('pdf') || type.includes('document') || type.includes('text')) return 'document'
-    return 'other'
+    setUploading(true)
+    const uploadPromises = newFiles.map(async (file) => {
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('workspaceId', currentWorkspace.id)
+
+      const response = await fetch('/api/files', {
+        method: 'POST',
+        body: formData,
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.message || `${file.name} 업로드 실패`)
+      }
+
+      return response.json()
+    })
+
+    try {
+      const results = await Promise.allSettled(uploadPromises)
+
+      const successCount = results.filter(r => r.status === 'fulfilled').length
+      const failCount = results.filter(r => r.status === 'rejected').length
+
+      if (successCount > 0) {
+        toast.success(`${successCount}개 파일이 업로드되었습니다.`)
+        await loadFiles() // 파일 목록 새로고침
+      }
+
+      if (failCount > 0) {
+        toast.error(`${failCount}개 파일 업로드에 실패했습니다.`)
+      }
+    } catch (error) {
+      if (isDev) console.error('Upload error:', error)
+      toast.error('파일 업로드에 실패했습니다.')
+    } finally {
+      setUploading(false)
+    }
   }
 
   const handleDownload = async (file: FileItem) => {
-    toast.error('파일 다운로드 기능은 현재 사용할 수 없습니다.')
+    try {
+      // 새 탭에서 다운로드 링크 열기
+      window.open(`/api/files/${file.id}/download`, '_blank')
+
+      // 다운로드 이력 새로고침 (다운로드 후 약간의 딜레이)
+      setTimeout(() => {
+        // loadDownloadHistory() // 필요시 구현
+      }, 1000)
+    } catch (error) {
+      if (isDev) console.error('Download error:', error)
+      toast.error('파일 다운로드에 실패했습니다.')
+    }
   }
 
   const handleDelete = async (file: FileItem) => {
-    toast.error('파일 삭제 기능은 현재 사용할 수 없습니다.')
+    if (!confirm(`"${file.name}" 파일을 삭제하시겠습니까?`)) {
+      return
+    }
+
+    try {
+      const response = await fetch(`/api/files/${file.id}`, {
+        method: 'DELETE',
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to delete file')
+      }
+
+      toast.success('파일이 삭제되었습니다.')
+      await loadFiles() // 파일 목록 새로고침
+    } catch (error) {
+      if (isDev) console.error('Delete error:', error)
+      toast.error('파일 삭제에 실패했습니다.')
+    }
   }
 
   const canDelete = userProfile?.role === 'admin'
   const canViewHistory = userProfile?.role === 'admin'
 
   const formatDate = (date: Date) => {
-    return new Intl.DateTimeFormat('ko-KR', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit'
-    }).format(date)
+    return format(date, 'yyyy년 MM월 dd일 HH:mm', { locale: ko })
   }
 
   if (loading) {
@@ -106,7 +215,8 @@ export default function FilesPage() {
   const formatFileSize = (bytes: number) => {
     if (bytes < 1024) return bytes + ' B'
     if (bytes < 1048576) return Math.round(bytes / 1024) + ' KB'
-    return (bytes / 1048576).toFixed(1) + ' MB'
+    if (bytes < 1073741824) return (bytes / 1048576).toFixed(1) + ' MB'
+    return (bytes / 1073741824).toFixed(2) + ' GB'
   }
 
   return (
@@ -191,7 +301,10 @@ export default function FilesPage() {
           {(userProfile?.role === 'admin' || userProfile?.role === 'member') && (
             <Card variant="glass">
               <CardHeader>
-                <CardTitle className="text-slate-900">파일 업로드</CardTitle>
+                <CardTitle className="text-slate-900 flex items-center gap-2">
+                  파일 업로드
+                  {uploading && <Loader2 className="h-4 w-4 animate-spin text-lime-500" />}
+                </CardTitle>
               </CardHeader>
               <CardContent>
                 <FileUpload

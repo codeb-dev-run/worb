@@ -148,6 +148,10 @@ export default function AnnouncementsPage() {
         setIsSubmitting(true)
         try {
             if (viewMode === 'write') {
+                if (!currentWorkspace?.id) {
+                    toast.error('워크스페이스를 선택해주세요')
+                    return
+                }
                 const response = await fetch('/api/announcements', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -155,12 +159,17 @@ export default function AnnouncementsPage() {
                         title,
                         content,
                         isPinned,
-                        authorId: userProfile.uid,
-                        workspaceId: currentWorkspace?.id,
+                        workspaceId: currentWorkspace.id,
                     }),
                 })
 
-                if (!response.ok) throw new Error('Failed to create')
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({}))
+                    if (errorData.code === 'INSUFFICIENT_PERMISSIONS') {
+                        throw new Error('공지사항 작성 권한이 없습니다. 관리자에게 문의하세요.')
+                    }
+                    throw new Error(errorData.error || '공지사항 등록에 실패했습니다')
+                }
                 toast.success('공지사항이 등록되었습니다')
             } else if (viewMode === 'edit' && selectedAnnouncement) {
                 const response = await fetch(`/api/announcements/${selectedAnnouncement.id}`, {
@@ -177,7 +186,8 @@ export default function AnnouncementsPage() {
             handleBackToList()
         } catch (error) {
             if (isDev) console.error('Failed to save announcement:', error)
-            toast.error('저장에 실패했습니다')
+            const errorMessage = error instanceof Error ? error.message : '저장에 실패했습니다'
+            toast.error(errorMessage)
         } finally {
             setIsSubmitting(false)
         }

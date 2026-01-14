@@ -76,6 +76,9 @@ model Workspace {
 
   // Messaging Relations
   channels    Channel[]
+
+  // File Management Relations
+  files       File[]
 }
 
 model WorkspaceMember {

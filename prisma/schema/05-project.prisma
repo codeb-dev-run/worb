@@ -83,19 +83,7 @@ model ProjectInvitation {
   @@index([status])
 }
 
-model File {
-  id         String   @id @default(uuid())
-  projectId  String
-  name       String
-  size       Int
-  type       String
-  url        String
-  uploadedBy String
-  category   String   @default("other")
-  createdAt  DateTime @default(now())
-
-  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
-}
+// File 모델은 20-file.prisma로 이동됨 (워크스페이스 레벨 파일 관리)
 
 model Activity {
   id        String   @id @default(uuid())

@@ -55,6 +55,7 @@ export function FlexibleWorkDashboard({ workspaceId, userId }: FlexibleWorkDashb
   const [startingSession, setStartingSession] = useState(false)
   const [endingSession, setEndingSession] = useState(false)
   const [elapsedTime, setElapsedTime] = useState(0)
+  const [lastSessionType, setLastSessionType] = useState<'OFFICE_WORK' | 'REMOTE_WORK' | null>(null)
 
   // 데이터 로드
   const fetchData = useCallback(async () => {
@@ -68,6 +69,17 @@ export function FlexibleWorkDashboard({ workspaceId, userId }: FlexibleWorkDashb
       setSessions(sessionData.sessions || [])
       setActiveSession(sessionData.activeSession || null)
       setTodaySummary(sessionData.todaySummary || { totalMinutes: 0, officeMinutes: 0, remoteMinutes: 0 })
+
+      // 마지막 세션 타입 기억 (이어서 근무하기 기능)
+      const allSessions = sessionData.sessions || []
+      if (!sessionData.activeSession && allSessions.length > 0) {
+        // 활성 세션이 없고 이전 세션이 있으면 마지막 세션 타입 저장
+        const lastSession = allSessions[allSessions.length - 1]
+        setLastSessionType(lastSession.sessionType)
+      } else if (sessionData.activeSession) {
+        // 활성 세션이 있으면 해당 타입 저장
+        setLastSessionType(sessionData.activeSession.sessionType)
+      }
 
       // 주간 요약 조회
       const weeklyRes = await fetch(`/api/attendance/weekly?workspaceId=${workspaceId}`)
@@ -329,6 +341,23 @@ export function FlexibleWorkDashboard({ workspaceId, userId }: FlexibleWorkDashb
                 <p>현재 활성 근무 세션이 없습니다.</p>
                 <p className="text-sm">아래 버튼을 눌러 근무를 시작하세요.</p>
               </div>
+
+              {/* 이어서 근무하기 버튼 - 이전 세션이 있을 때만 표시 */}
+              {lastSessionType && sessions.length > 0 && (
+                <Button
+                  onClick={() => startSession(lastSessionType)}
+                  disabled={startingSession}
+                  className="w-full h-14 bg-gradient-to-r from-lime-500 to-emerald-500 hover:from-lime-600 hover:to-emerald-600 text-white shadow-lg"
+                >
+                  <div className="flex items-center gap-2">
+                    <RefreshCw className="w-5 h-5" />
+                    <span className="font-medium">
+                      {lastSessionType === 'REMOTE_WORK' ? '재택' : '사무실'} 이어서 근무하기
+                    </span>
+                  </div>
+                </Button>
+              )}
+
               <div className="grid grid-cols-2 gap-3">
                 <Button
                   onClick={() => startSession('OFFICE_WORK')}

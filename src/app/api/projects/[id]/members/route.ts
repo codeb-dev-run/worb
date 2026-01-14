@@ -9,6 +9,7 @@ import { prisma } from '@/lib/prisma'
 import { getServerSession } from 'next-auth/next'
 import { authOptions } from '@/lib/auth-options'
 import { secureLogger, createErrorResponse } from '@/lib/security'
+import { notifyProjectMemberAdded } from '@/lib/centrifugo-client'
 
 // GET /api/projects/[id]/members - Get project members
 export async function GET(
@@ -159,6 +160,14 @@ export async function POST(
                 },
             },
         })
+
+        // 프로젝트 멤버 추가 알림 발송
+        try {
+            const adderName = session.user.name || session.user.email || '팀원'
+            await notifyProjectMemberAdded(userId, id, project.name, adderName)
+        } catch {
+            // 알림 실패는 무시
+        }
 
         return NextResponse.json({
             id: newMember.id,

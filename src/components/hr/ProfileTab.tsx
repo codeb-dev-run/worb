@@ -11,7 +11,7 @@ import { Label } from '@/components/ui/label'
 import {
   User, FileText, GraduationCap, Medal, Phone, Mail,
   Globe, Cake, Edit, ChevronRight, Loader2, Building2,
-  Calendar, Heart, Users, Star, TrendingUp, Award
+  Calendar, CalendarDays, Heart, Users, Star, TrendingUp, Award
 } from 'lucide-react'
 import { toast } from 'react-hot-toast'
 import { EmployeeProfile, EmployeeEducation, EmployeeExperience, EmployeeCertificate, MonthlyEvaluationSummary, YearlyEvaluationSummary, FlexWorkTier } from '@/types/hr'
@@ -21,6 +21,38 @@ const FLEX_TIER_LABELS: Record<FlexWorkTier, { label: string; color: string }> =
   HIGH_FLEX: { label: '고유연', color: 'bg-blue-500' },
   MID_FLEX: { label: '중유연', color: 'bg-amber-500' },
   STANDARD: { label: '표준', color: 'bg-slate-500' },
+}
+
+// 근속기간 계산 헬퍼 함수
+function calculateTenure(hireDate: string): string {
+  const hire = new Date(hireDate)
+  const now = new Date()
+
+  let years = now.getFullYear() - hire.getFullYear()
+  let months = now.getMonth() - hire.getMonth()
+
+  if (months < 0) {
+    years--
+    months += 12
+  }
+
+  if (now.getDate() < hire.getDate()) {
+    months--
+    if (months < 0) {
+      years--
+      months += 12
+    }
+  }
+
+  if (years > 0 && months > 0) {
+    return `${years}년 ${months}개월`
+  } else if (years > 0) {
+    return `${years}년`
+  } else if (months > 0) {
+    return `${months}개월`
+  } else {
+    return '1개월 미만'
+  }
 }
 
 interface ProfileTabProps {
@@ -43,17 +75,30 @@ export default function ProfileTab({ userId, workspaceId, isAdmin }: ProfileTabP
   const [yearlyScore, setYearlyScore] = useState<YearlyEvaluationSummary | null>(null)
   const [recentWeeklyScore, setRecentWeeklyScore] = useState<number | null>(null)
 
+  // 휴가 잔여 현황
+  const [leaveBalance, setLeaveBalance] = useState<{
+    annualTotal: number
+    annualUsed: number
+    annualRemaining: number
+    sickTotal: number
+    sickUsed: number
+    sickRemaining: number
+  } | null>(null)
+
   useEffect(() => {
     loadProfile()
     loadEvaluationScores()
+    loadLeaveBalance()
     if (isAdmin) loadAllEmployees()
   }, [userId, workspaceId, isAdmin])
 
   useEffect(() => {
     if (selectedEmployee) {
       loadEvaluationScores(selectedEmployee)
+      loadLeaveBalance(selectedEmployee)
     } else {
       loadEvaluationScores()
+      loadLeaveBalance()
     }
   }, [selectedEmployee])
 
@@ -89,6 +134,29 @@ export default function ProfileTab({ userId, workspaceId, isAdmin }: ProfileTabP
       }
     } catch (e) {
       if (isDev) console.error('Failed to load employees:', e)
+    }
+  }
+
+  const loadLeaveBalance = async (employeeId?: string) => {
+    try {
+      const headers: Record<string, string> = {
+        'x-workspace-id': workspaceId,
+        'x-user-id': userId,
+        'x-is-admin': isAdmin ? 'true' : 'false',
+      }
+      // employeeId가 있으면 쿼리 파라미터로 전달 (관리자가 다른 직원 조회)
+      const url = employeeId
+        ? `/api/leave?employeeId=${employeeId}`
+        : '/api/leave'
+      const res = await fetch(url, { headers })
+      if (res.ok) {
+        const data = await res.json()
+        if (data.balance) {
+          setLeaveBalance(data.balance)
+        }
+      }
+    } catch (e) {
+      if (isDev) console.error('Failed to load leave balance:', e)
     }
   }
 
@@ -351,17 +419,92 @@ export default function ProfileTab({ userId, workspaceId, isAdmin }: ProfileTabP
             고용 정보
           </CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             <InfoItem icon={<FileText />} label="사번" value={profile?.employeeNumber} />
             <InfoItem icon={<Building2 />} label="부서" value={profile?.department} />
             <InfoItem icon={<User />} label="직책" value={profile?.position} />
             <InfoItem icon={<User />} label="직무" value={profile?.jobTitle} />
-            <InfoItem icon={<Calendar />} label="입사일" value={profile?.hireDate} />
+            <div className="p-3 rounded-xl bg-lime-50 border border-lime-200">
+              <div className="flex items-center gap-2 text-lime-700 text-sm mb-1">
+                <Calendar className="w-4 h-4" />
+                입사일
+              </div>
+              <p className="text-slate-900 font-medium">{profile?.hireDate || '-'}</p>
+              {profile?.hireDate && (
+                <p className="text-lime-600 text-xs mt-1">
+                  근속 {calculateTenure(profile.hireDate)}
+                </p>
+              )}
+            </div>
             <div className="p-3 rounded-xl bg-white/50">
               <span className="text-slate-500 text-sm">고용형태</span>
               <div className="mt-1">{getEmploymentTypeBadge(profile?.employmentType)}</div>
             </div>
+          </div>
+
+          {/* 휴가 현황 */}
+          <div className="pt-4 border-t border-slate-100">
+            <h4 className="text-sm font-medium text-slate-700 mb-3 flex items-center gap-2">
+              <CalendarDays className="w-4 h-4 text-blue-500" />
+              휴가 현황 ({new Date().getFullYear()}년)
+            </h4>
+            {leaveBalance ? (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                {/* 연차 */}
+                <div className="bg-blue-50 rounded-xl p-3 text-center">
+                  <div className="text-blue-600 text-xs mb-1">연차 잔여</div>
+                  <div className="text-xl font-bold text-blue-700">
+                    {leaveBalance.annualRemaining}
+                    <span className="text-sm font-normal text-blue-400">/{leaveBalance.annualTotal}일</span>
+                  </div>
+                  <div className="text-xs text-blue-500 mt-1">사용 {leaveBalance.annualUsed}일</div>
+                </div>
+
+                {/* 병가 */}
+                <div className="bg-amber-50 rounded-xl p-3 text-center">
+                  <div className="text-amber-600 text-xs mb-1">병가 잔여</div>
+                  <div className="text-xl font-bold text-amber-700">
+                    {leaveBalance.sickRemaining}
+                    <span className="text-sm font-normal text-amber-400">/{leaveBalance.sickTotal}일</span>
+                  </div>
+                  <div className="text-xs text-amber-500 mt-1">사용 {leaveBalance.sickUsed}일</div>
+                </div>
+
+                {/* 연차 사용률 */}
+                <div className="bg-slate-50 rounded-xl p-3 text-center">
+                  <div className="text-slate-600 text-xs mb-1">연차 사용률</div>
+                  <div className="text-xl font-bold text-slate-700">
+                    {leaveBalance.annualTotal > 0
+                      ? Math.round((leaveBalance.annualUsed / leaveBalance.annualTotal) * 100)
+                      : 0}%
+                  </div>
+                  <div className="w-full h-1.5 bg-slate-200 rounded-full mt-2">
+                    <div
+                      className="h-full bg-blue-500 rounded-full transition-all"
+                      style={{ width: `${leaveBalance.annualTotal > 0 ? (leaveBalance.annualUsed / leaveBalance.annualTotal) * 100 : 0}%` }}
+                    />
+                  </div>
+                </div>
+
+                {/* 총 사용 */}
+                <div className="bg-emerald-50 rounded-xl p-3 text-center">
+                  <div className="text-emerald-600 text-xs mb-1">총 사용</div>
+                  <div className="text-xl font-bold text-emerald-700">
+                    {leaveBalance.annualUsed + leaveBalance.sickUsed}일
+                  </div>
+                  <div className="text-xs text-emerald-500 mt-1">
+                    총 {leaveBalance.annualTotal + leaveBalance.sickTotal}일 부여
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-6 bg-slate-50 rounded-xl">
+                <CalendarDays className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                <p className="text-slate-500 text-sm">휴가 정보가 아직 설정되지 않았습니다</p>
+                <p className="text-slate-400 text-xs mt-1">HR 설정에서 휴가 정책을 설정해주세요</p>
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -543,7 +686,24 @@ export default function ProfileTab({ userId, workspaceId, isAdmin }: ProfileTabP
                 <Input
                   type="date"
                   value={editForm.birthDate || ''}
-                  onChange={e => setEditForm({ ...editForm, birthDate: e.target.value })}
+                  onChange={e => {
+                    const inputDate = new Date(e.target.value)
+                    const today = new Date()
+                    const minDate = new Date('1900-01-01')
+
+                    // 유효성 검증: 미래 날짜 또는 1900년 이전 방지
+                    if (inputDate > today) {
+                      toast.error('생년월일은 오늘 날짜보다 이전이어야 합니다')
+                      return
+                    }
+                    if (inputDate < minDate) {
+                      toast.error('유효한 생년월일을 입력해주세요')
+                      return
+                    }
+                    setEditForm({ ...editForm, birthDate: e.target.value })
+                  }}
+                  max={new Date().toISOString().split('T')[0]}
+                  min="1900-01-01"
                   className="mt-1 bg-slate-50 border-slate-200 text-slate-900"
                 />
               </div>

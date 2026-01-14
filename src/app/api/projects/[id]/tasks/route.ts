@@ -13,6 +13,7 @@ import { prisma, getReadClient } from '@/lib/prisma'
 import { getOrSet, CacheKeys, CacheTTL, invalidateCache } from '@/lib/redis'
 import { secureLogger, createErrorResponse } from '@/lib/security'
 import { validateBody, taskCreateSchema, validationErrorResponse } from '@/lib/validation'
+import { notifyTaskAssigned } from '@/lib/centrifugo-client'
 
 // =============================================================================
 // Project Tasks API - Hyperscale Optimized
@@ -36,34 +37,58 @@ export async function GET(
     // 캐시 키 설정
     const cacheKey = CacheKeys.projectTasks(projectId)
 
-    const tasks = await getOrSet(cacheKey, async () => {
-      return readClient.task.findMany({
-        where: {
-          projectId: projectId,
-        },
-        include: {
-          assignee: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
-              avatar: true
+    // URL에서 limit 파라미터 추출 (기본값: 200, 최대: 500)
+    const { searchParams } = new URL(request.url)
+    const limit = Math.min(parseInt(searchParams.get('limit') || '200'), 500)
+    const cursor = searchParams.get('cursor') || undefined
+
+    const tasks = await getOrSet(
+      `${cacheKey}:${limit}:${cursor || 'first'}`,
+      async () => {
+        return readClient.task.findMany({
+          where: {
+            projectId: projectId,
+            deletedAt: null,
+          },
+          include: {
+            assignee: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+                avatar: true
+              }
+            },
+            project: {
+              select: {
+                id: true,
+                name: true
+              }
             }
           },
-          project: {
-            select: {
-              id: true,
-              name: true
-            }
-          }
-        },
-        orderBy: {
-          createdAt: 'desc',
-        },
-      })
-    }, CacheTTL.TASKS)
+          orderBy: {
+            createdAt: 'desc',
+          },
+          take: limit + 1,  // 100K CCU: 결과 제한 필수
+          ...(cursor && {
+            cursor: { id: cursor },
+            skip: 1,
+          }),
+        })
+      },
+      CacheTTL.TASKS
+    )
 
-    return NextResponse.json(tasks)
+    // 다음 페이지 존재 여부 확인
+    const hasMore = tasks.length > limit
+    const items = hasMore ? tasks.slice(0, -1) : tasks
+    const nextCursor = hasMore ? items[items.length - 1]?.id : null
+
+    return NextResponse.json({
+      items,
+      nextCursor,
+      hasMore,
+    })
   } catch (error) {
     // CVE-CB-005: Secure logging
     secureLogger.error('Failed to fetch tasks', error as Error, { operation: 'project.tasks.list' })
@@ -115,15 +140,37 @@ export async function POST(
       }
     })
 
-    // 프로젝트 태스크 캐시 무효화
-    await invalidateCache(CacheKeys.projectTasks(projectId))
-    // 대시보드 통계 캐시도 무효화 (태스크 수가 변경됨)
+    // 100K CCU: 캐시 무효화를 비동기로 처리 (응답 지연 방지)
+    // 프로젝트 정보 먼저 조회 (알림에도 필요)
     const project = await prisma.project.findUnique({
       where: { id: projectId },
-      select: { workspaceId: true }
+      select: { workspaceId: true, name: true }
     })
+
+    // 비동기 캐시 무효화 (await 없음 - fire-and-forget)
+    invalidateCache(CacheKeys.projectTasks(projectId))
     if (project?.workspaceId) {
-      await invalidateCache(CacheKeys.dashboardStats(project.workspaceId))
+      invalidateCache(CacheKeys.dashboardStats(project.workspaceId))
+    }
+
+    // 작업 할당 알림 발송 (담당자가 본인이 아닌 경우)
+    if (assigneeId && assigneeId !== session.user.id) {
+      try {
+        const currentUser = await prisma.user.findUnique({
+          where: { id: session.user.id },
+          select: { name: true, email: true }
+        })
+        await notifyTaskAssigned(
+          assigneeId,
+          task.id,
+          title,
+          projectId,
+          project?.name || '프로젝트',
+          currentUser?.name || currentUser?.email || '팀원'
+        )
+      } catch {
+        // 알림 실패는 무시
+      }
     }
 
     // CVE-CB-005: Secure logging

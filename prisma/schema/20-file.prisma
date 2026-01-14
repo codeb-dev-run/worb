@@ -1,0 +1,63 @@
+// ============================================
+// Domain: File Management (Storage Server Integration)
+// Storage: db.codeb.kr - PostgreSQL metadata + Local/S3 file storage
+// ============================================
+
+model File {
+  id            String   @id @default(uuid())
+  workspaceId   String
+  projectId     String?  // 프로젝트에 속한 파일 (선택)
+
+  // 파일 메타데이터
+  name          String   // 원본 파일명
+  originalName  String   // 업로드 시 원본 파일명
+  mimeType      String   // MIME 타입 (image/png, application/pdf 등)
+  size          Int      // 파일 크기 (bytes)
+  category      FileCategory @default(OTHER)
+
+  // 저장 정보
+  storagePath   String   // 저장 경로 (/uploads/workspace_id/year/month/filename)
+  storageType   StorageType @default(LOCAL) // LOCAL, S3, GCS
+  publicUrl     String?  // 공개 URL (CDN 등)
+
+  // 메타데이터
+  description   String?
+  tags          String[] @default([])
+
+  // 업로드 정보
+  uploadedById  String
+
+  // 상태
+  isPublic      Boolean  @default(false)
+  isDeleted     Boolean  @default(false)
+  deletedAt     DateTime?
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  workspace     Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project       Project?  @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  uploadedBy    User      @relation("FileUploader", fields: [uploadedById], references: [id])
+  downloads     FileDownload[]
+
+  @@index([workspaceId, category, createdAt])
+  @@index([workspaceId, isDeleted, createdAt])
+  @@index([projectId])
+  @@index([uploadedById])
+}
+
+model FileDownload {
+  id           String   @id @default(uuid())
+  fileId       String
+  userId       String
+  downloadedAt DateTime @default(now())
+  ipAddress    String?
+  userAgent    String?
+
+  file File @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  user User @relation("FileDownloader", fields: [userId], references: [id])
+
+  @@index([fileId, downloadedAt])
+  @@index([userId, downloadedAt])
+}

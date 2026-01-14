@@ -6,6 +6,7 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { secureLogger, createErrorResponse } from '@/lib/security'
 import { LeaveStatus, LeaveType } from '@prisma/client'
+import { notifyLeaveRequest } from '@/lib/centrifugo-client'
 
 // 휴가 유형 매핑 (프론트엔드 값 -> Prisma enum)
 const leaveTypeMap: Record<string, LeaveType> = {
@@ -46,6 +47,7 @@ export async function GET(request: Request) {
         const workspaceId = request.headers.get('x-workspace-id')
         const isAdmin = request.headers.get('x-is-admin') === 'true'
         const statusFilter = searchParams.get('status')
+        const employeeIdParam = searchParams.get('employeeId') // 특정 직원 조회용
 
         if (!workspaceId) {
             return createErrorResponse('Workspace ID is required', 400, 'MISSING_WORKSPACE')
@@ -53,7 +55,16 @@ export async function GET(request: Request) {
 
         // 현재 유저의 Employee 정보 조회
         let currentEmployee = null
-        if (userId) {
+
+        // employeeId 파라미터가 있으면 해당 직원 조회 (관리자용)
+        if (employeeIdParam && isAdmin) {
+            currentEmployee = await prisma.employee.findFirst({
+                where: {
+                    workspaceId,
+                    id: employeeIdParam,
+                },
+            })
+        } else if (userId) {
             currentEmployee = await prisma.employee.findFirst({
                 where: {
                     workspaceId,
@@ -276,6 +287,29 @@ export async function POST(request: Request) {
                 status: 'PENDING',
             },
         })
+
+        // 관리자들에게 알림 발송
+        try {
+            const admins = await prisma.workspaceMember.findMany({
+                where: { workspaceId, role: 'admin' },
+                select: { userId: true }
+            })
+            const adminUserIds = admins.map(a => a.userId)
+            if (adminUserIds.length > 0) {
+                await notifyLeaveRequest(
+                    adminUserIds,
+                    newRequest.id,
+                    employee.nameKor || employee.nameEng || '직원',
+                    leaveType,
+                    startDate.toISOString().split('T')[0],
+                    endDate.toISOString().split('T')[0],
+                    workspaceId
+                )
+            }
+        } catch (notifyError) {
+            // 알림 실패는 무시 (주요 기능에 영향 없음)
+            secureLogger.warn('Failed to send leave request notification', { error: notifyError })
+        }
 
         return NextResponse.json({
             success: true,

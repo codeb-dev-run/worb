@@ -177,7 +177,11 @@ export default function Sidebar() {
       groupwareItems.push({ href: '/workspace/organization', label: '조직 관리', icon: 'users' })
     }
     if (isFeatureEnabled('attendanceEnabled')) {
-      groupwareItems.push({ href: '/hr', label: '근태 관리', icon: 'calendar' })
+      groupwareItems.push({ href: '/attendance', label: '근태', icon: 'calendar' })
+      // 관리자용 근태관리 메뉴
+      if (isAdmin) {
+        groupwareItems.push({ href: '/hr', label: '근태관리', icon: 'users', roles: ['admin'] })
+      }
     }
     // 재무 기능 제거됨 (2024-12)
     // if (isFeatureEnabled('financeEnabled')) {

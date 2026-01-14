@@ -45,6 +45,67 @@ const statusVariants: Record<Project['status'], 'default' | 'secondary' | 'outli
   pending: 'outline'
 }
 
+// 데드라인 상태 계산 헬퍼 함수
+type DeadlineStatus = 'overdue' | 'urgent' | 'warning' | 'normal' | 'completed'
+
+function getDeadlineStatus(project: Project): DeadlineStatus {
+  // 완료된 프로젝트는 항상 completed
+  if (project.status === 'completed') return 'completed'
+
+  // 마감일이 없으면 normal
+  if (!project.endDate) return 'normal'
+
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const deadline = new Date(project.endDate)
+  deadline.setHours(0, 0, 0, 0)
+
+  const diffDays = Math.ceil((deadline.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+
+  // 진행률이 낮은데 데드라인이 가까우면 더 긴급
+  const progressFactor = project.progress < 50 ? 0 : project.progress < 80 ? 1 : 2
+  const adjustedDays = diffDays + progressFactor * 2
+
+  if (diffDays < 0) return 'overdue'        // 마감 지남
+  if (adjustedDays <= 3) return 'urgent'    // 3일 이내 (진행률 고려)
+  if (adjustedDays <= 7) return 'warning'   // 7일 이내 (진행률 고려)
+  return 'normal'
+}
+
+// 데드라인 상태별 스타일
+const deadlineStyles: Record<DeadlineStatus, { progress: string; text: string; bg: string; border: string }> = {
+  overdue: {
+    progress: 'bg-red-500',
+    text: 'text-red-600',
+    bg: 'bg-red-50',
+    border: 'border-red-200 ring-2 ring-red-100'
+  },
+  urgent: {
+    progress: 'bg-orange-500',
+    text: 'text-orange-600',
+    bg: 'bg-orange-50',
+    border: 'border-orange-200'
+  },
+  warning: {
+    progress: 'bg-amber-500',
+    text: 'text-amber-600',
+    bg: 'bg-amber-50',
+    border: 'border-amber-200'
+  },
+  normal: {
+    progress: 'bg-lime-500',
+    text: 'text-slate-600',
+    bg: 'bg-white/70',
+    border: 'border-white/40'
+  },
+  completed: {
+    progress: 'bg-emerald-500',
+    text: 'text-emerald-600',
+    bg: 'bg-emerald-50/50',
+    border: 'border-emerald-200'
+  }
+}
+
 export default function ProjectsPage() {
   const { user, userProfile } = useAuth()
   const { currentWorkspace } = useWorkspace()
@@ -57,7 +118,7 @@ export default function ProjectsPage() {
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [filterStatus, setFilterStatus] = useState<Project['status'] | 'all'>('all')
   const [searchTerm, setSearchTerm] = useState('')
-  const [sortBy, setSortBy] = useState<'name' | 'date' | 'progress'>('date')
+  const [sortBy, setSortBy] = useState<'name' | 'date' | 'progress'>('progress')
   const [showMyProjectsOnly, setShowMyProjectsOnly] = useState(false)
 
   // 프로젝트 데이터 로드
@@ -122,7 +183,20 @@ export default function ProjectsPage() {
       if (sortBy === 'name') {
         return a.name.localeCompare(b.name)
       } else if (sortBy === 'progress') {
-        return b.progress - a.progress
+        // 진행률순: 촉박한 프로젝트(진행률 낮고 데드라인 가까운)가 먼저
+        const statusA = getDeadlineStatus(a)
+        const statusB = getDeadlineStatus(b)
+        const priorityOrder: Record<DeadlineStatus, number> = {
+          overdue: 0,
+          urgent: 1,
+          warning: 2,
+          normal: 3,
+          completed: 4
+        }
+        const priorityDiff = priorityOrder[statusA] - priorityOrder[statusB]
+        if (priorityDiff !== 0) return priorityDiff
+        // 같은 우선순위면 진행률 오름차순 (낮은 진행률 먼저)
+        return a.progress - b.progress
       } else {
         return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
       }
@@ -339,16 +413,27 @@ export default function ProjectsPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredProjects.map((project) => (
+              {filteredProjects.map((project) => {
+                const deadlineStatus = getDeadlineStatus(project)
+                const style = deadlineStyles[deadlineStatus]
+                return (
                 <TableRow
                   key={project.id}
-                  className="cursor-pointer"
+                  className={cn("cursor-pointer transition-colors", style.bg, deadlineStatus !== 'normal' && style.border)}
                   onClick={() => router.push(`/projects/${project.id}`)}
                 >
                   <TableCell>
-                    <div>
-                      <div className="font-medium">{project.name}</div>
-                      <div className="text-sm text-muted-foreground">{project.description}</div>
+                    <div className="flex items-center gap-2">
+                      {deadlineStatus === 'overdue' && (
+                        <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                      )}
+                      {deadlineStatus === 'urgent' && (
+                        <span className="w-2 h-2 rounded-full bg-orange-500" />
+                      )}
+                      <div>
+                        <div className="font-medium">{project.name}</div>
+                        <div className="text-sm text-muted-foreground">{project.description}</div>
+                      </div>
                     </div>
                   </TableCell>
                   <TableCell>
@@ -357,10 +442,23 @@ export default function ProjectsPage() {
                     </Badge>
                   </TableCell>
                   <TableCell>
-                    <div className="flex items-center gap-3 min-w-[120px]">
-                      <Progress value={project.progress} className="flex-1" />
-                      <span className="text-sm font-medium w-10 text-right">{project.progress}%</span>
-                    </div>
+                    {(() => {
+                      const status = getDeadlineStatus(project)
+                      const style = deadlineStyles[status]
+                      return (
+                        <div className="flex items-center gap-3 min-w-[120px]">
+                          <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
+                            <div
+                              className={cn("h-full rounded-full transition-all", style.progress)}
+                              style={{ width: `${project.progress}%` }}
+                            />
+                          </div>
+                          <span className={cn("text-sm font-medium w-10 text-right", style.text)}>
+                            {project.progress}%
+                          </span>
+                        </div>
+                      )
+                    })()}
                   </TableCell>
                   <TableCell>
                     <div className="flex -space-x-2">
@@ -403,13 +501,16 @@ export default function ProjectsPage() {
                     </div>
                   </TableCell>
                 </TableRow>
-              ))}
+              )})}
             </TableBody>
           </Table>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-          {filteredProjects.map((project) => (
+          {filteredProjects.map((project) => {
+            const deadlineStatus = getDeadlineStatus(project)
+            const style = deadlineStyles[deadlineStatus]
+            return (
             <motion.div
               key={project.id}
               initial={{ opacity: 0, scale: 0.9 }}
@@ -417,7 +518,11 @@ export default function ProjectsPage() {
             >
               <Card
                 variant="glass"
-                className="cursor-pointer hover:shadow-xl hover:-translate-y-1 transition-all duration-300 h-full"
+                className={cn(
+                  "cursor-pointer hover:shadow-xl hover:-translate-y-1 transition-all duration-300 h-full",
+                  style.bg,
+                  deadlineStatus !== 'normal' && style.border
+                )}
                 onClick={() => router.push(`/projects/${project.id}`)}
               >
                 <CardHeader>
@@ -447,9 +552,14 @@ export default function ProjectsPage() {
                   <div>
                     <div className="flex justify-between text-sm mb-2">
                       <span className="text-slate-500">진행률</span>
-                      <span className="font-bold text-slate-900">{project.progress}%</span>
+                      <span className={cn("font-bold", style.text)}>{project.progress}%</span>
                     </div>
-                    <Progress value={project.progress} className="h-2" />
+                    <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                      <div
+                        className={cn("h-full rounded-full transition-all", style.progress)}
+                        style={{ width: `${project.progress}%` }}
+                      />
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-2 gap-3 text-sm">
@@ -474,10 +584,12 @@ export default function ProjectsPage() {
                     </div>
 
                     <div className="flex items-center gap-2">
-                      <Calendar className="h-4 w-4 text-slate-400" />
-                      <span className="text-slate-500">기간</span>
+                      <Calendar className={cn("h-4 w-4", deadlineStatus === 'overdue' || deadlineStatus === 'urgent' ? style.text : 'text-slate-400')} />
+                      <span className={cn(deadlineStatus === 'overdue' || deadlineStatus === 'urgent' ? style.text : 'text-slate-500')}>
+                        {deadlineStatus === 'overdue' ? '마감 지남' : deadlineStatus === 'urgent' ? '긴급' : '기간'}
+                      </span>
                     </div>
-                    <span className="text-xs text-right text-slate-500">
+                    <span className={cn("text-xs text-right", deadlineStatus === 'overdue' || deadlineStatus === 'urgent' ? style.text + ' font-semibold' : 'text-slate-500')}>
                       {project.endDate ? new Date(project.endDate).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' }) : '-'}
                     </span>
                   </div>
@@ -498,7 +610,7 @@ export default function ProjectsPage() {
                 </CardFooter>
               </Card>
             </motion.div>
-          ))}
+          )})}
         </div>
       )}
 

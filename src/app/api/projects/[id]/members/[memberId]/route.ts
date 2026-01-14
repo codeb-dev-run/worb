@@ -9,6 +9,7 @@ import { prisma } from '@/lib/prisma'
 import { getServerSession } from 'next-auth/next'
 import { authOptions } from '@/lib/auth-options'
 import { secureLogger, createErrorResponse } from '@/lib/security'
+import { notifyProjectMemberRemoved } from '@/lib/centrifugo-client'
 
 // DELETE /api/projects/[id]/members/[memberId] - Remove a member from project
 export async function DELETE(
@@ -89,10 +90,29 @@ export async function DELETE(
             }
         }
 
+        // 프로젝트 이름 조회
+        const project = await prisma.project.findUnique({
+            where: { id },
+            select: { name: true }
+        })
+
         // Remove the member
         await prisma.projectMember.delete({
             where: { id: memberId },
         })
+
+        // 프로젝트 멤버 제거 알림 발송
+        try {
+            const removerName = currentUser.name || currentUser.email || '관리자'
+            await notifyProjectMemberRemoved(
+                memberToRemove.userId,
+                id,
+                project?.name || '프로젝트',
+                removerName
+            )
+        } catch {
+            // 알림 실패는 무시
+        }
 
         secureLogger.info('Project member removed', {
             operation: 'projects.members.remove',

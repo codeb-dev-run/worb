@@ -86,6 +86,10 @@ model User {
   // User Preferences
   preference  UserPreference?
 
+  // File Management Relations
+  uploadedFiles     File[]         @relation("FileUploader")
+  fileDownloads     FileDownload[] @relation("FileDownloader")
+
   // 100K CCU 인덱스
   @@index([isActive])
   @@index([createdAt])

@@ -249,9 +249,39 @@ export async function createTask(projectId: string | undefined | null, data: {
     }
 }
 
-export async function updateTask(taskId: string, data: Partial<Task>) {
+export async function updateTask(taskId: string, data: Partial<Task>, userId?: string) {
     try {
-        secureLogger.debug('Updating task', { operation: 'task.update', taskId })
+        secureLogger.debug('Updating task', { operation: 'task.update', taskId, userId })
+
+        // 권한 검사: userId가 제공된 경우 본인 태스크인지 또는 프로젝트 관리자인지 확인
+        if (userId) {
+            const existingTask = await prisma.task.findUnique({
+                where: { id: taskId },
+                include: {
+                    project: {
+                        include: {
+                            members: {
+                                where: { userId },
+                                select: { role: true }
+                            }
+                        }
+                    }
+                }
+            })
+
+            if (!existingTask) {
+                return { success: false, error: '태스크를 찾을 수 없습니다' }
+            }
+
+            // 본인이 만든 태스크가 아니고, 프로젝트 관리자도 아닌 경우
+            const isOwner = existingTask.createdBy === userId
+            const isAssignee = existingTask.assigneeId === userId
+            const isProjectAdmin = existingTask.project?.members?.some(m => m.role === 'Admin' || m.role === 'PM')
+
+            if (!isOwner && !isAssignee && !isProjectAdmin) {
+                return { success: false, error: '본인이 만든 태스크만 수정할 수 있습니다' }
+            }
+        }
 
         // Date 객체를 올바르게 처리
         const updateData: any = { ...data }
@@ -295,8 +325,38 @@ export async function updateTask(taskId: string, data: Partial<Task>) {
 }
 
 // Soft delete - 휴지통으로 이동
-export async function deleteTask(taskId: string) {
+export async function deleteTask(taskId: string, userId?: string) {
     try {
+        // 권한 검사: userId가 제공된 경우 본인 태스크인지 또는 프로젝트 관리자인지 확인
+        if (userId) {
+            const existingTask = await prisma.task.findUnique({
+                where: { id: taskId },
+                include: {
+                    project: {
+                        include: {
+                            members: {
+                                where: { userId },
+                                select: { role: true }
+                            }
+                        }
+                    }
+                }
+            })
+
+            if (!existingTask) {
+                return { success: false, error: '태스크를 찾을 수 없습니다' }
+            }
+
+            // 본인이 만든 태스크가 아니고, 담당자도 아니고, 프로젝트 관리자도 아닌 경우
+            const isOwner = existingTask.createdBy === userId
+            const isAssignee = existingTask.assigneeId === userId
+            const isProjectAdmin = existingTask.project?.members?.some(m => m.role === 'Admin' || m.role === 'PM')
+
+            if (!isOwner && !isAssignee && !isProjectAdmin) {
+                return { success: false, error: '본인이 만든 태스크만 삭제할 수 있습니다' }
+            }
+        }
+
         const task = await prisma.task.update({
             where: { id: taskId },
             data: { deletedAt: new Date() }

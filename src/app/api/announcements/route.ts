@@ -14,6 +14,7 @@ import {
   uuidSchema,
 } from '@/lib/validation'
 import { z } from 'zod'
+import { notifyAnnouncement } from '@/lib/centrifugo-client'
 
 export async function GET(request: NextRequest) {
   try {
@@ -111,8 +112,8 @@ export async function POST(request: NextRequest) {
       return createErrorResponse('Forbidden', 403, 'NOT_A_MEMBER')
     }
 
-    // CVE-CB-004 Fix: Only admin/manager can create announcements
-    if (!['admin', 'manager'].includes(membership.role)) {
+    // CVE-CB-004 Fix: Only admin/manager/owner can create announcements
+    if (!['admin', 'manager', 'owner'].includes(membership.role)) {
       return createErrorResponse('Forbidden', 403, 'INSUFFICIENT_PERMISSIONS')
     }
 
@@ -130,6 +131,18 @@ export async function POST(request: NextRequest) {
         }
       }
     })
+
+    // 공지사항 발행 알림 발송
+    try {
+      await notifyAnnouncement(
+        workspaceId,
+        announcement.id,
+        title,
+        announcement.author?.name || user.email || '관리자'
+      )
+    } catch {
+      // 알림 실패는 무시
+    }
 
     secureLogger.info('Announcement created', {
       operation: 'announcements.create',

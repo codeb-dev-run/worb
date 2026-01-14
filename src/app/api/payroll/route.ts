@@ -300,8 +300,8 @@ export async function POST(request: NextRequest) {
       }
     })
 
-    // 캐시 무효화 (관련된 모든 급여 캐시)
-    await invalidateCache(CacheKeys.payroll(workspaceId))
+    // 100K CCU: 캐시 무효화를 비동기로 처리 (응답 지연 방지)
+    invalidateCache(CacheKeys.payroll(workspaceId))
 
     return NextResponse.json(
       { payrollRecord: formatPayrollRecord(payrollRecord) },

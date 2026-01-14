@@ -137,10 +137,27 @@ function AuthProviderContent({ children }: { children: React.ReactNode }) {
 
   const updateUserProfile = async (data: Partial<UserProfile>) => {
     if (!user) return
-    // Implement update API call
+    // 로컬 상태 즉시 업데이트
     const updated = { ...userProfile!, ...data }
     setUserProfile(updated)
-    localStorage.setItem('userProfile', JSON.stringify(updated))
+    // 사용자 정보도 동기화
+    if (data.displayName || data.avatar) {
+      setUser(prev => prev ? {
+        ...prev,
+        displayName: data.displayName || prev.displayName,
+        photoURL: data.avatar || prev.photoURL
+      } : null)
+    }
+    try {
+      localStorage.setItem('userProfile', JSON.stringify(updated))
+      localStorage.setItem('user', JSON.stringify({
+        ...user,
+        displayName: data.displayName || user.displayName,
+        photoURL: data.avatar || user.photoURL
+      }))
+    } catch {
+      // localStorage not available
+    }
   }
 
   const logout = async () => {
