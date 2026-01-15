@@ -291,6 +291,7 @@ export const taskCreateSchema = z.object({
   dueDate: z.coerce.date().optional(),
   estimatedHours: z.number().min(0).max(1000).optional(),
   tags: z.array(z.string().max(50)).max(10).optional(),
+  progress: z.number().min(0).max(100).default(0).optional(),
 })
 
 export const taskUpdateSchema = taskCreateSchema.partial().omit({ projectId: true })

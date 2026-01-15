@@ -1,23 +1,23 @@
 'use client'
 
 // ===========================================
-// 팀원 목록 페이지 - 전체 팀원 리스트
+// 팀원 목록 페이지 - 버튼 형태 카드 레이아웃
+// 입사일, 휴가, 근태상태, 주간 성과점수 표시
 // ===========================================
 
 import React, { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '@/lib/auth-context'
 import { useWorkspace } from '@/lib/workspace-context'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import {
-  Users, Search, Filter, ChevronLeft, Eye, Mail, Phone,
-  Building2, Briefcase, Calendar, Loader2, UserPlus,
-  MoreHorizontal, MapPin, Wifi
+  Users, Search, ChevronLeft, Eye, Calendar, Loader2, UserPlus,
+  MapPin, Wifi, Clock, Palmtree, Star, TrendingUp, Building2
 } from 'lucide-react'
 import Link from 'next/link'
-import { format } from 'date-fns'
+import { format, differenceInDays } from 'date-fns'
 import { ko } from 'date-fns/locale'
 
 interface Employee {
@@ -34,6 +34,12 @@ interface Employee {
   checkIn?: string
   checkOut?: string
   workLocation?: 'OFFICE' | 'REMOTE'
+  // 추가 정보
+  remainingLeave?: number
+  annualTotal?: number
+  annualUsed?: number
+  weeklyScore?: number
+  weeklyFlexTier?: string
 }
 
 export default function EmployeesPage() {
@@ -86,16 +92,35 @@ export default function EmployeesPage() {
   // 부서 목록 추출
   const departments = Array.from(new Set(employees.map(e => e.department).filter(Boolean)))
 
-  // 상태별 색상
+  // 상태별 스타일
   const getStatusStyle = (status: string) => {
     switch (status) {
-      case 'present': return { bg: 'bg-green-100', text: 'text-green-700', label: '근무중' }
-      case 'remote': return { bg: 'bg-blue-100', text: 'text-blue-700', label: '재택' }
-      case 'leave': return { bg: 'bg-purple-100', text: 'text-purple-700', label: '휴가' }
-      case 'late': return { bg: 'bg-yellow-100', text: 'text-yellow-700', label: '지각' }
-      case 'absent': return { bg: 'bg-red-100', text: 'text-red-700', label: '미출근' }
-      default: return { bg: 'bg-slate-100', text: 'text-slate-600', label: '-' }
+      case 'present': return { bg: 'bg-green-500', text: 'text-white', label: '근무중' }
+      case 'remote': return { bg: 'bg-blue-500', text: 'text-white', label: '재택' }
+      case 'leave': return { bg: 'bg-purple-500', text: 'text-white', label: '휴가' }
+      case 'late': return { bg: 'bg-yellow-500', text: 'text-white', label: '지각' }
+      case 'absent': return { bg: 'bg-red-500', text: 'text-white', label: '미출근' }
+      default: return { bg: 'bg-slate-400', text: 'text-white', label: '-' }
     }
+  }
+
+  // 근속기간 계산
+  const getTenure = (hireDate: string | undefined) => {
+    if (!hireDate) return null
+    const days = differenceInDays(new Date(), new Date(hireDate))
+    const years = Math.floor(days / 365)
+    const months = Math.floor((days % 365) / 30)
+    if (years > 0) return `${years}년 ${months}개월`
+    return `${months}개월`
+  }
+
+  // 성과 점수 색상
+  const getScoreColor = (score: number | undefined | null) => {
+    if (!score) return 'bg-slate-100 text-slate-600'
+    if (score >= 85) return 'bg-green-100 text-green-700'
+    if (score >= 75) return 'bg-lime-100 text-lime-700'
+    if (score >= 65) return 'bg-yellow-100 text-yellow-700'
+    return 'bg-red-100 text-red-700'
   }
 
   if (!isAdmin) {
@@ -182,97 +207,119 @@ export default function EmployeesPage() {
           </CardContent>
         </Card>
 
-        {/* 팀원 리스트 */}
-        <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg">
-          <CardContent className="p-0">
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-slate-50 border-b">
-                  <tr>
-                    <th className="text-left px-6 py-4 text-sm font-medium text-slate-600">이름</th>
-                    <th className="text-left px-6 py-4 text-sm font-medium text-slate-600">부서/직책</th>
-                    <th className="text-left px-6 py-4 text-sm font-medium text-slate-600">이메일</th>
-                    <th className="text-center px-6 py-4 text-sm font-medium text-slate-600">오늘 근태</th>
-                    <th className="text-center px-6 py-4 text-sm font-medium text-slate-600">출퇴근</th>
-                    <th className="text-center px-6 py-4 text-sm font-medium text-slate-600">근무지</th>
-                    <th className="text-center px-6 py-4 text-sm font-medium text-slate-600">액션</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y">
-                  {filteredEmployees.length > 0 ? (
-                    filteredEmployees.map((emp) => {
-                      const statusStyle = getStatusStyle(emp.todayStatus || 'absent')
-                      return (
-                        <tr key={emp.id} className="hover:bg-slate-50 transition-colors">
-                          <td className="px-6 py-4">
-                            <div className="flex items-center gap-3">
-                              <div className="w-10 h-10 rounded-full bg-lime-100 flex items-center justify-center text-lime-700 font-medium">
-                                {emp.avatar ? (
-                                  <img src={emp.avatar} alt={emp.name} className="w-10 h-10 rounded-full" />
-                                ) : (
-                                  emp.name?.charAt(0) || '?'
-                                )}
-                              </div>
-                              <div>
-                                <p className="font-medium text-slate-900">{emp.name}</p>
-                                {emp.employeeNumber && (
-                                  <p className="text-xs text-slate-400">{emp.employeeNumber}</p>
-                                )}
-                              </div>
-                            </div>
-                          </td>
-                          <td className="px-6 py-4">
-                            <p className="text-slate-900">{emp.department || '-'}</p>
-                            <p className="text-sm text-slate-500">{emp.position || '-'}</p>
-                          </td>
-                          <td className="px-6 py-4 text-slate-600">
-                            {emp.email}
-                          </td>
-                          <td className="px-6 py-4 text-center">
-                            <span className={`inline-flex px-3 py-1 rounded-full text-sm font-medium ${statusStyle.bg} ${statusStyle.text}`}>
-                              {statusStyle.label}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 text-center text-sm text-slate-600">
+        {/* 팀원 카드 리스트 */}
+        {filteredEmployees.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {filteredEmployees.map((emp) => {
+              const statusStyle = getStatusStyle(emp.todayStatus || 'absent')
+              const tenure = getTenure(emp.hireDate)
+
+              return (
+                <Card key={emp.id} className="bg-white/90 backdrop-blur-sm border-0 shadow-lg hover:shadow-xl transition-all">
+                  <CardContent className="p-5">
+                    {/* 헤더: 프로필 & 상태 */}
+                    <div className="flex items-start justify-between mb-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-12 h-12 rounded-full bg-lime-100 flex items-center justify-center text-lime-700 font-bold text-lg">
+                          {emp.avatar ? (
+                            <img src={emp.avatar} alt={emp.name} className="w-12 h-12 rounded-full" />
+                          ) : (
+                            emp.name?.charAt(0) || '?'
+                          )}
+                        </div>
+                        <div>
+                          <p className="font-bold text-slate-900">{emp.name}</p>
+                          <p className="text-sm text-slate-500">{emp.department || '-'} · {emp.position || '-'}</p>
+                        </div>
+                      </div>
+                      <span className={`px-3 py-1 rounded-full text-xs font-bold ${statusStyle.bg} ${statusStyle.text}`}>
+                        {statusStyle.label}
+                      </span>
+                    </div>
+
+                    {/* 정보 버튼들 - 전체 노출 (펼침목록 X) */}
+                    <div className="grid grid-cols-2 gap-2 mb-4">
+                      {/* 입사일 */}
+                      <div className="flex items-center gap-2 px-3 py-2 bg-slate-50 rounded-xl">
+                        <Calendar className="w-4 h-4 text-slate-400" />
+                        <div className="text-xs">
+                          <p className="text-slate-400">입사일</p>
+                          <p className="font-semibold text-slate-700">
+                            {emp.hireDate ? format(new Date(emp.hireDate), 'yy.MM.dd') : '-'}
+                          </p>
+                          {tenure && <p className="text-slate-500">{tenure}</p>}
+                        </div>
+                      </div>
+
+                      {/* 휴가 잔여 */}
+                      <div className="flex items-center gap-2 px-3 py-2 bg-purple-50 rounded-xl">
+                        <Palmtree className="w-4 h-4 text-purple-400" />
+                        <div className="text-xs">
+                          <p className="text-purple-400">휴가 잔여</p>
+                          <p className="font-semibold text-purple-700">
+                            {emp.remainingLeave ?? '-'}일
+                          </p>
+                          <p className="text-purple-500">{emp.annualUsed || 0}/{emp.annualTotal || 15} 사용</p>
+                        </div>
+                      </div>
+
+                      {/* 오늘 출퇴근 */}
+                      <div className="flex items-center gap-2 px-3 py-2 bg-blue-50 rounded-xl">
+                        <Clock className="w-4 h-4 text-blue-400" />
+                        <div className="text-xs">
+                          <p className="text-blue-400">오늘 출퇴근</p>
+                          <p className="font-semibold text-blue-700">
                             {emp.checkIn ? format(new Date(emp.checkIn), 'HH:mm') : '--:--'}
                             {' → '}
                             {emp.checkOut ? format(new Date(emp.checkOut), 'HH:mm') : '--:--'}
-                          </td>
-                          <td className="px-6 py-4 text-center">
-                            {emp.workLocation && (
-                              <span className="inline-flex items-center gap-1 text-sm text-slate-500">
-                                {emp.workLocation === 'OFFICE' ? (
-                                  <><MapPin className="w-3 h-3" /> 사무실</>
-                                ) : (
-                                  <><Wifi className="w-3 h-3" /> 재택</>
-                                )}
-                              </span>
+                          </p>
+                          <p className="text-blue-500 flex items-center gap-1">
+                            {emp.workLocation === 'OFFICE' ? (
+                              <><MapPin className="w-3 h-3" /> 사무실</>
+                            ) : (
+                              <><Wifi className="w-3 h-3" /> 재택</>
                             )}
-                          </td>
-                          <td className="px-6 py-4 text-center">
-                            <Link href={`/hr/employees/${emp.id}`}>
-                              <Button variant="ghost" size="sm">
-                                <Eye className="w-4 h-4 mr-1" />
-                                상세
-                              </Button>
-                            </Link>
-                          </td>
-                        </tr>
-                      )
-                    })
-                  ) : (
-                    <tr>
-                      <td colSpan={7} className="px-6 py-12 text-center text-slate-500">
-                        <Users className="w-12 h-12 mx-auto mb-4 text-slate-300" />
-                        <p>검색 결과가 없습니다</p>
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* 주간 성과 */}
+                      <div className={`flex items-center gap-2 px-3 py-2 rounded-xl ${getScoreColor(emp.weeklyScore)}`}>
+                        <Star className="w-4 h-4" />
+                        <div className="text-xs">
+                          <p className="opacity-70">주간 성과</p>
+                          <p className="font-semibold">
+                            {emp.weeklyScore ? `${emp.weeklyScore}점` : '미등록'}
+                          </p>
+                          {emp.weeklyFlexTier && (
+                            <p className="opacity-70">{emp.weeklyFlexTier}</p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* 액션 버튼 */}
+                    <div className="flex gap-2">
+                      <Link href={`/hr/employees/${emp.id}`} className="flex-1">
+                        <Button variant="outline" className="w-full rounded-xl border-slate-200 hover:border-lime-400 hover:bg-lime-50">
+                          <Eye className="w-4 h-4 mr-2" />
+                          상세 보기
+                        </Button>
+                      </Link>
+                    </div>
+                  </CardContent>
+                </Card>
+              )
+            })}
+          </div>
+        ) : (
+          <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg">
+            <CardContent className="p-12 text-center">
+              <Users className="w-12 h-12 mx-auto mb-4 text-slate-300" />
+              <p className="text-slate-500">검색 결과가 없습니다</p>
+            </CardContent>
+          </Card>
+        )}
       </div>
     </div>
   )

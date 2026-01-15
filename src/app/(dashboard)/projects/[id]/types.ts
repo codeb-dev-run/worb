@@ -118,6 +118,7 @@ export interface NewTaskForm {
   priority: 'low' | 'medium' | 'high' | 'urgent'
   department: string
   color: string
+  progress: number
 }
 
 export const INITIAL_TASK_FORM: NewTaskForm = {
@@ -128,7 +129,8 @@ export const INITIAL_TASK_FORM: NewTaskForm = {
   startDate: '',
   priority: 'medium',
   department: '',
-  color: '#a3e635'
+  color: '#a3e635',
+  progress: 0
 }
 
 // ============================================

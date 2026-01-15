@@ -63,6 +63,7 @@ interface WorkspaceMember {
   avatar?: string
   role: 'admin' | 'member'
   workspaceRole: 'admin' | 'member'
+  adminLevel: 'SUPER_ADMIN' | 'ADMIN' | 'MEMBER'
   joinedAt: string
 }
 
@@ -200,6 +201,9 @@ export default function FeaturesSettingsPage() {
   const [transferring, setTransferring] = useState(false)
   const [selectedNewOwner, setSelectedNewOwner] = useState<string | null>(null)
 
+  // 권한 등급 변경
+  const [savingAdminLevel, setSavingAdminLevel] = useState<string | null>(null)
+
   // 워크스페이스 기능 설정 로드
   useEffect(() => {
     if (features) {
@@ -325,6 +329,36 @@ export default function FeaturesSettingsPage() {
       toast.error('권한 변경 중 오류가 발생했습니다')
     } finally {
       setSavingRole(null)
+    }
+  }
+
+  // 권한 등급 변경 (3등급 시스템)
+  const handleAdminLevelChange = async (memberId: string, newLevel: 'SUPER_ADMIN' | 'ADMIN' | 'MEMBER') => {
+    if (!currentWorkspace?.id) return
+
+    setSavingAdminLevel(memberId)
+    try {
+      // SUPER_ADMIN이나 ADMIN으로 변경하면 role도 admin으로 변경
+      const newRole = newLevel === 'MEMBER' ? 'member' : 'admin'
+
+      const response = await fetch(`/api/workspace/${currentWorkspace.id}/members/${memberId}/role`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ role: newRole, adminLevel: newLevel })
+      })
+
+      if (response.ok) {
+        toast.success('권한 등급이 변경되었습니다')
+        await loadData()
+      } else {
+        const error = await response.json()
+        toast.error(error.error || '권한 등급 변경 실패')
+      }
+    } catch (error) {
+      if (isDev) console.error('Failed to change admin level:', error)
+      toast.error('권한 등급 변경 중 오류가 발생했습니다')
+    } finally {
+      setSavingAdminLevel(null)
     }
   }
 
@@ -648,15 +682,15 @@ export default function FeaturesSettingsPage() {
             </CardContent>
           </Card>
 
-          {/* 멤버 권한 관리 */}
+          {/* 멤버 권한 관리 (3등급 시스템) */}
           <Card variant="glass">
             <CardHeader>
               <CardTitle className="text-slate-900 flex items-center gap-2">
                 <UserCog className="h-5 w-5 text-violet-600" />
-                멤버 권한 관리
+                멤버 권한 관리 (3등급)
               </CardTitle>
               <CardDescription className="text-slate-500">
-                워크스페이스 멤버의 권한을 관리합니다. 관리자는 모든 설정에 접근할 수 있습니다.
+                워크스페이스 멤버의 권한 등급을 관리합니다. 등급별로 접근 가능한 기능이 다릅니다.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -667,102 +701,127 @@ export default function FeaturesSettingsPage() {
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {members.map((member) => (
-                    <div
-                      key={member.id}
-                      className="flex items-center justify-between p-4 bg-white/60 rounded-xl border border-white/40"
-                    >
-                      <div className="flex items-center gap-3">
-                        {member.avatar ? (
-                          <img
-                            src={member.avatar}
-                            alt={member.name}
-                            className="w-10 h-10 rounded-full object-cover"
-                          />
-                        ) : (
-                          <div className="w-10 h-10 bg-lime-100 rounded-full flex items-center justify-center">
-                            <User className="h-5 w-5 text-lime-600" />
-                          </div>
-                        )}
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <span className="font-medium text-slate-900">{member.name}</span>
-                            {member.workspaceRole === 'admin' && (
-                              <Badge className="bg-amber-100 text-amber-700 border-amber-200 gap-1">
-                                <Crown className="h-3 w-3" />
-                                관리자
+                  {members.map((member) => {
+                    const levelColors: Record<string, string> = {
+                      SUPER_ADMIN: 'bg-rose-100 text-rose-700 border-rose-200',
+                      ADMIN: 'bg-amber-100 text-amber-700 border-amber-200',
+                      MEMBER: 'bg-slate-100 text-slate-700 border-slate-200'
+                    }
+                    const levelLabels: Record<string, string> = {
+                      SUPER_ADMIN: '1등급 (최고관리자)',
+                      ADMIN: '2등급 (관리자)',
+                      MEMBER: '3등급 (멤버)'
+                    }
+                    return (
+                      <div
+                        key={member.id}
+                        className="flex items-center justify-between p-4 bg-white/60 rounded-xl border border-white/40"
+                      >
+                        <div className="flex items-center gap-3">
+                          {member.avatar ? (
+                            <img
+                              src={member.avatar}
+                              alt={member.name}
+                              className="w-10 h-10 rounded-full object-cover"
+                            />
+                          ) : (
+                            <div className="w-10 h-10 bg-lime-100 rounded-full flex items-center justify-center">
+                              <User className="h-5 w-5 text-lime-600" />
+                            </div>
+                          )}
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium text-slate-900">{member.name}</span>
+                              <Badge className={`${levelColors[member.adminLevel || 'MEMBER']} gap-1`}>
+                                {member.adminLevel === 'SUPER_ADMIN' && <Crown className="h-3 w-3" />}
+                                {member.adminLevel === 'ADMIN' && <Shield className="h-3 w-3" />}
+                                {levelLabels[member.adminLevel || 'MEMBER']}
                               </Badge>
+                            </div>
+                            <span className="text-sm text-slate-500">{member.email}</span>
+                            {member.department && (
+                              <span className="text-sm text-slate-400 ml-2">· {member.department}</span>
                             )}
                           </div>
-                          <span className="text-sm text-slate-500">{member.email}</span>
-                          {member.department && (
-                            <span className="text-sm text-slate-400 ml-2">· {member.department}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <select
+                            value={member.adminLevel || 'MEMBER'}
+                            onChange={(e) => handleAdminLevelChange(member.id, e.target.value as 'SUPER_ADMIN' | 'ADMIN' | 'MEMBER')}
+                            disabled={savingAdminLevel === member.id}
+                            className="px-3 py-2 rounded-xl text-sm border border-white/40 bg-white/60 text-slate-700 focus:outline-none focus:ring-2 focus:ring-lime-400"
+                          >
+                            <option value="SUPER_ADMIN">1등급 (최고관리자)</option>
+                            <option value="ADMIN">2등급 (관리자)</option>
+                            <option value="MEMBER">3등급 (멤버)</option>
+                          </select>
+                          {savingAdminLevel === member.id && (
+                            <Loader2 className="h-4 w-4 animate-spin text-lime-600" />
                           )}
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleRemoveMember(member.id)}
+                            className="text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-xl"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <select
-                          value={member.workspaceRole}
-                          onChange={(e) => handleRoleChange(member.id, e.target.value as 'admin' | 'member')}
-                          disabled={savingRole === member.id}
-                          className="px-3 py-2 rounded-xl text-sm border border-white/40 bg-white/60 text-slate-700 focus:outline-none focus:ring-2 focus:ring-lime-400"
-                        >
-                          <option value="member">멤버</option>
-                          <option value="admin">관리자</option>
-                        </select>
-                        {savingRole === member.id && (
-                          <Loader2 className="h-4 w-4 animate-spin text-lime-600" />
-                        )}
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleRemoveMember(member.id)}
-                          className="text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-xl"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
               )}
             </CardContent>
           </Card>
 
-          {/* 권한 설명 */}
+          {/* 권한 등급 설명 (3등급) */}
           <Card variant="glass">
             <CardHeader>
               <CardTitle className="text-slate-900 flex items-center gap-2">
                 <Shield className="h-5 w-5 text-blue-600" />
-                권한 안내
+                권한 등급 안내
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="p-4 bg-rose-50 rounded-xl border border-rose-100">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Crown className="h-5 w-5 text-rose-600" />
+                    <span className="font-semibold text-rose-800">1등급 (최고관리자)</span>
+                  </div>
+                  <ul className="text-sm text-rose-700 space-y-1 ml-7">
+                    <li>• <strong>성과 등록</strong> (팀원 평가)</li>
+                    <li>• <strong>급여 관리</strong></li>
+                    <li>• 조직 구조 변경</li>
+                    <li>• 모든 설정 접근</li>
+                    <li>• 권한 등급 변경</li>
+                  </ul>
+                </div>
                 <div className="p-4 bg-amber-50 rounded-xl border border-amber-100">
                   <div className="flex items-center gap-2 mb-2">
-                    <Crown className="h-5 w-5 text-amber-600" />
-                    <span className="font-semibold text-amber-800">관리자 (Admin)</span>
+                    <Shield className="h-5 w-5 text-amber-600" />
+                    <span className="font-semibold text-amber-800">2등급 (관리자)</span>
                   </div>
                   <ul className="text-sm text-amber-700 space-y-1 ml-7">
-                    <li>• 워크스페이스 설정 변경</li>
-                    <li>• 기능 활성화/비활성화</li>
-                    <li>• 멤버 초대 및 권한 관리</li>
-                    <li>• 모든 데이터 접근 및 수정</li>
-                    <li>• 워크스페이스 삭제</li>
+                    <li>• <strong>출퇴근 관리</strong> (팀원 체크)</li>
+                    <li>• 직원 정보 관리</li>
+                    <li>• 휴가 승인</li>
+                    <li>• 공지사항 작성</li>
+                    <li>• HR 메뉴 접근</li>
                   </ul>
                 </div>
                 <div className="p-4 bg-slate-50 rounded-xl border border-slate-100">
                   <div className="flex items-center gap-2 mb-2">
                     <User className="h-5 w-5 text-slate-600" />
-                    <span className="font-semibold text-slate-800">멤버 (Member)</span>
+                    <span className="font-semibold text-slate-800">3등급 (멤버)</span>
                   </div>
                   <ul className="text-sm text-slate-700 space-y-1 ml-7">
-                    <li>• 활성화된 기능 사용</li>
-                    <li>• 프로젝트 참여 및 작업 수행</li>
+                    <li>• 본인 출퇴근</li>
+                    <li>• 프로젝트 참여</li>
+                    <li>• 휴가 신청</li>
+                    <li>• 게시판/공지 열람</li>
                     <li>• 본인 데이터 관리</li>
-                    <li>• 공지사항 및 게시판 접근</li>
-                    <li>• 근태 및 휴가 신청</li>
                   </ul>
                 </div>
               </div>

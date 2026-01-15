@@ -234,7 +234,8 @@ export function useProjectData(): UseProjectDataReturn {
           dueDate: newTask.dueDate ? new Date(newTask.dueDate) : undefined,
           assigneeId: newTask.assignee || null,
           teamId: newTask.department || null,
-          color: newTask.color
+          color: newTask.color,
+          progress: newTask.progress ?? 0
         })
 
         if (result.success) {
@@ -262,7 +263,8 @@ export function useProjectData(): UseProjectDataReturn {
           columnId: selectedColumnId,
           order: tasks.filter(t => t.columnId === selectedColumnId).length,
           teamId: newTask.department || undefined,
-          color: newTask.color
+          color: newTask.color,
+          progress: newTask.progress ?? 0
         })
 
         if (result.success) {

@@ -85,10 +85,11 @@ model Workspace {
 }
 
 model WorkspaceMember {
-  id          String @id @default(uuid())
+  id          String     @id @default(uuid())
   workspaceId String
   userId      String
-  role        Role   @default(member)
+  role        Role       @default(member)
+  adminLevel  AdminLevel @default(MEMBER)  // 관리자 권한 레벨 (3등급)
 
   joinedAt DateTime @default(now())
 
@@ -98,6 +99,7 @@ model WorkspaceMember {
   @@unique([workspaceId, userId])
   // 100K CCU 인덱스
   @@index([workspaceId, role])
+  @@index([workspaceId, adminLevel])
   @@index([userId])
 }
 

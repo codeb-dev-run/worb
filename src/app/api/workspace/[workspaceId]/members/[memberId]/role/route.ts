@@ -1,5 +1,6 @@
 // =============================================================================
 // Member Role API - CVE-CB-005 Fixed: Secure Logging
+// 권한 등급 3단계: SUPER_ADMIN, ADMIN, MEMBER
 // =============================================================================
 
 export const dynamic = 'force-dynamic'
@@ -10,7 +11,7 @@ import { getServerSession } from 'next-auth/next'
 import { authOptions } from '@/lib/auth-options'
 import { secureLogger, createErrorResponse } from '@/lib/security'
 
-// 멤버 역할 변경
+// 멤버 역할 및 권한 레벨 변경
 export async function PATCH(
     request: Request,
     { params }: { params: Promise<{ workspaceId: string; memberId: string }> }
@@ -22,11 +23,17 @@ export async function PATCH(
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
         }
 
-        const { role } = await request.json()
+        const { role, adminLevel } = await request.json()
 
         // 유효한 역할인지 확인
-        if (!['admin', 'member'].includes(role)) {
+        if (role && !['admin', 'member'].includes(role)) {
             return NextResponse.json({ error: 'Invalid role' }, { status: 400 })
+        }
+
+        // 유효한 권한 레벨인지 확인
+        const validAdminLevels = ['SUPER_ADMIN', 'ADMIN', 'MEMBER']
+        if (adminLevel && !validAdminLevels.includes(adminLevel)) {
+            return NextResponse.json({ error: 'Invalid admin level' }, { status: 400 })
         }
 
         // 현재 사용자가 admin인지 확인
@@ -81,7 +88,16 @@ export async function PATCH(
             }
         }
 
-        // 역할 변경
+        // 역할 및 권한 레벨 변경
+        const updateData: Record<string, unknown> = {}
+        if (role) updateData.role = role
+        if (adminLevel) updateData.adminLevel = adminLevel
+
+        // role이 admin이 아니면 adminLevel을 MEMBER로 자동 설정
+        if (role === 'member' && !adminLevel) {
+            updateData.adminLevel = 'MEMBER'
+        }
+
         const updatedMember = await prisma.workspaceMember.update({
             where: {
                 workspaceId_userId: {
@@ -89,9 +105,7 @@ export async function PATCH(
                     userId: memberId
                 }
             },
-            data: {
-                role: role
-            },
+            data: updateData,
             include: {
                 user: {
                     select: {
@@ -110,11 +124,13 @@ export async function PATCH(
             workspaceId,
             memberId,
             newRole: role,
+            newAdminLevel: adminLevel,
         })
 
         return NextResponse.json({
             ...updatedMember.user,
             workspaceRole: updatedMember.role,
+            adminLevel: updatedMember.adminLevel,
             joinedAt: updatedMember.joinedAt.toISOString()
         })
     } catch (error) {

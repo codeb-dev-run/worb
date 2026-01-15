@@ -115,7 +115,7 @@ export async function POST(
       return validationErrorResponse(validation.errors!)
     }
 
-    const { title, description, status, priority, assigneeId, dueDate, estimatedHours, tags } = validation.data!
+    const { title, description, status, priority, assigneeId, dueDate, estimatedHours, tags, progress } = validation.data!
 
     const task = await prisma.task.create({
       data: {
@@ -126,6 +126,7 @@ export async function POST(
         priority: priority || 'medium',
         assigneeId: assigneeId,
         dueDate: dueDate,
+        progress: progress ?? 0,
         createdBy: session.user.id,
       },
       include: {

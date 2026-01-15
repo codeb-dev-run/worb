@@ -201,6 +201,7 @@ export async function createTask(projectId: string | undefined | null, data: {
     labels?: string[]
     color?: string
     teamId?: string  // 부서(팀) ID 추가
+    progress?: number  // 진행율 (0-100)
 }) {
     try {
         const task = await prisma.task.create({
@@ -218,7 +219,8 @@ export async function createTask(projectId: string | undefined | null, data: {
                 order: data.order || 0,
                 labels: data.labels || [],
                 color: data.color,
-                teamId: data.teamId  // 부서(팀) ID 저장
+                teamId: data.teamId,  // 부서(팀) ID 저장
+                progress: data.progress ?? 0  // 진행율
             }
         })
 

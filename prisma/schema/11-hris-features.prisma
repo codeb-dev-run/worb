@@ -63,6 +63,20 @@ model FeatureAdmin {
   @@index([featuresId, featureKey])
 }
 
+// 기능별 권한 레벨 커스텀 설정
+model FeaturePermission {
+  id          String     @id @default(uuid())
+  workspaceId String
+  featureKey  String     // 기능 키 (예: attendance, payroll, evaluation)
+  minLevel    AdminLevel @default(ADMIN)  // 이 기능에 접근 가능한 최소 권한 레벨
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([workspaceId, featureKey])
+  @@index([workspaceId])
+}
+
 model WorkspaceOnboarding {
   id          String           @id @default(uuid())
   workspaceId String           @unique

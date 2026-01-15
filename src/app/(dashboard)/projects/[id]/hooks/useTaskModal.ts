@@ -41,7 +41,8 @@ export function useTaskModal(): UseTaskModalReturn {
       startDate: task.startDate ? new Date(task.startDate).toISOString().split('T')[0] : '',
       priority: (task.priority as string).toLowerCase() as 'low' | 'medium' | 'high' | 'urgent',
       department: task.department || (task as { teamId?: string }).teamId || '',
-      color: task.color || '#a3e635'
+      color: task.color || '#a3e635',
+      progress: task.progress ?? 0
     })
   }, [])
 

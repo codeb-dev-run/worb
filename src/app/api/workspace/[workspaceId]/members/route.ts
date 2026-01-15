@@ -71,6 +71,7 @@ export async function GET(
         const members = workspaceMembers.map(wm => ({
             ...wm.user,
             workspaceRole: wm.role,
+            adminLevel: wm.adminLevel,
             joinedAt: wm.joinedAt.toISOString()
         }))
 

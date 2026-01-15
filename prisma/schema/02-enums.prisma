@@ -8,6 +8,13 @@ enum Role {
   member
 }
 
+// 관리자 권한 레벨 (3등급 시스템)
+enum AdminLevel {
+  SUPER_ADMIN  // 1등급: 최고 권한자 - 성과등록, 급여관리, 모든 설정
+  ADMIN        // 2등급: 관리자 - 출퇴근관리, 직원관리, 기본 설정
+  MEMBER       // 3등급: 일반 멤버 - 본인 데이터만 접근
+}
+
 enum InvitationStatus {
   PENDING
   ACCEPTED

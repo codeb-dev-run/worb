@@ -1,11 +1,12 @@
 // =============================================================================
 // Team Attendance API - 팀원 근태 현황 조회 (관리자용)
+// v2: 입사일, 휴가잔여일, 주간성과점수 포함
 // =============================================================================
 
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { authenticateRequest, createErrorResponse } from '@/lib/security'
-import { startOfDay, endOfDay } from 'date-fns'
+import { startOfDay, endOfDay, startOfWeek, endOfWeek } from 'date-fns'
 
 export async function GET(request: NextRequest) {
   try {
@@ -82,10 +83,47 @@ export async function GET(request: NextRequest) {
 
     const leaveUserIds = new Set(leaveRequests.map(l => l.employee.userId).filter(Boolean))
 
+    // Employee 정보 조회 (입사일, 부서, 직책 등)
+    const employees = await prisma.employee.findMany({
+      where: {
+        workspaceId,
+        userId: { in: members.map(m => m.userId) }
+      }
+    })
+    const employeeMap = new Map(employees.map(e => [e.userId, e]))
+
+    // 휴가 잔여일 조회
+    const leaveBalances = await prisma.leaveBalance.findMany({
+      where: {
+        workspaceId,
+        year: today.getFullYear(),
+        employeeId: { in: employees.map(e => e.id) }
+      }
+    })
+    const leaveBalanceMap = new Map(leaveBalances.map(lb => [lb.employeeId, lb]))
+
+    // 이번 주 성과 평가 조회
+    const weekStart = startOfWeek(today, { weekStartsOn: 1 }) // 월요일 시작
+    const weekEnd = endOfWeek(today, { weekStartsOn: 1 })
+
+    const weeklyEvaluations = await prisma.weeklyEvaluation.findMany({
+      where: {
+        workspaceId,
+        weekStartDate: {
+          gte: weekStart,
+          lte: weekEnd
+        }
+      }
+    })
+    const evaluationMap = new Map(weeklyEvaluations.map(we => [we.employeeId, we]))
+
     // 멤버별 근태 상태 계산
     const memberAttendance = members.map(member => {
       const attendance = attendances.find(a => a.userId === member.userId)
       const isOnLeave = leaveUserIds.has(member.userId)
+      const employee = employeeMap.get(member.userId)
+      const leaveBalance = employee ? leaveBalanceMap.get(employee.id) : null
+      const weeklyEval = employee ? evaluationMap.get(employee.id) : null
 
       let todayStatus: 'present' | 'absent' | 'leave' | 'late' | 'remote' = 'absent'
 
@@ -102,18 +140,30 @@ export async function GET(request: NextRequest) {
         }
       }
 
-      // Employee 정보 조회 (있으면)
+      // 휴가 잔여일 계산
+      const annualTotal = leaveBalance?.annualTotal || 15
+      const annualUsed = leaveBalance?.annualUsed || 0
+      const remainingLeave = annualTotal - annualUsed
+
       return {
         id: member.userId,
         name: member.user.name || member.user.email?.split('@')[0] || 'Unknown',
         email: member.user.email,
         avatar: member.user.avatar,
-        department: member.role === 'admin' ? '관리자' : '팀원', // Employee에서 가져올 수 있음
-        position: member.role,
+        department: employee?.department || (member.role === 'admin' ? '관리자' : '팀원'),
+        position: employee?.position || member.role,
+        hireDate: employee?.hireDate?.toISOString() || null,
+        employeeNumber: employee?.employeeNumber || null,
         todayStatus,
         checkIn: attendance?.checkIn?.toISOString() || null,
         checkOut: attendance?.checkOut?.toISOString() || null,
-        workLocation: (attendance?.remoteWorkedMinutes ?? 0) > 0 ? 'REMOTE' : 'OFFICE'
+        workLocation: (attendance?.remoteWorkedMinutes ?? 0) > 0 ? 'REMOTE' : 'OFFICE',
+        // 추가 정보
+        remainingLeave,
+        annualTotal,
+        annualUsed,
+        weeklyScore: weeklyEval?.totalScore || null,
+        weeklyFlexTier: null // MonthlyEvaluationSummary에서 계산됨
       }
     })
 

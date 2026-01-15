@@ -128,6 +128,12 @@ export function TaskModal({
             onSelect={(priority) => onUpdateForm({ priority })}
           />
 
+          {/* Progress */}
+          <ProgressSelector
+            progress={newTask.progress ?? 0}
+            onProgressChange={(progress) => onUpdateForm({ progress })}
+          />
+
           {/* Color */}
           <ColorSelector
             selectedColor={newTask.color}
@@ -312,6 +318,76 @@ function PrioritySelector({
             )}
           >
             {priority.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function ProgressSelector({
+  progress,
+  onProgressChange
+}: {
+  progress: number
+  onProgressChange: (progress: number) => void
+}) {
+  const presetValues = [10, 30, 50, 70, 100]
+
+  return (
+    <div>
+      <label className="block text-sm font-medium text-slate-700 mb-2">
+        진행율 <span className="text-lime-600 font-bold">{progress}%</span>
+      </label>
+
+      {/* Slider */}
+      <div className="relative mb-3">
+        <input
+          type="range"
+          min="0"
+          max="100"
+          value={progress}
+          onChange={(e) => onProgressChange(Number(e.target.value))}
+          className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-lime-500
+            [&::-webkit-slider-thumb]:appearance-none
+            [&::-webkit-slider-thumb]:w-5
+            [&::-webkit-slider-thumb]:h-5
+            [&::-webkit-slider-thumb]:bg-lime-500
+            [&::-webkit-slider-thumb]:rounded-full
+            [&::-webkit-slider-thumb]:shadow-lg
+            [&::-webkit-slider-thumb]:border-2
+            [&::-webkit-slider-thumb]:border-white
+            [&::-webkit-slider-thumb]:cursor-pointer
+            [&::-webkit-slider-thumb]:transition-all
+            [&::-webkit-slider-thumb]:hover:scale-110
+            [&::-moz-range-thumb]:w-5
+            [&::-moz-range-thumb]:h-5
+            [&::-moz-range-thumb]:bg-lime-500
+            [&::-moz-range-thumb]:rounded-full
+            [&::-moz-range-thumb]:border-2
+            [&::-moz-range-thumb]:border-white
+            [&::-moz-range-thumb]:cursor-pointer"
+          style={{
+            background: `linear-gradient(to right, #a3e635 0%, #a3e635 ${progress}%, #e2e8f0 ${progress}%, #e2e8f0 100%)`
+          }}
+        />
+      </div>
+
+      {/* Quick Select Buttons */}
+      <div className="flex gap-2">
+        {presetValues.map(value => (
+          <button
+            key={value}
+            type="button"
+            onClick={() => onProgressChange(value)}
+            className={cn(
+              "flex-1 px-2 py-1.5 rounded-lg text-xs font-medium transition-all",
+              progress === value
+                ? 'bg-lime-100 text-lime-700 ring-2 ring-lime-500'
+                : 'bg-white/60 text-slate-600 hover:bg-white/80'
+            )}
+          >
+            {value}%
           </button>
         ))}
       </div>
