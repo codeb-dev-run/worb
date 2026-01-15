@@ -61,6 +61,42 @@ interface LeaveRecord {
   createdAt: string
 }
 
+// 성과 평가 타입
+interface WeeklyEvaluation {
+  id: string
+  year: number
+  weekNumber: number
+  weekStartDate: string
+  weekEndDate: string
+  projectQuality: number
+  deadlineAdherence: number
+  presentation: number
+  collaboration: number
+  selfInitiative: number
+  totalScore: number
+  feedback?: string
+}
+
+interface MonthlyEvaluation {
+  id: string
+  year: number
+  month: number
+  averageScore: number
+  flexWorkTier: string
+}
+
+interface YearlyEvaluation {
+  id: string
+  year: number
+  averageScore: number
+  flexWorkTier: string
+  q1Average?: number
+  q2Average?: number
+  q3Average?: number
+  q4Average?: number
+  suggestedRaisePercent?: number
+}
+
 export default function EmployeeDetailPage() {
   const params = useParams()
   const employeeId = params?.id as string
@@ -72,7 +108,11 @@ export default function EmployeeDetailPage() {
   const [employee, setEmployee] = useState<EmployeeDetail | null>(null)
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([])
   const [leaveRecords, setLeaveRecords] = useState<LeaveRecord[]>([])
+  const [weeklyEvaluations, setWeeklyEvaluations] = useState<WeeklyEvaluation[]>([])
+  const [monthlyEvaluations, setMonthlyEvaluations] = useState<MonthlyEvaluation[]>([])
+  const [yearlyEvaluations, setYearlyEvaluations] = useState<YearlyEvaluation[]>([])
   const [selectedMonth, setSelectedMonth] = useState(new Date())
+  const [selectedEvalYear, setSelectedEvalYear] = useState(new Date().getFullYear())
   const [isEditing, setIsEditing] = useState(false)
   const [editForm, setEditForm] = useState<Partial<EmployeeDetail>>({})
 
@@ -113,6 +153,9 @@ export default function EmployeeDetailPage() {
         const leaveData = await leaveRes.json()
         setLeaveRecords(leaveData.requests || [])
       }
+
+      // 성과 평가 데이터 로드
+      await loadEvaluationData()
     } catch (error) {
       console.error('Failed to load employee data:', error)
     } finally {
@@ -123,6 +166,49 @@ export default function EmployeeDetailPage() {
   useEffect(() => {
     loadEmployeeData()
   }, [loadEmployeeData])
+
+  // 평가 데이터 로드
+  const loadEvaluationData = useCallback(async () => {
+    if (!workspaceId || !employeeId) return
+
+    try {
+      // 주간 평가
+      const weeklyRes = await fetch(
+        `/api/evaluation?workspaceId=${workspaceId}&type=weekly&year=${selectedEvalYear}&employeeId=${employeeId}`
+      )
+      if (weeklyRes.ok) {
+        const data = await weeklyRes.json()
+        setWeeklyEvaluations(data.evaluations || [])
+      }
+
+      // 월간 요약
+      const monthlyRes = await fetch(
+        `/api/evaluation?workspaceId=${workspaceId}&type=monthly&year=${selectedEvalYear}&employeeId=${employeeId}`
+      )
+      if (monthlyRes.ok) {
+        const data = await monthlyRes.json()
+        setMonthlyEvaluations(data.evaluations || [])
+      }
+
+      // 연간 요약
+      const yearlyRes = await fetch(
+        `/api/evaluation?workspaceId=${workspaceId}&type=yearly&employeeId=${employeeId}`
+      )
+      if (yearlyRes.ok) {
+        const data = await yearlyRes.json()
+        setYearlyEvaluations(data.evaluations || [])
+      }
+    } catch (error) {
+      console.error('Failed to load evaluation data:', error)
+    }
+  }, [workspaceId, employeeId, selectedEvalYear])
+
+  // 연도 변경 시 평가 데이터 재로드
+  useEffect(() => {
+    if (activeTab === 'evaluation') {
+      loadEvaluationData()
+    }
+  }, [selectedEvalYear, activeTab, loadEvaluationData])
 
   // 프로필 저장
   const handleSaveProfile = async () => {
@@ -641,21 +727,197 @@ export default function EmployeeDetailPage() {
         )}
 
         {activeTab === 'evaluation' && (
-          <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
+          <div className="space-y-6">
+            {/* 연도 선택 */}
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
                 <Award className="w-5 h-5 text-lime-600" />
-                성과평가
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex flex-col items-center justify-center py-12 text-slate-500">
-                <BarChart2 className="w-12 h-12 text-slate-300 mb-4" />
-                <p>성과평가 기능은 준비 중입니다.</p>
-                <p className="text-sm">곧 제공될 예정입니다.</p>
+                {employee.name}님의 성과평가
+              </h2>
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setSelectedEvalYear(y => y - 1)}
+                >
+                  이전
+                </Button>
+                <span className="px-4 py-2 text-sm font-medium bg-white rounded-lg border">
+                  {selectedEvalYear}년
+                </span>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setSelectedEvalYear(y => y + 1)}
+                >
+                  다음
+                </Button>
               </div>
-            </CardContent>
-          </Card>
+            </div>
+
+            {/* 연간 요약 카드 */}
+            {yearlyEvaluations.length > 0 && (
+              <Card className="bg-gradient-to-br from-lime-50 to-emerald-50 border-0 shadow-lg">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <BarChart2 className="w-5 h-5 text-emerald-600" />
+                    연간 성과 요약
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {yearlyEvaluations.map(yearly => (
+                    <div key={yearly.id} className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-4">
+                          <div className={`text-5xl font-bold ${yearly.averageScore >= 80 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                            {yearly.averageScore.toFixed(1)}
+                          </div>
+                          <div>
+                            <Badge className={`${yearly.averageScore >= 80 ? 'bg-emerald-500' : 'bg-rose-500'} text-white text-lg px-4 py-1`}>
+                              {yearly.averageScore >= 80 ? '자유' : '집중케어'}
+                            </Badge>
+                            <p className="text-sm text-slate-500 mt-1">
+                              {yearly.averageScore >= 80 ? '근무 자율권 부여' : '집중 관리 필요'}
+                            </p>
+                          </div>
+                        </div>
+                        {yearly.suggestedRaisePercent && (
+                          <div className="text-right">
+                            <p className="text-sm text-slate-500">권장 인상률</p>
+                            <p className="text-2xl font-bold text-emerald-600">+{yearly.suggestedRaisePercent}%</p>
+                          </div>
+                        )}
+                      </div>
+                      <div className="grid grid-cols-4 gap-4 mt-4">
+                        <div className="bg-white/80 rounded-xl p-3 text-center">
+                          <p className="text-sm text-slate-500">1분기 (Q1)</p>
+                          <p className="text-xl font-bold text-slate-900">{yearly.q1Average?.toFixed(1) || '-'}</p>
+                        </div>
+                        <div className="bg-white/80 rounded-xl p-3 text-center">
+                          <p className="text-sm text-slate-500">2분기 (Q2)</p>
+                          <p className="text-xl font-bold text-slate-900">{yearly.q2Average?.toFixed(1) || '-'}</p>
+                        </div>
+                        <div className="bg-white/80 rounded-xl p-3 text-center">
+                          <p className="text-sm text-slate-500">3분기 (Q3)</p>
+                          <p className="text-xl font-bold text-slate-900">{yearly.q3Average?.toFixed(1) || '-'}</p>
+                        </div>
+                        <div className="bg-white/80 rounded-xl p-3 text-center">
+                          <p className="text-sm text-slate-500">4분기 (Q4)</p>
+                          <p className="text-xl font-bold text-slate-900">{yearly.q4Average?.toFixed(1) || '-'}</p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+            )}
+
+            {/* 월간 평가 현황 */}
+            <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg">
+              <CardHeader>
+                <CardTitle>월간 평가 현황</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {monthlyEvaluations.length > 0 ? (
+                  <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
+                    {monthlyEvaluations.map(monthly => (
+                      <div key={monthly.id} className="bg-slate-50 rounded-xl p-4 text-center">
+                        <p className="text-sm text-slate-500">{monthly.month}월</p>
+                        <p className={`text-2xl font-bold mt-1 ${monthly.averageScore >= 80 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                          {monthly.averageScore.toFixed(1)}
+                        </p>
+                        <Badge
+                          variant="outline"
+                          className={`mt-2 text-xs ${
+                            monthly.averageScore >= 80
+                              ? 'border-emerald-500 text-emerald-600'
+                              : 'border-rose-500 text-rose-600'
+                          }`}
+                        >
+                          {monthly.averageScore >= 80 ? '자유' : '집중케어'}
+                        </Badge>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-slate-500">
+                    {selectedEvalYear}년 월간 평가 기록이 없습니다
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* 주간 평가 상세 */}
+            <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg">
+              <CardHeader>
+                <CardTitle>주간 평가 기록</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {weeklyEvaluations.length > 0 ? (
+                  <div className="space-y-4">
+                    {weeklyEvaluations.map(weekly => (
+                      <div key={weekly.id} className="border rounded-xl p-4">
+                        <div className="flex items-center justify-between mb-3">
+                          <div>
+                            <span className="font-semibold text-slate-900">
+                              {weekly.weekNumber}주차
+                            </span>
+                            <span className="text-sm text-slate-500 ml-2">
+                              ({format(new Date(weekly.weekStartDate), 'MM/dd')} ~ {format(new Date(weekly.weekEndDate), 'MM/dd')})
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className={`text-2xl font-bold ${weekly.totalScore >= 80 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                              {weekly.totalScore}점
+                            </span>
+                            <Badge className={`${weekly.totalScore >= 80 ? 'bg-emerald-500' : 'bg-rose-500'} text-white`}>
+                              {weekly.totalScore >= 80 ? '자유' : '집중케어'}
+                            </Badge>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-5 gap-2 text-center">
+                          <div className="bg-slate-50 rounded-lg p-2">
+                            <p className="text-xs text-slate-500">프로젝트 품질</p>
+                            <p className="font-semibold">{weekly.projectQuality}/20</p>
+                          </div>
+                          <div className="bg-slate-50 rounded-lg p-2">
+                            <p className="text-xs text-slate-500">마감 준수</p>
+                            <p className="font-semibold">{weekly.deadlineAdherence}/20</p>
+                          </div>
+                          <div className="bg-slate-50 rounded-lg p-2">
+                            <p className="text-xs text-slate-500">프레젠테이션</p>
+                            <p className="font-semibold">{weekly.presentation}/20</p>
+                          </div>
+                          <div className="bg-slate-50 rounded-lg p-2">
+                            <p className="text-xs text-slate-500">협업</p>
+                            <p className="font-semibold">{weekly.collaboration}/20</p>
+                          </div>
+                          <div className="bg-slate-50 rounded-lg p-2">
+                            <p className="text-xs text-slate-500">자기주도성</p>
+                            <p className="font-semibold">{weekly.selfInitiative}/20</p>
+                          </div>
+                        </div>
+                        {weekly.feedback && (
+                          <div className="mt-3 p-3 bg-blue-50 rounded-lg">
+                            <p className="text-sm text-slate-600">
+                              <span className="font-medium text-blue-700">피드백: </span>
+                              {weekly.feedback}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-12 text-slate-500">
+                    <Award className="w-12 h-12 mx-auto mb-4 text-slate-300" />
+                    <p>{selectedEvalYear}년 주간 평가 기록이 없습니다</p>
+                    <p className="text-sm mt-1">HR 관리 페이지에서 평가를 입력해주세요</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
         )}
       </div>
     </div>
