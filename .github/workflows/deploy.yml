@@ -40,14 +40,25 @@ jobs:
         run: |
           echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
-      - name: Build and Push
+      - name: Build and Push (with layer cache)
         run: |
           IMAGE_TAG="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}"
+          CACHE_TAG="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:cache"
           echo "Building: $IMAGE_TAG"
-          docker build --no-cache \
+
+          # Pull cache image (ignore if not exists)
+          docker pull "$CACHE_TAG" 2>/dev/null || true
+
+          # Build with cache from previous build
+          docker build \
+            --cache-from "$CACHE_TAG" \
             --build-arg NPM_TOKEN=${{ secrets.GHCR_PAT }} \
-            -t "$IMAGE_TAG" .
+            --build-arg BUILDKIT_INLINE_CACHE=1 \
+            -t "$IMAGE_TAG" \
+            -t "$CACHE_TAG" .
+
           docker push "$IMAGE_TAG"
+          docker push "$CACHE_TAG"
           docker tag "$IMAGE_TAG" "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest"
           docker push "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest"
 
