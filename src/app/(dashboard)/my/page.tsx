@@ -25,8 +25,14 @@ import {
   Loader2,
   CheckCircle2,
   XCircle,
-  Coffee
+  Coffee,
+  Lock,
+  Eye,
+  EyeOff
 } from 'lucide-react'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { toast } from 'react-hot-toast'
 import { format } from 'date-fns'
 import { ko } from 'date-fns/locale'
@@ -67,6 +73,15 @@ export default function MyPage() {
   const [checkingIn, setCheckingIn] = useState(false)
   const [checkingOut, setCheckingOut] = useState(false)
 
+  // PIN 인증 상태 (급여/인사기록 보호)
+  const [isPinLocked, setIsPinLocked] = useState(true)
+  const [savedPin, setSavedPin] = useState('')
+  const [showPinModal, setShowPinModal] = useState(false)
+  const [pinInput, setPinInput] = useState('')
+  const [showPin, setShowPin] = useState(false)
+  const [isSettingPin, setIsSettingPin] = useState(false)
+  const [confirmPin, setConfirmPin] = useState('')
+
   // 출퇴근 상태
   const [todayAttendance, setTodayAttendance] = useState<AttendanceData | null>(null)
   const [currentSession, setCurrentSession] = useState<WorkSession | null>(null)
@@ -104,6 +119,64 @@ export default function MyPage() {
   useEffect(() => {
     loadAttendanceData()
   }, [loadAttendanceData])
+
+  // PIN 로드
+  useEffect(() => {
+    if (user?.uid) {
+      const pin = localStorage.getItem(`salary_pin_${user.uid}`)
+      if (pin) {
+        setSavedPin(pin)
+      }
+    }
+  }, [user?.uid])
+
+  // PIN 설정
+  const handleSetPin = () => {
+    if (pinInput.length < 4) {
+      toast.error('PIN은 4자리 이상이어야 합니다')
+      return
+    }
+    if (pinInput !== confirmPin) {
+      toast.error('PIN이 일치하지 않습니다')
+      return
+    }
+    if (user?.uid) {
+      localStorage.setItem(`salary_pin_${user.uid}`, pinInput)
+      setSavedPin(pinInput)
+    }
+    setIsPinLocked(false)
+    setShowPinModal(false)
+    setPinInput('')
+    setConfirmPin('')
+    setIsSettingPin(false)
+    toast.success('PIN이 설정되었습니다')
+  }
+
+  // PIN 확인
+  const handleVerifyPin = () => {
+    if (pinInput === savedPin) {
+      setIsPinLocked(false)
+      setShowPinModal(false)
+      setPinInput('')
+      toast.success('개인정보가 해제되었습니다')
+    } else {
+      toast.error('PIN이 올바르지 않습니다')
+    }
+  }
+
+  // PIN 잠금 해제 시도
+  const handleUnlockPin = () => {
+    if (!savedPin) {
+      setIsSettingPin(true)
+    }
+    setShowPinModal(true)
+  }
+
+  // 다시 잠금
+  const handleLockPin = () => {
+    setIsPinLocked(true)
+    toast.success('개인정보가 잠겼습니다')
+  }
 
   // 출근하기
   const handleCheckIn = async () => {
@@ -404,14 +477,104 @@ export default function MyPage() {
             <LeaveTab userId={user?.uid || ''} workspaceId={currentWorkspace?.id || ''} isAdmin={false} />
           </TabsContent>
 
-          {/* 인사기록 탭 */}
+          {/* 인사기록 탭 - PIN 보호 */}
           <TabsContent value="profile" className="mt-4">
-            <ProfileTab userId={user?.uid || ''} workspaceId={currentWorkspace?.id || ''} isAdmin={false} />
+            <div className="space-y-4">
+              {/* PIN 잠금/해제 버튼 */}
+              <div className="flex justify-end">
+                {isPinLocked ? (
+                  <Button
+                    onClick={handleUnlockPin}
+                    variant="outline"
+                    className="border-amber-300 text-amber-600 hover:bg-amber-50"
+                  >
+                    <Lock className="w-4 h-4 mr-2" />
+                    개인정보 보기 (PIN 입력)
+                  </Button>
+                ) : (
+                  <Button
+                    onClick={handleLockPin}
+                    variant="outline"
+                    className="border-slate-300 text-slate-600 hover:bg-slate-50"
+                  >
+                    <Lock className="w-4 h-4 mr-2" />
+                    개인정보 잠금
+                  </Button>
+                )}
+              </div>
+
+              {isPinLocked ? (
+                <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg rounded-3xl">
+                  <CardContent className="p-8 text-center">
+                    <Lock className="w-12 h-12 text-amber-400 mx-auto mb-4" />
+                    <h3 className="text-lg font-bold text-slate-900 mb-2">인사기록 잠금</h3>
+                    <p className="text-slate-500 mb-4">
+                      인사기록은 보안을 위해 잠겨 있습니다.<br/>
+                      PIN을 입력하여 확인하세요.
+                    </p>
+                    <Button
+                      onClick={handleUnlockPin}
+                      className="bg-amber-500 hover:bg-amber-600 text-white"
+                    >
+                      <Eye className="w-4 h-4 mr-2" />
+                      인사기록 보기
+                    </Button>
+                  </CardContent>
+                </Card>
+              ) : (
+                <ProfileTab userId={user?.uid || ''} workspaceId={currentWorkspace?.id || ''} isAdmin={false} />
+              )}
+            </div>
           </TabsContent>
 
-          {/* 급여 탭 */}
+          {/* 급여 탭 - PIN 보호 */}
           <TabsContent value="payroll" className="mt-4">
-            <PayrollTab userId={user?.uid || ''} workspaceId={currentWorkspace?.id || ''} isAdmin={false} />
+            <div className="space-y-4">
+              {/* PIN 잠금/해제 버튼 */}
+              <div className="flex justify-end">
+                {isPinLocked ? (
+                  <Button
+                    onClick={handleUnlockPin}
+                    variant="outline"
+                    className="border-amber-300 text-amber-600 hover:bg-amber-50"
+                  >
+                    <Lock className="w-4 h-4 mr-2" />
+                    급여정보 보기 (PIN 입력)
+                  </Button>
+                ) : (
+                  <Button
+                    onClick={handleLockPin}
+                    variant="outline"
+                    className="border-slate-300 text-slate-600 hover:bg-slate-50"
+                  >
+                    <Lock className="w-4 h-4 mr-2" />
+                    급여정보 잠금
+                  </Button>
+                )}
+              </div>
+
+              {isPinLocked ? (
+                <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg rounded-3xl">
+                  <CardContent className="p-8 text-center">
+                    <Lock className="w-12 h-12 text-amber-400 mx-auto mb-4" />
+                    <h3 className="text-lg font-bold text-slate-900 mb-2">급여 정보 잠금</h3>
+                    <p className="text-slate-500 mb-4">
+                      급여 정보는 보안을 위해 잠겨 있습니다.<br/>
+                      PIN을 입력하여 확인하세요.
+                    </p>
+                    <Button
+                      onClick={handleUnlockPin}
+                      className="bg-amber-500 hover:bg-amber-600 text-white"
+                    >
+                      <Eye className="w-4 h-4 mr-2" />
+                      급여 정보 보기
+                    </Button>
+                  </CardContent>
+                </Card>
+              ) : (
+                <PayrollTab userId={user?.uid || ''} workspaceId={currentWorkspace?.id || ''} isAdmin={false} />
+              )}
+            </div>
           </TabsContent>
 
           {/* 평가 탭 */}
@@ -420,6 +583,105 @@ export default function MyPage() {
           </TabsContent>
         </Tabs>
       </div>
+
+      {/* PIN 입력 모달 */}
+      <Dialog open={showPinModal} onOpenChange={setShowPinModal}>
+        <DialogContent className="bg-white border-slate-200 rounded-3xl shadow-xl max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-slate-900 flex items-center gap-2">
+              <Lock className="w-5 h-5 text-amber-500" />
+              {isSettingPin ? 'PIN 설정' : 'PIN 입력'}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            {isSettingPin ? (
+              <>
+                <p className="text-sm text-slate-500">
+                  개인정보 보호를 위한 PIN을 설정해주세요.
+                </p>
+                <div>
+                  <Label className="text-slate-600">PIN (4자리 이상)</Label>
+                  <div className="relative mt-2">
+                    <Input
+                      type={showPin ? 'text' : 'password'}
+                      value={pinInput}
+                      onChange={(e) => setPinInput(e.target.value)}
+                      placeholder="PIN 입력"
+                      className="bg-slate-50 border-slate-200 text-slate-900 rounded-xl pr-10"
+                      maxLength={8}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPin(!showPin)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                    >
+                      {showPin ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+                <div>
+                  <Label className="text-slate-600">PIN 확인</Label>
+                  <Input
+                    type={showPin ? 'text' : 'password'}
+                    value={confirmPin}
+                    onChange={(e) => setConfirmPin(e.target.value)}
+                    placeholder="PIN 다시 입력"
+                    className="mt-2 bg-slate-50 border-slate-200 text-slate-900 rounded-xl"
+                    maxLength={8}
+                  />
+                </div>
+              </>
+            ) : (
+              <>
+                <p className="text-sm text-slate-500">
+                  개인정보를 확인하려면 PIN을 입력하세요.
+                </p>
+                <div>
+                  <Label className="text-slate-600">PIN</Label>
+                  <div className="relative mt-2">
+                    <Input
+                      type={showPin ? 'text' : 'password'}
+                      value={pinInput}
+                      onChange={(e) => setPinInput(e.target.value)}
+                      placeholder="PIN 입력"
+                      className="bg-slate-50 border-slate-200 text-slate-900 rounded-xl pr-10"
+                      maxLength={8}
+                      onKeyDown={(e) => e.key === 'Enter' && handleVerifyPin()}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPin(!showPin)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                    >
+                      {showPin ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+          <DialogFooter className="flex gap-2">
+            <Button
+              onClick={() => {
+                setShowPinModal(false)
+                setPinInput('')
+                setConfirmPin('')
+                setIsSettingPin(false)
+              }}
+              variant="outline"
+              className="flex-1 border-slate-200 text-slate-700 rounded-xl"
+            >
+              취소
+            </Button>
+            <Button
+              onClick={isSettingPin ? handleSetPin : handleVerifyPin}
+              className="flex-1 bg-amber-500 hover:bg-amber-600 text-white rounded-xl"
+            >
+              {isSettingPin ? 'PIN 설정' : '확인'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
