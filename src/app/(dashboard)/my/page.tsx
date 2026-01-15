@@ -36,6 +36,7 @@ import ProfileTab from '@/components/hr/ProfileTab'
 import LeaveTab from '@/components/hr/LeaveTab'
 import PayrollTab from '@/components/hr/PayrollTab'
 import EvaluationTab from '@/components/hr/EvaluationTab'
+import AttendanceTab from '@/components/hr/AttendanceTab'
 
 type MyTab = 'attendance' | 'history' | 'leave' | 'profile' | 'payroll' | 'evaluation'
 
@@ -393,67 +394,9 @@ export default function MyPage() {
             </Card>
           </TabsContent>
 
-          {/* 근태이력 탭 */}
+          {/* 근태이력 탭 - AttendanceTab 컴포넌트 사용 (수정 요청 기능 포함) */}
           <TabsContent value="history" className="mt-4">
-            <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg">
-              <CardHeader>
-                <CardTitle>근태 이력</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  {attendanceHistory.length > 0 ? (
-                    attendanceHistory.map((record) => (
-                      <div
-                        key={record.id}
-                        className="flex items-center justify-between p-4 bg-slate-50 rounded-xl"
-                      >
-                        <div className="flex items-center gap-4">
-                          <div className="text-center">
-                            <p className="text-sm font-medium text-slate-900">
-                              {format(new Date(record.date), 'M/d')}
-                            </p>
-                            <p className="text-xs text-slate-500">
-                              {format(new Date(record.date), 'EEE', { locale: ko })}
-                            </p>
-                          </div>
-                          <div className="h-10 w-px bg-slate-200" />
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <span className="text-sm text-slate-600">
-                                {record.checkIn ? format(new Date(record.checkIn), 'HH:mm') : '--:--'}
-                              </span>
-                              <span className="text-slate-400">→</span>
-                              <span className="text-sm text-slate-600">
-                                {record.checkOut ? format(new Date(record.checkOut), 'HH:mm') : '--:--'}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <span className={`px-2 py-1 rounded-full text-xs ${
-                            record.status === 'PRESENT' ? 'bg-green-100 text-green-700' :
-                            record.status === 'LATE' ? 'bg-yellow-100 text-yellow-700' :
-                            record.status === 'ABSENT' ? 'bg-red-100 text-red-700' :
-                            'bg-slate-100 text-slate-600'
-                          }`}>
-                            {record.status === 'PRESENT' ? '정상' :
-                             record.status === 'LATE' ? '지각' :
-                             record.status === 'ABSENT' ? '결근' : record.status}
-                          </span>
-                          <span className="text-sm font-medium text-slate-900">
-                            {Math.floor(record.workedMinutes / 60)}시간 {record.workedMinutes % 60}분
-                          </span>
-                        </div>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="text-center py-12 text-slate-500">
-                      근태 이력이 없습니다.
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
+            <AttendanceTab userId={user?.uid || ''} workspaceId={currentWorkspace?.id || ''} isAdmin={false} />
           </TabsContent>
 
           {/* 휴가 탭 */}
