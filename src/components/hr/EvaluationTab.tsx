@@ -19,6 +19,7 @@ interface EvaluationTabProps {
   userId: string
   workspaceId: string
   isAdmin: boolean
+  adminLevel?: 'SUPER_ADMIN' | 'ADMIN' | 'MEMBER' | null  // 관리자 등급 (SUPER_ADMIN만 평가 입력 가능)
 }
 
 interface EvaluationFormData {
@@ -31,10 +32,18 @@ interface EvaluationFormData {
 }
 
 const FLEX_TIER_LABELS: Record<FlexWorkTier, { label: string; color: string; description: string }> = {
-  FULL_FLEX: { label: '완전자율', color: 'bg-emerald-500', description: '85점 이상' },
-  HIGH_FLEX: { label: '고유연', color: 'bg-blue-500', description: '80-84점' },
-  MID_FLEX: { label: '중유연', color: 'bg-amber-500', description: '75-79점' },
-  STANDARD: { label: '표준', color: 'bg-slate-500', description: '75점 미만' },
+  FULL_FLEX: { label: '자유', color: 'bg-emerald-500', description: '80점 이상 - 근무 자율권' },
+  HIGH_FLEX: { label: '자유', color: 'bg-emerald-500', description: '80점 이상' },
+  MID_FLEX: { label: '집중케어', color: 'bg-amber-500', description: '80점 미만' },
+  STANDARD: { label: '집중케어 주', color: 'bg-rose-500', description: '80점 미만 - 집중 관리' },
+}
+
+// 점수에 따른 등급 판정 (80점 기준)
+const getFlexTierFromScore = (score: number): { tier: FlexWorkTier; label: string; color: string } => {
+  if (score >= 80) {
+    return { tier: 'FULL_FLEX', label: '자유', color: 'bg-emerald-500' }
+  }
+  return { tier: 'STANDARD', label: '집중케어 주', color: 'bg-rose-500' }
 }
 
 const CRITERIA_LABELS = {
@@ -67,10 +76,13 @@ function getWeekDates(year: number, week: number): { start: Date; end: Date } {
   return { start, end }
 }
 
-export default function EvaluationTab({ userId, workspaceId, isAdmin }: EvaluationTabProps) {
+export default function EvaluationTab({ userId, workspaceId, isAdmin, adminLevel }: EvaluationTabProps) {
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
-  const [activeView, setActiveView] = useState<'evaluate' | 'evaluators' | 'my-scores'>('evaluate')
+  const [activeView, setActiveView] = useState<'evaluate' | 'evaluators' | 'my-scores'>('my-scores')
+
+  // SUPER_ADMIN만 평가 입력 가능
+  const canInputEvaluation = adminLevel === 'SUPER_ADMIN'
 
   // 평가권한자 관련
   const [evaluators, setEvaluators] = useState<Evaluator[]>([])
@@ -308,7 +320,7 @@ export default function EvaluationTab({ userId, workspaceId, isAdmin }: Evaluati
           <Star className="w-4 h-4 inline mr-2" />
           내 점수
         </button>
-        {isEvaluator && (
+        {canInputEvaluation && (
           <button
             className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
               activeView === 'evaluate' ? 'bg-black text-lime-400' : 'text-slate-600 hover:bg-white/60'
@@ -319,7 +331,7 @@ export default function EvaluationTab({ userId, workspaceId, isAdmin }: Evaluati
             평가 입력
           </button>
         )}
-        {isAdmin && (
+        {canInputEvaluation && (
           <button
             className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
               activeView === 'evaluators' ? 'bg-black text-lime-400' : 'text-slate-600 hover:bg-white/60'
@@ -395,13 +407,12 @@ export default function EvaluationTab({ userId, workspaceId, isAdmin }: Evaluati
                       <Badge
                         variant="outline"
                         className={`mt-2 text-xs ${
-                          summary.averageScore >= 85 ? 'border-emerald-500 text-emerald-600' :
-                          summary.averageScore >= 80 ? 'border-blue-500 text-blue-600' :
-                          summary.averageScore >= 75 ? 'border-amber-500 text-amber-600' :
-                          'border-slate-400 text-slate-500'
+                          summary.averageScore >= 80
+                            ? 'border-emerald-500 text-emerald-600'
+                            : 'border-rose-500 text-rose-600'
                         }`}
                       >
-                        {FLEX_TIER_LABELS[summary.flexWorkTier]?.label}
+                        {summary.averageScore >= 80 ? '자유' : '집중케어'}
                       </Badge>
                     </div>
                   ))}
@@ -463,8 +474,8 @@ export default function EvaluationTab({ userId, workspaceId, isAdmin }: Evaluati
         </div>
       )}
 
-      {/* 평가 입력 (평가권한자만) */}
-      {activeView === 'evaluate' && isEvaluator && (
+      {/* 평가 입력 (SUPER_ADMIN만) */}
+      {activeView === 'evaluate' && canInputEvaluation && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* 직원 선택 */}
           <Card className="bg-white/60 backdrop-blur-xl border-white/40 rounded-3xl">
@@ -558,20 +569,21 @@ export default function EvaluationTab({ userId, workspaceId, isAdmin }: Evaluati
                     ))}
                   </div>
 
-                  {/* 총점 표시 */}
+                  {/* 총점 표시 - 80점 기준 자유/집중케어 */}
                   <div className="flex justify-center items-center gap-4 py-4 bg-gradient-to-r from-lime-50 to-emerald-50 rounded-2xl">
-                    <div className="text-4xl font-bold text-lime-600">{totalScore}</div>
+                    <div className={`text-4xl font-bold ${totalScore >= 80 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                      {totalScore}
+                    </div>
                     <div className="text-slate-500">/ 100점</div>
-                    <Badge className={`${
-                      totalScore >= 85 ? 'bg-emerald-500' :
-                      totalScore >= 80 ? 'bg-blue-500' :
-                      totalScore >= 75 ? 'bg-amber-500' : 'bg-slate-500'
-                    } text-white`}>
-                      {totalScore >= 85 ? '완전자율' :
-                       totalScore >= 80 ? '고유연' :
-                       totalScore >= 75 ? '중유연' : '표준'}
+                    <Badge className={`${totalScore >= 80 ? 'bg-emerald-500' : 'bg-rose-500'} text-white`}>
+                      {totalScore >= 80 ? '자유' : '집중케어 주'}
                     </Badge>
                   </div>
+                  {totalScore < 80 && (
+                    <div className="text-center text-sm text-rose-600 bg-rose-50 rounded-xl py-2">
+                      ⚠️ 80점 미만: 해당 주 집중 관리 대상
+                    </div>
+                  )}
 
                   {/* 피드백 */}
                   <div>
@@ -604,8 +616,8 @@ export default function EvaluationTab({ userId, workspaceId, isAdmin }: Evaluati
         </div>
       )}
 
-      {/* 평가권한자 관리 (관리자만) */}
-      {activeView === 'evaluators' && isAdmin && (
+      {/* 평가권한자 관리 (SUPER_ADMIN만) */}
+      {activeView === 'evaluators' && canInputEvaluation && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* 현재 평가권한자 */}
           <Card className="bg-white/60 backdrop-blur-xl border-white/40 rounded-3xl">

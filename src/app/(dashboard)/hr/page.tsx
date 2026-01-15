@@ -30,8 +30,9 @@ import StatsTab from '@/components/hr/StatsTab'
 import ExportTab from '@/components/hr/ExportTab'
 import SettingsTab from '@/components/hr/SettingsTab'
 import AdminLeaveManagement from '@/components/hr/AdminLeaveManagement'
+import EvaluationTab from '@/components/hr/EvaluationTab'
 
-type HRAdminTab = 'dashboard' | 'attendance' | 'leave' | 'stats' | 'export' | 'settings'
+type HRAdminTab = 'dashboard' | 'attendance' | 'leave' | 'evaluation' | 'stats' | 'export' | 'settings'
 
 interface TeamMember {
   id: string
@@ -75,6 +76,7 @@ export default function HRAdminPage() {
   const [activeTab, setActiveTab] = useState<HRAdminTab>('dashboard')
   const [loading, setLoading] = useState(true)
   const [isAdmin, setIsAdmin] = useState(false)
+  const [adminLevel, setAdminLevel] = useState<'SUPER_ADMIN' | 'ADMIN' | 'MEMBER' | null>(null)
 
   // 대시보드 데이터
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([])
@@ -106,24 +108,30 @@ export default function HRAdminPage() {
   const checkAdminAndLoadData = async () => {
     setLoading(true)
     try {
-      // 관리자 권한 확인
-      if (workspaceIsAdmin) {
+      // 관리자 권한 및 등급 확인
+      const res = await fetch(`/api/workspace/${workspaceId}/members`)
+      if (res.ok) {
+        const data = await res.json()
+        const myMember = data.members?.find(
+          (m: any) => m.userId === userId || m.user?.id === userId
+        )
+
+        // adminLevel 설정
+        if (myMember?.adminLevel) {
+          setAdminLevel(myMember.adminLevel)
+        } else if (myMember?.role === 'owner') {
+          setAdminLevel('SUPER_ADMIN')  // owner는 기본적으로 SUPER_ADMIN
+        }
+
+        if (workspaceIsAdmin || myMember?.role === 'admin' || myMember?.role === 'owner' || myMember?.role === 'hr') {
+          setIsAdmin(true)
+          await loadDashboardData()
+        } else {
+          setIsAdmin(false)
+        }
+      } else if (workspaceIsAdmin) {
         setIsAdmin(true)
         await loadDashboardData()
-      } else {
-        const res = await fetch(`/api/workspace/${workspaceId}/members`)
-        if (res.ok) {
-          const data = await res.json()
-          const myMember = data.members?.find(
-            (m: any) => m.userId === userId || m.user?.id === userId
-          )
-          if (myMember?.role === 'admin' || myMember?.role === 'owner' || myMember?.role === 'hr') {
-            setIsAdmin(true)
-            await loadDashboardData()
-          } else {
-            setIsAdmin(false)
-          }
-        }
       }
     } catch (e) {
       if (isDev) console.error('Failed to check admin:', e)
@@ -295,6 +303,9 @@ export default function HRAdminPage() {
             </TabsTrigger>
             <TabsTrigger value="leave" className="rounded-lg data-[state=active]:bg-lime-500 data-[state=active]:text-white">
               휴가 관리
+            </TabsTrigger>
+            <TabsTrigger value="evaluation" className="rounded-lg data-[state=active]:bg-lime-500 data-[state=active]:text-white">
+              성과 평가
             </TabsTrigger>
             <TabsTrigger value="stats" className="rounded-lg data-[state=active]:bg-lime-500 data-[state=active]:text-white">
               통계
@@ -607,6 +618,11 @@ export default function HRAdminPage() {
           {/* 휴가 관리 탭 */}
           <TabsContent value="leave" className="mt-6">
             <AdminLeaveManagement workspaceId={workspaceId} userId={userId} />
+          </TabsContent>
+
+          {/* 성과 평가 탭 */}
+          <TabsContent value="evaluation" className="mt-6">
+            <EvaluationTab userId={userId} workspaceId={workspaceId} isAdmin={isAdmin} adminLevel={adminLevel} />
           </TabsContent>
 
           {/* 통계 탭 */}
