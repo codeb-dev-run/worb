@@ -3,13 +3,27 @@
  *
  * 백엔드에서 Centrifugo HTTP API를 통해 메시지를 발행합니다.
  * Socket.IO의 Redis Emitter를 대체합니다.
+ * 알림은 DB에도 저장됩니다.
  */
+
+import { prisma } from '@/lib/prisma'
+import { NotificationType } from '@prisma/client'
 
 const isDev = process.env.NODE_ENV === 'development'
 
 // Centrifugo API 설정
 const CENTRIFUGO_API_URL = process.env.CENTRIFUGO_API_URL || 'http://ws.codeb.kr:8000/api'
 const CENTRIFUGO_API_KEY = process.env.CENTRIFUGO_API_KEY || ''
+
+// 알림 타입 매핑 (소문자 -> Prisma enum)
+const notificationTypeMap: Record<string, NotificationType> = {
+  info: 'INFO',
+  success: 'SUCCESS',
+  warning: 'WARNING',
+  error: 'ERROR',
+  action: 'ACTION',
+  system: 'SYSTEM',
+}
 
 interface PublishOptions {
   channel: string
@@ -108,30 +122,93 @@ export const emitToChat = async (chatId: string, data: any): Promise<void> => {
 }
 
 /**
- * 사용자 개인 채널로 알림 발행
+ * 사용자 개인 채널로 알림 발행 + DB 저장
  */
 export const emitToUser = async (userId: string, data: any): Promise<void> => {
+  const timestamp = new Date().toISOString()
+  const notificationData = { event: 'notification', ...data, timestamp }
+
   try {
+    // 1. DB에 알림 저장
+    const dbNotification = await prisma.notification.create({
+      data: {
+        userId,
+        workspaceId: data.workspaceId || null,
+        type: notificationTypeMap[data.type] || 'INFO',
+        title: data.title || '알림',
+        message: data.message || '',
+        link: data.actionUrl || null,
+        metadata: {
+          event: data.event,
+          ...data
+        },
+      }
+    })
+
+    // 2. Centrifugo로 실시간 발송 (DB ID 포함)
     await publishToCentrifugo({
       channel: `user:${userId}`,
-      data: { event: 'notification', ...data, timestamp: new Date().toISOString() }
+      data: { ...notificationData, id: dbNotification.id }
     })
-  } catch {
-    // Silent fail
+  } catch (error) {
+    if (isDev) console.error('emitToUser error:', error)
+    // DB 저장 실패해도 Centrifugo 발송 시도
+    try {
+      await publishToCentrifugo({
+        channel: `user:${userId}`,
+        data: notificationData
+      })
+    } catch {
+      // Silent fail
+    }
   }
 }
 
 /**
- * 워크스페이스 채널로 알림 발행
+ * 워크스페이스 채널로 알림 발행 + 모든 멤버에게 DB 저장
  */
 export const emitToWorkspace = async (workspaceId: string, event: string, data: any): Promise<void> => {
+  const timestamp = new Date().toISOString()
+  const notificationData = { event, ...data, timestamp }
+
   try {
+    // 1. 워크스페이스 멤버 조회
+    const members = await prisma.workspaceMember.findMany({
+      where: { workspaceId },
+      select: { userId: true }
+    })
+
+    // 2. 모든 멤버에게 DB 알림 생성
+    if (members.length > 0) {
+      await prisma.notification.createMany({
+        data: members.map(m => ({
+          userId: m.userId,
+          workspaceId,
+          type: notificationTypeMap[data.type] || 'INFO',
+          title: data.title || '알림',
+          message: data.message || '',
+          link: data.actionUrl || null,
+          metadata: { event, ...data },
+        }))
+      })
+    }
+
+    // 3. Centrifugo로 실시간 발송
     await publishToCentrifugo({
       channel: `workspace:${workspaceId}`,
-      data: { event, ...data, timestamp: new Date().toISOString() }
+      data: notificationData
     })
-  } catch {
-    // Silent fail
+  } catch (error) {
+    if (isDev) console.error('emitToWorkspace error:', error)
+    // DB 저장 실패해도 Centrifugo 발송 시도
+    try {
+      await publishToCentrifugo({
+        channel: `workspace:${workspaceId}`,
+        data: notificationData
+      })
+    } catch {
+      // Silent fail
+    }
   }
 }
 

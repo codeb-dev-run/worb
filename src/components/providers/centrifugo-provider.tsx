@@ -2,7 +2,13 @@
 
 import { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react'
 
+// 개발 모드 확인
 const isDev = process.env.NODE_ENV === 'development'
+
+// 항상 로그 출력 (디버깅용)
+const LOG_ENABLED = true
+const log = (...args: any[]) => LOG_ENABLED && console.log('[Centrifugo]', ...args)
+const logError = (...args: any[]) => LOG_ENABLED && console.error('[Centrifugo]', ...args)
 
 // Centrifugo 타입 정의
 interface CentrifugoSubscription {
@@ -100,19 +106,28 @@ export const CentrifugoProvider = ({ children }: { children: React.ReactNode }) 
     let centrifugoInstance: CentrifugoClient | null = null
 
     const initCentrifugo = async () => {
+      log('Starting initialization...', { url: centrifugoUrl })
+
       try {
+        log('Importing centrifuge library...')
         const { Centrifuge } = await import('centrifuge')
+        log('Library imported successfully')
 
         // 토큰 가져오기 (인증된 연결용)
         const getTokenData = async (): Promise<{ token: string | null; user: PresenceUser | null }> => {
           try {
+            log('Fetching token from /api/centrifugo/token...')
             const response = await fetch('/api/centrifugo/token')
+            log('Token response status:', response.status)
             if (response.ok) {
               const data = await response.json()
+              log('Token data received:', { hasToken: !!data.token, user: data.user })
               return { token: data.token, user: data.user }
+            } else {
+              logError('Token fetch failed:', response.status, await response.text())
             }
           } catch (error) {
-            if (isDev) console.warn('Failed to get Centrifugo token:', error)
+            logError('Token fetch error:', error)
           }
           return { token: null, user: null }
         }
@@ -125,29 +140,36 @@ export const CentrifugoProvider = ({ children }: { children: React.ReactNode }) 
           setCurrentUser(tokenData.user)
         }
 
+        log('Creating Centrifuge instance...', { hasToken: !!token })
         centrifugoInstance = new Centrifuge(centrifugoUrl, {
           token: token || undefined,
-          // 익명 연결도 허용 (토큰 없이)
         }) as unknown as CentrifugoClient
+        log('Centrifuge instance created')
 
-        centrifugoInstance.on('connected', () => {
-          if (isDev) console.log('Centrifugo connected')
+        centrifugoInstance.on('connected', (ctx: any) => {
+          log('Connected!', ctx)
           setIsConnected(true)
         })
 
-        centrifugoInstance.on('disconnected', () => {
-          if (isDev) console.log('Centrifugo disconnected')
+        centrifugoInstance.on('connecting', (ctx: any) => {
+          log('Connecting...', ctx)
+        })
+
+        centrifugoInstance.on('disconnected', (ctx: any) => {
+          log('Disconnected', ctx)
           setIsConnected(false)
         })
 
         centrifugoInstance.on('error', (ctx: any) => {
-          if (isDev) console.warn('Centrifugo error:', ctx)
+          logError('Connection error:', ctx)
         })
 
+        log('Calling connect()...')
         centrifugoInstance.connect()
         setClient(centrifugoInstance)
+        log('Connect called, waiting for connection...')
       } catch (error) {
-        if (isDev) console.warn('Centrifugo initialization failed:', error)
+        logError('Initialization failed:', error)
       }
     }
 
@@ -168,19 +190,44 @@ export const CentrifugoProvider = ({ children }: { children: React.ReactNode }) 
   // 채널 구독
   const subscribe = useCallback((channel: string, onMessage: (data: any) => void) => {
     if (!client) {
+      log('Subscribe called but client not ready')
       return () => {}
     }
+
+    log('Subscribe called for channel:', channel)
 
     // 이미 구독 중인지 확인
     let subscription = subscriptionsRef.current.get(channel)
 
     if (!subscription) {
+      log('Creating new subscription for:', channel)
       subscription = client.newSubscription(channel)
       subscriptionsRef.current.set(channel, subscription)
+
+      // 구독 상태 이벤트 핸들러
+      subscription.on('subscribing', (ctx: any) => {
+        log(`Channel ${channel} subscribing...`, ctx)
+      })
+
+      subscription.on('subscribed', (ctx: any) => {
+        log(`Channel ${channel} subscribed!`, ctx)
+      })
+
+      subscription.on('error', (ctx: any) => {
+        logError(`Channel ${channel} error:`, ctx)
+      })
+
+      subscription.on('unsubscribed', (ctx: any) => {
+        log(`Channel ${channel} unsubscribed`, ctx)
+      })
+
       subscription.subscribe()
+    } else {
+      log('Reusing existing subscription for:', channel)
     }
 
     const handlePublication = (ctx: any) => {
+      log(`Message received on ${channel}:`, ctx.data)
       onMessage(ctx.data)
     }
 

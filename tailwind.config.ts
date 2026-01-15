@@ -23,11 +23,19 @@ const config: Config = {
         background: "hsl(var(--background))",
         foreground: "hsl(var(--foreground))",
         primary: {
-          DEFAULT: "hsl(var(--primary))",
-          foreground: "hsl(var(--primary-foreground))",
-          hover: '#3d6cdb',
-          light: '#6b8fff',
-          dark: '#3a5fd8',
+          DEFAULT: "#03C75A", // Naver Key Color - Trustworthy & Modern
+          foreground: "#ffffff",
+          50: '#E5F9EF',
+          100: '#C0F0D8',
+          200: '#92E6BC',
+          300: '#5DD99C',
+          400: '#32CC80',
+          500: '#03C75A', // Main Brand Color
+          600: '#02A349', // Hover state
+          700: '#028039',
+          800: '#06632F',
+          900: '#065128',
+          hover: '#02A349',
         },
         secondary: {
           DEFAULT: "hsl(var(--secondary))",

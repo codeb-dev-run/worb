@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, startOfDay, endOfDay, isSameDay } from 'date-fns'
-import { getCalendarEvents, createCalendarEvent, updateCalendarEvent, deleteCalendarEvent } from '@/actions/calendar'
+import { getCalendarEvents, createCalendarEvent, updateCalendarEvent, deleteCalendarEvent, getHRCalendarEvents, HRCalendarEvent } from '@/actions/calendar'
 import { getProjects } from '@/actions/project'
 import { useWorkspace } from '@/lib/workspace-context'
 import { useAuth } from '@/lib/auth-context'
@@ -53,6 +53,7 @@ export function useCalendarData(
   const { userProfile } = useAuth()
 
   const [events, setEvents] = useState<CalendarEvent[]>([])
+  const [hrEvents, setHREvents] = useState<HRCalendarEvent[]>([])
   const [projects, setProjects] = useState<ProjectOption[]>([])
   const [loading, setLoading] = useState(false)
 
@@ -76,12 +77,14 @@ export function useCalendarData(
     setLoading(true)
     try {
       const { start, end } = getDateRange()
-      const [fetchedEvents, fetchedProjects] = await Promise.all([
+      const [fetchedEvents, fetchedProjects, fetchedHREvents] = await Promise.all([
         getCalendarEvents(currentWorkspace.id, start, end),
-        getProjects(userProfile.uid, currentWorkspace.id)
+        getProjects(userProfile.uid, currentWorkspace.id),
+        getHRCalendarEvents(currentWorkspace.id, start, end)
       ])
       setEvents(fetchedEvents as unknown as CalendarEvent[])
       setProjects(fetchedProjects as ProjectOption[])
+      setHREvents(fetchedHREvents)
     } catch (error) {
       if (isDev) console.error('Failed to load data:', error)
       toast.error('데이터를 불러오는데 실패했습니다.')
@@ -105,8 +108,32 @@ export function useCalendarData(
     }
   }, [loadData])
 
+  // Combine HR events with regular events
+  const allEvents: CalendarEvent[] = [
+    ...events,
+    // HR 이벤트를 CalendarEvent 형식으로 변환
+    ...hrEvents.map(hr => ({
+      id: hr.id,
+      title: hr.title,
+      description: hr.description || '',
+      startDate: hr.startDate,
+      endDate: hr.endDate,
+      color: hr.color,
+      isAllDay: hr.isAllDay,
+      type: hr.type === 'leave' ? 'team' : 'personal',
+      location: '',
+      projectId: undefined,
+      createdBy: hr.employeeId || '',
+      createdAt: hr.startDate,
+      updatedAt: hr.startDate,
+      // HR 이벤트 식별용 플래그
+      isHREvent: true,
+      hrEventType: hr.type
+    } as CalendarEvent & { isHREvent?: boolean; hrEventType?: string }))
+  ]
+
   // Filter events
-  const filteredEvents = events.filter(event => {
+  const filteredEvents = allEvents.filter(event => {
     if (filterMode === 'all') return true
     if (filterMode === 'personal') return event.type === 'personal' || !event.projectId
     if (filterMode === 'team') return event.type === 'team' || event.type === 'meeting' || event.projectId

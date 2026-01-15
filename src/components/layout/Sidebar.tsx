@@ -127,6 +127,11 @@ export default function Sidebar() {
       { href: '/dashboard', label: '홈', icon: 'dashboard' },
     ]
 
+    // 마이페이지 (모든 직원에게 표시)
+    if (isFeatureEnabled('attendanceEnabled')) {
+      items.push({ href: '/my', label: '마이페이지', icon: 'users' })
+    }
+
     if (isFeatureEnabled('projectEnabled')) {
       items.push({ href: '/tasks', label: '내 작업', icon: 'tasks' })
     }
@@ -177,10 +182,10 @@ export default function Sidebar() {
       groupwareItems.push({ href: '/workspace/organization', label: '조직 관리', icon: 'users' })
     }
     if (isFeatureEnabled('attendanceEnabled')) {
-      groupwareItems.push({ href: '/attendance', label: '근태', icon: 'calendar' })
-      // 관리자용 근태관리 메뉴
+      // 관리자용 HR 관리 메뉴
       if (isAdmin) {
-        groupwareItems.push({ href: '/hr', label: '근태관리', icon: 'users', roles: ['admin'] })
+        groupwareItems.push({ href: '/hr', label: 'HR 관리', icon: 'users', roles: ['admin'] })
+        groupwareItems.push({ href: '/hr/employees', label: '팀원 목록', icon: 'list', roles: ['admin'] })
       }
     }
     // 재무 기능 제거됨 (2024-12)

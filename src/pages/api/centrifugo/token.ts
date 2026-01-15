@@ -36,10 +36,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Centrifugo는 간단한 HMAC-SHA256 JWT를 사용
     const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url')
 
+    // 채널 권한 설정 - 사용자별 채널 접근 허용
+    const channels: string[] = []
+    if (userId !== 'anonymous') {
+      channels.push(`user:${userId}`)  // 개인 채널
+    }
+
     const payload = Buffer.from(JSON.stringify({
       sub: userId,
       exp: Math.floor(Date.now() / 1000) + 3600, // 1시간
-      info: userInfo
+      info: userInfo,
+      channels: channels.length > 0 ? channels : undefined
     })).toString('base64url')
 
     // Node.js crypto를 사용한 HMAC-SHA256 서명

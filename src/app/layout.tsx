@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import { AuthProvider } from '@/lib/auth-context'
 import './globals.css'
-// import { SocketProvider } from '@/components/providers/socket-provider'
+import { CentrifugoProvider } from '@/components/providers/centrifugo-provider'
 import { WorkspaceProvider } from '@/lib/workspace-context'
 import { NotificationProvider } from '@/lib/notification-context'
 import { VersionCheckProvider } from '@/components/providers/version-check-provider'
@@ -36,16 +36,17 @@ export default async function RootLayout({
         {/* CSP Nonce meta tag for client-side scripts */}
         {nonce && <meta name="csp-nonce" content={nonce} />}
       </head>
-      <body className={inter.className} suppressHydrationWarning>
+      <body className="font-sans antialiased" suppressHydrationWarning>
         <AuthProvider>
           <WorkspaceProvider>
-            {/* SocketProvider 임시 비활성화 - webpack 문제 디버깅 */}
-            <NotificationProvider>
-              <VersionCheckProvider>
-                {children}
-              </VersionCheckProvider>
-              <NotificationToast />
-            </NotificationProvider>
+            <CentrifugoProvider>
+              <NotificationProvider>
+                <VersionCheckProvider>
+                  {children}
+                </VersionCheckProvider>
+                <NotificationToast />
+              </NotificationProvider>
+            </CentrifugoProvider>
           </WorkspaceProvider>
         </AuthProvider>
       </body>

@@ -113,11 +113,11 @@ export default function QACreateModal({
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.95 }}
         onClick={(e) => e.stopPropagation()}
-        className="bg-white rounded-xl shadow-xl w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col"
+        className="bg-white rounded-xl shadow-xl w-full max-w-3xl max-h-[90vh] flex flex-col"
       >
-        <form onSubmit={handleSubmit} className="flex flex-col h-full">
-          {/* Header */}
-          <div className="flex items-center justify-between p-4 border-b">
+        <form onSubmit={handleSubmit} className="flex flex-col h-full min-h-0">
+          {/* Header - 고정 */}
+          <div className="flex-shrink-0 flex items-center justify-between p-4 border-b">
             <h2 className="text-lg font-semibold">새 이슈 생성</h2>
             <button type="button" onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg">
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -126,8 +126,8 @@ export default function QACreateModal({
             </button>
           </div>
 
-          {/* Content */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-4">
+          {/* Content - 스크롤 가능 영역 */}
+          <div className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0">
             {/* Type & Priority */}
             <div className="flex gap-4">
               <div className="flex-1">
@@ -298,8 +298,8 @@ export default function QACreateModal({
             </div>
           </div>
 
-          {/* Footer */}
-          <div className="flex items-center justify-end gap-3 p-4 border-t bg-gray-50">
+          {/* Footer - 고정 */}
+          <div className="flex-shrink-0 flex items-center justify-end gap-3 p-4 border-t bg-gray-50">
             <button
               type="button"
               onClick={onClose}
